@@ -100,6 +100,11 @@ def index():
     return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu)
 
 
+@app.get("/service-worker.js")
+def service_worker():
+    return "", 204
+
+
 @app.get("/api/status")
 def application_status():
     """Healthcheck léger pour les clients qui attendent le démarrage du serveur."""

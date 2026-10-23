@@ -16,19 +16,6 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
 set "VIRTUAL_ENV=%VENV_DIR%"
 set "PATH=%VENV_DIR%\Scripts;%PATH%"
 
-REM ── Ecran de demarrage anime ────────────────────────────────────────────
-python -c "import rich" >nul 2>&1
-if errorlevel 1 (
-    echo [INFO] Installation de Rich pour l'ecran de demarrage...
-    python -m pip install "rich>=13.7.1,<16"
-)
-python -c "import rich" >nul 2>&1
-if not errorlevel 1 (
-    python startup.py
-) else (
-    echo [INFO] Animation indisponible; demarrage de DowFlow.
-)
-
 REM ── Playwright / Chromium : verifier a chaque lancement ──────────────────
 python -c "from playwright.sync_api import sync_playwright as s; p=s().start(); b=p.chromium.launch(headless=True); b.close(); p.stop()" 1>nul 2>nul
 if errorlevel 1 (
@@ -51,24 +38,16 @@ if errorlevel 1 (
     for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\aria2.aria2*") do (
         for /d %%S in ("%%D\aria2*") do set "PATH=%%S;%PATH%"
     )
-) else (
-    echo aria2c OK
 )
 
 REM ── FFmpeg ───────────────────────────────────────────────────────────────
 set "FFMPEG_BIN=%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
 if exist "%FFMPEG_BIN%\ffmpeg.exe" set "PATH=%FFMPEG_BIN%;%PATH%"
 
-REM ── Runtime JavaScript pour yt-dlp / YouTube ─────────────────────────────
-where node >nul 2>&1
+python -c "import rich" >nul 2>&1
 if errorlevel 1 (
-    echo [ATTENTION] Node.js absent : l'extraction YouTube peut proposer moins de formats.
-    echo [INFO] Installe Node.js LTS puis relance DowFlow.
-) else (
-    node --version
+    echo [INFO] Installation de Rich pour l'ecran de demarrage...
+    python -m pip install "rich>=13.7.1,<16"
 )
-
-echo DowFlow est disponible sur http://127.0.0.1:5001
-echo Ouvrez ou actualisez votre onglet existant. Aucun nouveau Chrome ne sera lance.
-python app.py
+python startup.py
 pause

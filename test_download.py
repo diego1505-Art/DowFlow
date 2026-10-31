@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 import unittest
@@ -5,6 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import playlist
+from rich.console import Console
+from startup import _format_output_line, _should_show_output_line
 
 
 class FakeYoutubeDL:
@@ -64,6 +67,36 @@ class DownloadStabilityTests(unittest.TestCase):
     def setUp(self):
         FakeYoutubeDL.instances.clear()
 
+    def test_terminal_filter_hides_impersonation_warning_and_unknown_speed(self):
+        self.assertFalse(
+            _should_show_output_line(
+                "WARNING: The extractor specified to use impersonation for this download, "
+                "but no impersonate target is available."
+            )
+        )
+        self.assertFalse(
+            _should_show_output_line(
+                "[download] 1.5% of 1.89GiB at  Unknown B/s ETA Unknown"
+            )
+        )
+        self.assertTrue(
+            _should_show_output_line(
+                "[download] 2.0% of 1.89GiB at 3.1MiB/s ETA 00:10"
+            )
+        )
+
+    def test_adaptive_change_line_gets_separated_from_progress(self):
+        console = Console(record=True, width=120)
+        console.print(_format_output_line("[download] 10% of 1GiB at 2MiB/s ETA 00:30"))
+        console.print(
+            _format_output_line(
+                "23:28:27 | INFO | playlist | [adaptive] Baisse de qualité après 10 s : "
+                "2160p → 1440p (ETA 1689 s > seuil 300 s)."
+            )
+        )
+        rendered = console.export_text()
+        self.assertIn("ETA 00:30\n\n23:28:27", rendered)
+
     def test_youtube_uses_aria2_and_skips_subtitles_by_default(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL):
             with patch.object(
@@ -76,6 +109,7 @@ class DownloadStabilityTests(unittest.TestCase):
                         "https://www.youtube.com/shorts/12345678901",
                         output_path=output,
                         quality="720p",
+                        download_id=92,
                     )
                     self.assertTrue(Path(result["filepath"]).is_file())
 
@@ -85,6 +119,7 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertNotIn("writesubtitles", options)
         self.assertEqual(options["external_downloader"], "aria2c")
         self.assertIn("--split=16", options["external_downloader_args"])
+        self.assertIn("--gid=00005c0000000000", options["external_downloader_args"])
         self.assertTrue(options["quiet"])
         self.assertIn("[protocol^=http]", options["format"])
         self.assertEqual(options["retries"], 10)
@@ -110,21 +145,24 @@ class DownloadStabilityTests(unittest.TestCase):
                     **first,
                     "downloaded_bytes": (11 if type(self).calls == 1 else 700) * 1024 * 1024,
                 }
-                with patch.object(
-                    playlist.time,
-                    "time",
-                    side_effect=[1000.0, 1011.0],
-                ):
-                    for hook in progress_hooks:
-                        hook(first)
-                    for hook in progress_hooks:
-                        hook(second)
+                with patch.object(playlist.log, "info"):
+                    with patch.object(
+                        playlist.time,
+                        "time",
+                        side_effect=[1000.0, 1011.0],
+                    ):
+                        for hook in progress_hooks:
+                            hook(first)
+                        for hook in progress_hooks:
+                            hook(second)
                 output_path = self.options["outtmpl"].replace("%(title).200s.%(ext)s", "clip.mp4")
                 Path(output_path).write_bytes(b"video")
                 return {"title": "clip", "ext": "mp4", "filepath": output_path}
 
         AdaptiveYoutubeDL.calls = 0
-        with patch.object(playlist.yt_dlp, "YoutubeDL", AdaptiveYoutubeDL):
+        with patch.object(playlist.yt_dlp, "YoutubeDL", AdaptiveYoutubeDL), patch.object(
+            playlist, "get_connection_tier", return_value=16
+        ):
             with patch.object(
                 playlist.shutil,
                 "which",
@@ -141,6 +179,12 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertEqual(result["quality_used"], "1440p")
         self.assertEqual(len(AdaptiveYoutubeDL.instances), 2)
         self.assertNotIn("external_downloader", AdaptiveYoutubeDL.instances[0].options)
+        self.assertEqual(
+            AdaptiveYoutubeDL.instances[0].options["concurrent_fragment_downloads"], 16
+        )
+        self.assertEqual(
+            AdaptiveYoutubeDL.instances[1].options["concurrent_fragment_downloads"], 16
+        )
         self.assertEqual(
             AdaptiveYoutubeDL.instances[1].options["format_sort"], ["res:1440"]
         )
@@ -328,7 +372,8 @@ class DownloadStabilityTests(unittest.TestCase):
         )
 
     def test_adaptive_watch_hook_downgrades_when_eta_is_too_long(self):
-        hook = playlist._make_adaptive_watch_hook()
+        events = []
+        hook = playlist._make_adaptive_watch_hook(events.append)
         first = {
             "status": "downloading",
             "filename": "video.f137.mp4",
@@ -340,13 +385,24 @@ class DownloadStabilityTests(unittest.TestCase):
         second = {**first, "downloaded_bytes": 11 * 1024 * 1024}
 
         base = 1000.0
-        with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
-            hook(first)  # démarre la fenêtre d'observation
-            with self.assertRaises(playlist._AdaptiveDowngrade) as ctx:
-                hook(second)  # dépasse la fenêtre de 10 s : décision de downgrade
+        with patch.object(playlist.log, "info") as info:
+            with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
+                hook(first)  # démarre la fenêtre d'observation
+                with self.assertRaises(playlist._AdaptiveDowngrade) as ctx:
+                    hook(second)  # dépasse la fenêtre de 10 s : décision de downgrade
+
+        info.assert_not_called()
 
         self.assertEqual(ctx.exception.quality, "1440p")
-        self.assertIn("1440p", ctx.exception.note)
+        self.assertEqual(
+            ctx.exception.note,
+            "Baisse de qualité après 10 s : 2160p → 1440p (ETA 989 s > seuil 300 s).",
+        )
+        self.assertEqual(events[-1]["status"], "adaptive_quality")
+        self.assertEqual(events[-1]["quality_from"], "2160p")
+        self.assertEqual(events[-1]["quality_to"], "1440p")
+        self.assertEqual(events[-1]["adaptive_eta_seconds"], 989)
+        self.assertEqual(events[-1]["adaptive_threshold_seconds"], 300)
 
     def test_adaptive_watch_hook_keeps_quality_when_eta_is_short(self):
         hook = playlist._make_adaptive_watch_hook()
@@ -361,9 +417,10 @@ class DownloadStabilityTests(unittest.TestCase):
         second = {**first, "downloaded_bytes": 700 * 1024 * 1024}
 
         base = 2000.0
-        with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
-            hook(first)
-            hook(second)  # doit se terminer sans lever d'exception
+        with patch.object(playlist.log, "info"):
+            with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
+                hook(first)
+                hook(second)  # doit se terminer sans lever d'exception
 
     def test_adaptive_watch_hook_resets_for_new_file_and_can_retry(self):
         hook = playlist._make_adaptive_watch_hook()
@@ -385,12 +442,13 @@ class DownloadStabilityTests(unittest.TestCase):
         slow = {**second, "downloaded_bytes": 11 * 1024 * 1024}
 
         base = 2500.0
-        with patch.object(playlist.time, "time", side_effect=[base, base + 11.0, base + 12.0, base + 23.0, base + 24.0]):
-            hook(first)
-            hook(short)
-            hook(second)
-            with self.assertRaises(playlist._AdaptiveDowngrade):
-                hook(slow)
+        with patch.object(playlist.log, "info"):
+            with patch.object(playlist.time, "time", side_effect=[base, base + 11.0, base + 12.0, base + 23.0, base + 24.0]):
+                hook(first)
+                hook(short)
+                hook(second)
+                with self.assertRaises(playlist._AdaptiveDowngrade):
+                    hook(slow)
 
     def test_quality_target_uses_resolution_sort_for_portrait_videos(self):
         selector = playlist._build_video_format_string("240p", "mp4", True, prefer_http=True)

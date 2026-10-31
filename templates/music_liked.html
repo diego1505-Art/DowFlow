@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DowFlow Music - Favoris</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='music.css') }}?v=20261031b" />
+  </head>
+  <body data-page="liked" oncontextmenu="return false">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="{{ url_for('music_page') }}">
+          <div class="brand-mark"></div>
+          <div>
+            <p class="eyebrow">Espace musique</p>
+            <h1>DowFlow Music</h1>
+          </div>
+        </a>
+        <nav class="menu">
+          <a class="menu-item" data-nav="home" href="{{ url_for('music_page') }}">Accueil</a>
+          <a class="menu-item" data-nav="explore" href="{{ url_for('music_explore_page') }}">Explorer</a>
+          <a class="menu-item active" data-nav="liked" href="{{ url_for('music_liked_page') }}">Favoris</a>
+        </nav>
+        <nav class="menu sidebar-menu-extra">
+          <a class="menu-item" href="{{ url_for('index') }}">← Menu DowFlow</a>
+        </nav>
+        <section class="sidebar-card sidebar-card-photo">
+          <p class="eyebrow">Memoire locale</p>
+          <h2>Lecture Favoris</h2>
+          <p>Ecoute uniquement tes titres preferes en boucle continue.</p>
+          <button class="ghost-button" id="play-liked-loop">Lire Favoris en Boucle</button>
+        </section>
+        <section class="sidebar-stats">
+          <div>
+            <strong id="stat-track-count">0</strong>
+            <span>Titres</span>
+          </div>
+          <div>
+            <strong id="stat-favorite-count">0</strong>
+            <span>Favoris</span>
+          </div>
+        </section>
+      </aside>
+
+      <main class="main-content">
+        <section class="page-header">
+          <div class="page-header-copy">
+            <div class="page-header-topline">
+              <p class="eyebrow">Collection Personnelle</p>
+              <span class="page-header-pill">Favoris locaux</span>
+            </div>
+            <h2>Tes Morceaux Preferes</h2>
+            <div class="page-header-meta" aria-hidden="true">
+              <span class="page-header-chip">Playlist rapide</span>
+            </div>
+          </div>
+          <label class="search-box search-box-top">
+            <span>Filtrer</span>
+            <input id="liked-search" type="search" placeholder="Rechercher dans tes favoris..." autocomplete="off" autocapitalize="none" spellcheck="false" />
+          </label>
+        </section>
+
+        <section class="content-section">
+          <div class="section-heading">
+            <h3>Playlist Favorites</h3>
+            <a href="{{ url_for('music_explore_page') }}">Ajouter plus de morceaux</a>
+          </div>
+          <div class="panel">
+            <div class="table-list" id="liked-list"></div>
+            <div class="pagination" id="liked-pagination"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="player">
+      <div class="player-track">
+        <div class="player-cover" id="player-cover"></div>
+        <div>
+          <strong id="player-track">Aucun morceau</strong>
+          <p id="player-artist">Bibliotheque locale</p>
+        </div>
+      </div>
+      <div class="player-controls">
+        <div class="control-row">
+          <button class="icon-button" id="prev-track" aria-label="Precedent">|&#60;</button>
+          <button class="play-button" id="play-toggle" aria-label="Lecture">Play</button>
+          <button class="icon-button" id="next-track" aria-label="Suivant">&#62;|</button>
+        </div>
+        <div class="timeline">
+          <span id="current-time">0:00</span>
+          <input class="timeline-range" id="timeline-range" type="range" min="0" max="0" value="0" step="1" />
+          <span id="total-time">0:00</span>
+        </div>
+      </div>
+      <div class="player-meta">
+        <button class="ghost-button compact" id="like-current">Favori</button>
+        <p id="player-status">Pret</p>
+      </div>
+    </footer>
+
+    <audio id="audio-player" preload="metadata" crossorigin="anonymous"></audio>
+    <script src="{{ url_for('static', filename='music.js') }}?v=20261031b"></script>
+  </body>
+</html>

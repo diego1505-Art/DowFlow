@@ -1572,7 +1572,7 @@ https://example.com/video..."
             const label = qualityUsed === "4320p" ? "8K" : qualityUsed === "2160p" ? "4K" : qualityUsed === "1440p" ? "1440p" : qualityUsed === "1080p" ? "1080p" : qualityUsed === "720p" ? "720p" : qualityUsed === "480p" ? "480p" : qualityUsed === "360p" ? "360p" : qualityUsed === "240p" ? "240p" : qualityUsed.toUpperCase();
             adaptiveBanner.dataset.show = "true";
             adaptiveBanner.textContent = (result && result.adaptive_note)
-                ? `Qualité ajustée après 10 s → ${result.adaptive_note}`
+                ? result.adaptive_note
                 : `Qualité ajustée automatiquement : Auto max → ${label} pour garder le téléchargement compatible avec le débit actuel.`;
             adaptiveBanner.classList.add("visible");
         }
@@ -1685,6 +1685,12 @@ https://example.com/video..."
                 const pct = Math.max(0, Math.min(99, Number(j.progress) || 0));
                 const hasMeasuredProgress = pct > 0;
                 setProgress(pct, !hasMeasuredProgress && j.status === "running");
+                if (j.quality_changed && j.adaptive_note) {
+                    showAdaptiveChangeNote({
+                        quality_used: j.quality_to || j.quality_used,
+                        adaptive_note: j.adaptive_note,
+                    });
+                }
                 const speedTxt = formatSpeed(j.speed);
                 const progressText = hasMeasuredProgress
                     ? `Telechargement ${pct.toFixed(0)}%${speedTxt}`

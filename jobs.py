@@ -138,6 +138,18 @@ def make_progress_hook(job_id: str) -> Callable[[dict[str, Any]], None]:
             )
         elif status == "finished":
             update_job(job_id, progress=99.0, message="Finalisation / fusion...")
+        elif status == "adaptive_quality":
+            update_job(
+                job_id,
+                quality_changed=True,
+                quality_from=d.get("quality_from"),
+                quality_to=d.get("quality_to"),
+                quality_used=d.get("quality_used"),
+                adaptive_note=d.get("adaptive_note"),
+                adaptive_eta_seconds=d.get("adaptive_eta_seconds"),
+                adaptive_threshold_seconds=d.get("adaptive_threshold_seconds"),
+                message=d.get("adaptive_note") or "Qualité abaissée automatiquement",
+            )
         elif status == "error":
             update_job(job_id, message=str(d.get("error") or "Erreur yt-dlp"))
 

@@ -437,9 +437,24 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
         # Si l'ETA est trop long, on downgrade immédiatement, peu importe le débit réel.
         if threshold and eta > threshold:
             state["decided"] = True
+            note = (
+                f"Baisse de qualité après 10 s : {tier} → {next_quality} "
+                f"(ETA {int(eta)} s > seuil {threshold} s)."
+            )
+            if user_hook is not None:
+                user_hook({
+                    "status": "adaptive_quality",
+                    "quality_from": tier,
+                    "quality_to": next_quality,
+                    "quality_changed": True,
+                    "quality_used": next_quality,
+                    "adaptive_note": note,
+                    "adaptive_eta_seconds": int(eta),
+                    "adaptive_threshold_seconds": threshold,
+                })
             raise _AdaptiveDowngrade(
                 next_quality,
-                f"Temps de téléchargement estimé trop long ({int(eta)}s > seuil {threshold}s en {tier}) → passage en {next_quality}",
+                note,
             )
 
     return hook
@@ -777,6 +792,7 @@ def download_media(
                 write_subtitles=write_subtitles,
                 progress_hook=progress_hook,
                 adaptive_quality=adaptive_quality,
+                download_id=dl_id,
             )
         except Exception as e:
             try:
@@ -931,6 +947,7 @@ def _ydlp_download(
     write_subtitles: bool = False,
     progress_hook=None,
     adaptive_quality: bool = True,
+    download_id: int | None = None,
 ) -> dict[str, Any]:
     """Téléchargement yt-dlp interne (version étendue)."""
     os.makedirs(output_path, exist_ok=True)
@@ -1017,6 +1034,11 @@ def _ydlp_download(
             connections = min(connection_tier, 16)
             opts["external_downloader"] = "aria2c"
             args = [
+                *(
+                    [f"--gid={download_id:06x}{'0' * 10}"]
+                    if download_id is not None and download_id < 0x1000000
+                    else []
+                ),
                 f"--max-connection-per-server={connections}",
                 f"--split={connections}",
                 "--min-split-size=1M",

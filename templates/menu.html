@@ -141,8 +141,8 @@
                 <div class="brand">
                     <div class="brand-mark">▼</div>
                     <div class="brand-copy">
-                        <h1 id="menuTitle">{{ menu.name }}</h1>
-                        <p>{{ menu.description }}</p>
+                        <h1 id="menuTitle">DowFlow</h1>
+                        <p>Téléchargement vidéo et audio</p>
                     </div>
                 </div>
                 <div class="ffmpeg-status">
@@ -161,14 +161,36 @@
             </section>
 
             <section class="grid">
-                {% for item in menu["items"] %}
-                <a class="card {{ 'available' if item.available else 'disabled' }}" href="{{ item.href }}" data-menu-id="{{ item.id }}">
-                    <div class="card-index">{{ "%02d"|format(loop.index) }}</div>
-                    <h3>{{ item.label }}</h3>
-                    <p>{{ item.description }}</p>
-                    <span class="badge {{ 'on' if item.available else 'soon' }}">{{ 'Disponible' if item.available else 'Bientôt' }}</span>
+                <a class="card available" href="/video" data-menu-id="video">
+                    <div class="card-index">01</div>
+                    <h3>Vidéo</h3>
+                    <p>Télécharge une vidéo ou un audio depuis une URL.</p>
+                    <span class="badge on">Disponible</span>
                 </a>
-                {% endfor %}
+                <a class="card available" href="/music" data-menu-id="music">
+                    <div class="card-index">02</div>
+                    <h3>Musique</h3>
+                    <p>Recherche, téléchargement et bibliothèque musicale.</p>
+                    <span class="badge on">Disponible</span>
+                </a>
+                <a class="card disabled" href="/film" data-menu-id="film">
+                    <div class="card-index">03</div>
+                    <h3>Film / Série</h3>
+                    <p>Films et séries avec audio et sous-titres.</p>
+                    <span class="badge soon">Bientôt</span>
+                </a>
+                <a class="card disabled" href="/anime" data-menu-id="anime">
+                    <div class="card-index">04</div>
+                    <h3>Anime / Dessin animé</h3>
+                    <p>Animes et dessins animés en VF ou VOSTFR.</p>
+                    <span class="badge soon">Bientôt</span>
+                </a>
+                <a class="card disabled" href="/image" data-menu-id="image">
+                    <div class="card-index">05</div>
+                    <h3>Manhwa / Manga / BD / Image</h3>
+                    <p>Chapitres, planches et images.</p>
+                    <span class="badge soon">Bientôt</span>
+                </a>
             </section>
 
             <footer class="footer">

@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
+import re
 import sys
 import threading
 from pathlib import Path
@@ -82,12 +83,14 @@ class _ColorFormatter(logging.Formatter):
         start = line.find(level_name)
         if start >= 0:
             end = start + len(level_name)
-            return (
+            colored_line = (
                 line[:start]
                 + self.BOLD + color + level_name + self.RESET
                 + line[end:]
             )
-        return color + line + self.RESET
+        else:
+            colored_line = color + line + self.RESET
+        return colored_line
 
 
 class _FileFormatter(logging.Formatter):
@@ -98,6 +101,17 @@ class _FileFormatter(logging.Formatter):
             fmt="%(asctime)s | %(levelname)-7s | %(name)-16s | %(process)d | %(thread)d | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
+
+
+class _ConsoleAccessFilter(logging.Filter):
+    _ACCESS_LINE = re.compile(
+        r'^.+ - - \[[^\]]+\] "[A-Z]+ .+ HTTP/[\d.]+" \d{3} -$'
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name == "werkzeug" and record.levelno == logging.INFO:
+            return self._ACCESS_LINE.match(record.getMessage()) is None
+        return True
 
 
 # ── Configuration globale ──────────────────────────────────────────────────────
@@ -135,6 +149,7 @@ def _configure() -> None:
         console = logging.StreamHandler(console_stream)
         console.setLevel(logging.DEBUG if debug_env else logging.INFO)
         console.setFormatter(_ColorFormatter(use_color=True))
+        console.addFilter(_ConsoleAccessFilter())
         root.addHandler(console)
         if debug_env:
             logging.getLogger("yt_dlp").setLevel(logging.DEBUG)

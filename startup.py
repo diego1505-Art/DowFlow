@@ -25,6 +25,23 @@ from rich.text import Text
 
 STARTUP_PANEL_HEIGHT = 18
 APP_VERSION = "V13"
+_LOG_ENTRY_RE = re.compile(
+    r"^(?P<time>\d{2}:\d{2}:\d{2})\s*\|\s*(?P<level>[A-Z]+)\s*\|\s*"
+    r"(?P<logger>[^|]+?)\s*\|\s*(?P<message>.*)$"
+)
+_HTTP_ACCESS_RE = re.compile(
+    r'^(?P<ip>.+?)\s+-\s+-\s+\[(?P<date>[^\]]+)\]\s+"'
+    r'(?P<method>[A-Z]+)\s+(?P<path>.*?)\s+HTTP/(?P<version>[\d.]+)"\s+'
+    r'(?P<status>\d{3})\s+(?P<size>\S+)$'
+)
+_ARIA2_PROGRESS_RE = re.compile(
+    r"^\[#(?P<gid>[0-9a-fA-F]+)\s+(?P<downloaded>[^/\s]+)/(?P<total>[^\s(]+)"
+    r"\((?P<percent>[\d.]+%)\)\s+CN:(?P<connections>\d+)"
+    r"(?:\s+DL:(?P<speed>\S+))?(?:\s+ETA:(?P<eta>[^\]\s]+))?\]$"
+)
+_YTDLP_PROGRESS_RE = re.compile(
+    r"^\[download\]\s+(?P<percent>[\d.]+%)\s+of\s+(?P<details>.+)$"
+)
 
 
 def _triangle_rows(console: Console, frame_number: int) -> Table:
@@ -56,7 +73,7 @@ def _frame(
     unicode_terminal = console.encoding.lower().startswith("utf")
     bar_empty = "·" if unicode_terminal else "."
     bar_fill = "━" if unicode_terminal else "="
-    progress_width = 30
+    progress_width = max(30, len(version_text), len("Initialisation terminée"))
     progress = progress_width if complete else min(progress_width - 1, frame_number // 3)
     status = (
         "Initialisation terminée" if complete
@@ -143,6 +160,139 @@ def _capture_output(stream: BinaryIO, output: Queue[str | None]) -> None:
     output.put(None)
 
 
+def _format_output_line(line: str) -> Text:
+    source = Text.from_ansi(line)
+    plain = source.plain.strip()
+
+    aria_match = _ARIA2_PROGRESS_RE.match(plain)
+    if aria_match:
+        parts = aria_match.groupdict()
+        percent_style = "bold bright_cyan"
+        display_id = parts["gid"]
+        if len(display_id) == 6:
+            try:
+                display_id = str(int(display_id, 16))
+            except ValueError:
+                pass
+        elif len(display_id) == 16:
+            try:
+                display_id = str(int(display_id, 16))
+            except ValueError:
+                pass
+        text = Text()
+        text.append("[", style="dim")
+        text.append("#", style="dim")
+        text.append(display_id, style="bold bright_magenta")
+        text.append(" ", style="dim")
+        text.append(parts["downloaded"], style="bold bright_green")
+        text.append("/", style="dim")
+        text.append(parts["total"], style="bright_black")
+        text.append("(", style="dim")
+        text.append(parts["percent"], style=percent_style)
+        text.append(") CN:", style="dim")
+        text.append(parts["connections"], style="bold bright_cyan")
+        if parts["speed"]:
+            text.append(" DL:", style="dim")
+            text.append(parts["speed"], style="bold bright_green")
+        if parts["eta"]:
+            text.append(" ETA:", style="dim")
+            text.append(parts["eta"], style="bold yellow")
+        text.append("]", style="dim")
+        return text
+
+    ytdlp_match = _YTDLP_PROGRESS_RE.match(plain)
+    if ytdlp_match:
+        text = Text()
+        text.append("[download] ", style="bold bright_cyan")
+        text.append(ytdlp_match["percent"], style="bold bright_cyan")
+        text.append(" of ", style="dim")
+        text.append(ytdlp_match["details"], style="white")
+        return text
+
+    log_match = _LOG_ENTRY_RE.match(plain)
+    if log_match:
+        message = log_match["message"]
+        adaptive_change = (
+            log_match["logger"].strip() == "playlist"
+            and message.startswith("[adaptive] Baisse de qualité après 10 s :")
+        )
+        text = Text("\n" if adaptive_change else "")
+        text.append(log_match["time"], style="dim")
+        text.append(" | ", style="bright_black")
+        level = log_match["level"]
+        level_styles = {
+            "DEBUG": "dim cyan",
+            "INFO": "bold bright_cyan",
+            "SUCCESS": "bold bright_green",
+            "WARNING": "bold yellow",
+            "ERROR": "bold bright_red",
+            "CRITICAL": "bold bright_magenta",
+        }
+        text.append(level, style=level_styles.get(level, "bold white"))
+        text.append(" | ", style="bright_black")
+        text.append(log_match["logger"].strip(), style="bold #7dd3fc")
+        text.append(" | ", style="bright_black")
+
+        access_match = _HTTP_ACCESS_RE.match(message)
+        if access_match:
+            access = access_match.groupdict()
+            status = int(access["status"])
+            status_style = (
+                "bold bright_green" if status < 400
+                else "bold yellow" if status < 500
+                else "bold bright_red"
+            )
+            text.append(access["ip"], style="dim")
+            text.append(f" - - [{access['date']}] ", style="bright_black")
+            text.append(f'"{access["method"]} ', style="bold bright_cyan")
+            text.append(access["path"], style="white")
+            text.append(f' HTTP/{access["version"]}" ', style="bright_black")
+            text.append(access["status"], style=status_style)
+            text.append(f" {access['size']}", style="dim")
+        else:
+            text.append_text(Text.from_ansi(message))
+        return text
+
+    if plain.startswith("ERROR:"):
+        return Text(plain, style="bold bright_red")
+    if plain.startswith("WARNING:"):
+        return Text(plain, style="bold yellow")
+    return source
+
+
+def _should_show_output_line(line: str) -> bool:
+    plain = Text.from_ansi(line).plain.strip()
+    if plain.startswith(
+        "WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available."
+    ):
+        return False
+    if plain.startswith("[download]") and ("Unknown B/s" in plain or "ETA Unknown" in plain):
+        return False
+
+    log_match = _LOG_ENTRY_RE.match(plain)
+    if not log_match or log_match["logger"].strip() != "werkzeug":
+        return True
+    if log_match["level"] != "INFO":
+        return True
+
+    access_match = _HTTP_ACCESS_RE.match(log_match["message"])
+    if not access_match:
+        return True
+
+    method = access_match["method"]
+    path = access_match["path"].split("?", 1)[0]
+    if method == "GET":
+        return path in {"/", "/video", "/music", "/film", "/anime", "/image"}
+    if method == "POST":
+        return path in {
+            "/api/music/download",
+            "/api/music/search",
+            "/download",
+            "/download-async",
+        }
+    return False
+
+
 def _drain_output(output: Queue[str | None], lines: deque[str]) -> bool:
     finished = False
     while True:
@@ -152,7 +302,7 @@ def _drain_output(output: Queue[str | None], lines: deque[str]) -> bool:
             return finished
         if item is None:
             finished = True
-        else:
+        elif _should_show_output_line(item):
             lines.append(item)
 
 
@@ -160,7 +310,7 @@ def _logs_panel(lines: deque[str], max_lines: int) -> Panel:
     visible_lines = list(lines)[-max_lines:]
     if not visible_lines:
         visible_lines = ["En attente des journaux du serveur..."]
-    content = Group(*(Text.from_ansi(line) for line in visible_lines))
+    content = Group(*(_format_output_line(line) for line in visible_lines))
     return Panel(content, title="Journaux système", border_style="#7d2829")
 
 
@@ -261,9 +411,7 @@ def main() -> int:
                     output_finished = _drain_output(output, log_lines) or output_finished
                     log_lines.append(failure)
                     log_lines.append("Consultez le dossier logs pour le détail.")
-                    _update_dashboard(
-                        layout, console, frame_number, log_lines, failed=True
-                    )
+                    _update_dashboard(layout, console, frame_number, log_lines, failed=True)
                     break
 
                 _update_dashboard(
@@ -274,22 +422,23 @@ def main() -> int:
                     complete=ready,
                     version_text=version_text,
                 )
-                if ready and process is not None and process.poll() is not None and output_finished:
-                    exit_code = process.returncode or 0
-                    if exit_code:
-                        log_lines.append(f"Serveur arrêté avec le code {exit_code}.")
-                        _update_dashboard(
-                            layout,
-                            console,
-                            frame_number,
-                            log_lines,
-                            complete=True,
-                            version_text=version_text,
-                        )
+                if ready:
                     break
 
                 frame_number += 1
                 time.sleep(0.125)
+
+        if ready and process is not None:
+            while not output_finished or process.poll() is None:
+                try:
+                    line = output.get(timeout=0.1)
+                except Empty:
+                    continue
+                if line is None:
+                    output_finished = True
+                elif _should_show_output_line(line):
+                    console.print(_format_output_line(line), soft_wrap=True)
+            exit_code = process.wait()
     except KeyboardInterrupt:
         if process is not None and process.poll() is None:
             process.terminate()

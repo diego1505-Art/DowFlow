@@ -20,7 +20,6 @@ from playlist import download_media, get_frontend_config
 from logger import get_logger
 from jobs import start_download_job, get_job, list_jobs
 from database import download_list, download_count_by_status
-from menu_config import load_menu, rename_menu
 import music
 
 log = get_logger("app")
@@ -96,8 +95,7 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 @app.route("/")
 def index():
     """Grand menu : choix du type de telechargement."""
-    menu = load_menu()
-    return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu)
+    return render_template("menu.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.get("/service-worker.js")
@@ -115,24 +113,6 @@ def application_status():
     })
 
 
-@app.get("/api/menu")
-def menu_config_api():
-    return jsonify(load_menu())
-
-
-@app.post("/api/menu/rename")
-def rename_menu_api():
-    payload = request.get_json(silent=True) or {}
-    menu_id = str(payload.get("id", "")).strip()
-    label = str(payload.get("label", "")).strip()
-    if not menu_id or not label:
-        return jsonify({"success": False, "error": "Un identifiant et un nom sont requis."}), 400
-    try:
-        return jsonify({"success": True, "menu": rename_menu(menu_id, label)})
-    except KeyError:
-        return jsonify({"success": False, "error": "Ce menu n'existe pas."}), 404
-
-
 @app.route("/video")
 def video_page():
     """Telechargeur video / audio generique (template historique)."""
@@ -141,8 +121,20 @@ def video_page():
 
 @app.route("/music")
 def music_page():
-    """Espace musique : recherche, populaires, telechargement, bibliotheque."""
+    """Espace musique — Accueil (lecteur, themes, recents)."""
     return render_template("music.html", has_ffmpeg=has_ffmpeg())
+
+
+@app.route("/music/explore")
+def music_explore_page():
+    """Espace musique — Explorer (biblio locale + telechargement en ligne)."""
+    return render_template("music_explore.html", has_ffmpeg=has_ffmpeg())
+
+
+@app.route("/music/liked")
+def music_liked_page():
+    """Espace musique — Favoris."""
+    return render_template("music_liked.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/film")

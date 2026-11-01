@@ -34,8 +34,6 @@ let heroTrackArtist = document.getElementById("hero-track-artist");
 let heroProgress = document.getElementById("hero-progress");
 let heroPhoto = document.getElementById("hero-photo");
 let heroCover = document.getElementById("hero-cover");
-let heroSpotifyCode = document.getElementById("hero-spotify-code");
-let heroCodeSeed = "";
 
 const refreshHeroRefs = () => {
   heroTrackTitle = document.getElementById("hero-track-title");
@@ -43,7 +41,6 @@ const refreshHeroRefs = () => {
   heroProgress = document.getElementById("hero-progress");
   heroPhoto = document.getElementById("hero-photo");
   heroCover = document.getElementById("hero-cover");
-  heroSpotifyCode = document.getElementById("hero-spotify-code");
 };
 
 // VARIABLES POUR LA LECTURE EN BOUCLE DES FAVORIS
@@ -287,58 +284,6 @@ const updateFavoriteButton = () => {
   likeCurrentButton.classList.toggle("is-liked", liked);
 };
 
-const hashSeed = (value) => {
-  let hash = 2166136261;
-  const text = String(value || "dowflow");
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-};
-
-const renderSpotifyCode = (seed) => {
-  if (!heroSpotifyCode) {
-    return;
-  }
-  if (heroCodeSeed === seed && heroSpotifyCode.childElementCount) {
-    return;
-  }
-  heroCodeSeed = seed;
-  heroSpotifyCode.innerHTML = "";
-
-  const rng = (() => {
-    let state = hashSeed(seed) || 1;
-    return () => {
-      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-      return state / 4294967296;
-    };
-  })();
-
-  const heights = [18, 28, 38, 48, 62, 78, 92];
-  const pattern = [];
-  pattern.push("dot");
-  for (let i = 0; i < 23; i += 1) {
-    if (rng() < 0.12) {
-      pattern.push("dot");
-    } else {
-      pattern.push(heights[Math.floor(rng() * heights.length)]);
-    }
-  }
-  pattern.push("dot");
-
-  pattern.forEach((item) => {
-    const el = document.createElement("span");
-    if (item === "dot") {
-      el.className = "code-dot";
-    } else {
-      el.className = "code-bar";
-      el.style.setProperty("--h", `${item}%`);
-    }
-    heroSpotifyCode.appendChild(el);
-  });
-};
-
 const syncPlayerLabels = () => {
   const currentTrack = tracks[currentIndex];
 
@@ -358,7 +303,6 @@ const syncPlayerLabels = () => {
       heroTrackTitle.textContent = "No track";
       heroTrackArtist.textContent = "Choose a track to begin";
     }
-    renderSpotifyCode("empty");
     updateFavoriteButton();
     return;
   }
@@ -381,7 +325,6 @@ const syncPlayerLabels = () => {
     heroTrackTitle.textContent = currentTrack.title;
     heroTrackArtist.textContent = currentTrack.artist;
   }
-  renderSpotifyCode(currentTrack.file || currentTrack.title || "track");
   updateFavoriteButton();
 };
 

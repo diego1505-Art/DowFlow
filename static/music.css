@@ -419,39 +419,6 @@ body.is-page-transitioning .main-content {
   width: min(840px, 100%);
 }
 
-.spotify-code {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 54px;
-  margin-top: 16px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: #f3f1ea;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
-  max-width: min(420px, 100%);
-  overflow: hidden;
-}
-
-.spotify-code span {
-  display: block;
-  flex: 0 0 auto;
-  background: #111;
-  border-radius: 999px;
-}
-
-.spotify-code .code-bar {
-  width: 3.5px;
-  height: var(--h, 42%);
-  align-self: center;
-}
-
-.spotify-code .code-dot {
-  width: 4px;
-  height: 4px;
-  align-self: center;
-}
-
 .hero-progress-track {
   width: min(520px, 100%);
   height: 7px;
@@ -469,15 +436,6 @@ body.is-page-transitioning .main-content {
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
   box-shadow: 0 0 18px rgba(30, 215, 96, 0.42);
   transition: width 120ms linear;
-}
-
-body.is-playing .spotify-code {
-  animation: spotify-code-pulse 1.8s ease-in-out infinite;
-}
-
-@keyframes spotify-code-pulse {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.06); }
 }
 
 .hero-stage-copy h2 {
@@ -1595,17 +1553,6 @@ body.theme-active .list-row:hover {
   .hero-stage-copy p {
     font-size: 0.9rem;
     margin-bottom: 6px;
-  }
-
-  .spotify-code {
-    height: 42px;
-    margin-top: 10px;
-    padding: 7px 10px;
-    gap: 2px;
-  }
-
-  .spotify-code .code-bar {
-    width: 2.5px;
   }
 
   .badge {

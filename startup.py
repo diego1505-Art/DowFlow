@@ -74,12 +74,12 @@ def _frame(
     unicode_terminal = console.encoding.lower().startswith("utf")
     bar_empty = "·" if unicode_terminal else "."
     bar_fill = "━" if unicode_terminal else "="
-    progress_width = max(30, len(version_text), len("Initialisation terminée"))
+    progress_width = max(30, len(version_text), len("Initialization complete"))
     progress = progress_width if complete else min(progress_width - 1, frame_number // 3)
     status = (
-        "Initialisation terminée" if complete
-        else "Échec de l'initialisation" if failed
-        else "Démarrage du serveur"
+        "Initialization complete" if complete
+        else "Initialization failed" if failed
+        else "Starting server"
     )
     dots = "" if complete or failed else "." * ((frame_number // 5) % 4)
     bar_style = "bold red" if failed else "bold #ff5a3d"
@@ -310,9 +310,9 @@ def _drain_output(output: Queue[str | None], lines: deque[str]) -> bool:
 def _logs_panel(lines: deque[str], max_lines: int) -> Panel:
     visible_lines = list(lines)[-max_lines:]
     if not visible_lines:
-        visible_lines = ["En attente des journaux du serveur..."]
+        visible_lines = ["Waiting for server logs..."]
     content = Group(*(_format_output_line(line) for line in visible_lines))
-    return Panel(content, title="Journaux système", border_style="#7d2829")
+    return Panel(content, title="System logs", border_style="#7d2829")
 
 
 def _update_dashboard(
@@ -348,7 +348,7 @@ def main() -> int:
     failure = None
 
     if _port_is_open(probe_host, port):
-        failure = f"Le port {port} est déjà utilisé."
+        failure = f"Port {port} is already in use."
     else:
         try:
             process = subprocess.Popen(
@@ -370,7 +370,7 @@ def main() -> int:
     exit_code = 1
     version_text = ""
     ready_since: float | None = None
-    log_lines: deque[str] = deque(["Démarrage du serveur DowFlow..."], maxlen=500)
+    log_lines: deque[str] = deque(["Starting DowFlow server..."], maxlen=500)
     layout = Layout()
     layout.split_column(
         Layout(name="startup", size=STARTUP_PANEL_HEIGHT),
@@ -387,19 +387,19 @@ def main() -> int:
                         ready = True
                         ready_since = time.monotonic()
                         version_text = _startup_version_text()
-                        log_lines.append(f"Serveur démarré sur {url}")
+                        log_lines.append(f"Server started at {url}")
                         try:
                             browser_opened = webbrowser.open(url)
                         except Exception:
                             browser_opened = False
                         if browser_opened:
-                            log_lines.append("Interface ouverte dans le navigateur.")
+                            log_lines.append("Interface opened in the browser.")
                         else:
-                            log_lines.append(f"Ouvrez cette adresse dans votre navigateur : {url}")
+                            log_lines.append(f"Open this address in your browser: {url}")
                     elif process is not None and process.poll() is not None:
-                        failure = f"Le serveur s'est arrêté au démarrage (code {process.returncode})."
+                        failure = f"The server stopped during startup (code {process.returncode})."
                     elif process is not None and time.monotonic() >= deadline:
-                        failure = "Le serveur n'a pas répondu après 10 secondes."
+                        failure = "The server did not respond within 10 seconds."
 
                 if failure is not None:
                     if process is not None and process.poll() is None:
@@ -413,7 +413,7 @@ def main() -> int:
                         output_reader.join(timeout=2)
                     output_finished = _drain_output(output, log_lines) or output_finished
                     log_lines.append(failure)
-                    log_lines.append("Consultez le dossier logs pour le détail.")
+                    log_lines.append("See the logs folder for details.")
                     _update_dashboard(layout, console, frame_number, log_lines, failed=True)
                     break
 

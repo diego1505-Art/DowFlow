@@ -327,13 +327,13 @@ def detect_connection_tier(speed_mbps: float | None = None, force: bool = False)
 
     if override > 0:
         _CONNECTION_TIER = max(1, override)
-        log.info("[perf] Connexions forcées : x%d (DOWFLOW_CONNECTIONS)", _CONNECTION_TIER)
+        log.info("[perf] Forced connections: x%d (DOWFLOW_CONNECTIONS)", _CONNECTION_TIER)
     else:
         cores = os.cpu_count() or 2
         measured = speed_mbps if speed_mbps is not None else _measure_network_speed_mbps()
         _CONNECTION_TIER = pick_connection_tier(cores, measured)
         log.info(
-            "[perf] Palier de connexions : x%d (%d cœurs, débit %s)",
+            "[perf] Connection tier: x%d (%d cores, speed %s)",
             _CONNECTION_TIER,
             cores,
             f"{measured:.1f} Mbps" if measured > 0 else "non détecté",

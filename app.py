@@ -619,15 +619,15 @@ def _start_network_detection() -> None:
         try:
             from playlist import _measure_network_speed_mbps, detect_connection_tier
 
-            log.info("Analyse du reseau en arriere-plan...")
+            log.info("Measuring network speed in background...")
             speed = _measure_network_speed_mbps()
             if speed > 0:
-                log.success("Debit detecte : %.2f Mbps", speed)
+                log.success("Network speed detected: %.2f Mbps", speed)
             else:
-                log.warning("Debit non detecte (verifiez votre connexion).")
+                log.warning("Network speed unavailable (check your connection).")
             detect_connection_tier(speed)
         except Exception as exc:
-            log.debug("Detection reseau ignoree : %s", exc, exc_info=True)
+            log.debug("Network detection skipped: %s", exc, exc_info=True)
 
     threading.Thread(target=worker, name="dowflow-network-detection", daemon=True).start()
 
@@ -640,10 +640,10 @@ if __name__ == "__main__":
 
     configured_host = os.environ.get("DOWFLOW_HOST", "127.0.0.1")
     configured_port = int(os.environ.get("DOWFLOW_PORT", "5001"))
-    log.success("Serveur démarré sur http://%s:%d", configured_host, configured_port)
+    log.success("Server started at http://%s:%d", configured_host, configured_port)
     if DEBUG_MODE:
         log.info("DEBUG: historique=/history  jobs=/jobs  async=/download-async")
-    log.info("Ctrl+C pour arrêter")
+    log.info("Press Ctrl+C to stop")
     app.run(
         debug=DEBUG_MODE,
         host=os.environ.get("DOWFLOW_HOST", "127.0.0.1"),

@@ -10,15 +10,15 @@ if not exist "%PYTHON%" set "PYTHON=python"
 "%PYTHON%" --version >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo [ERREUR] Python introuvable dans le PATH.
-    echo Installe Python et coche "Add Python to PATH".
+    echo [ERROR] Python was not found in PATH.
+    echo Install Python and enable "Add Python to PATH".
     echo.
     pause
     exit /b 1
 )
 
 echo.
-echo [DOWFLOW] Lancement du centre de diagnostic...
+echo [DOWFLOW] Starting diagnostic center...
 for %%A in (1 2 3) do (
     <nul set /p "=."
     >nul ping 127.0.0.1 -n 2
@@ -41,7 +41,7 @@ for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\aria2.aria2*") do (
 set "ERR=%ERRORLEVEL%"
 if not "%ERR%"=="0" (
     echo.
-    echo [ERREUR] tools\debug_center.py a quitte avec le code %ERR%.
+    echo [ERROR] tools\debug_center.py exited with code %ERR%.
     pause
 )
 exit /b %ERR%

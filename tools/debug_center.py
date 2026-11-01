@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DowFlow Debug Center — menu interactif lisible (ASCII).
-Lance via debug.bat ou : python tools/debug_center.py
+Run with debug.bat or: python tools/debug_center.py
 """
 from __future__ import annotations
 
@@ -138,28 +138,28 @@ def check_python() -> None:
     if venv.is_file():
         ok(f"Virtualenv present : {venv}")
     else:
-        warn("Virtualenv .venv absent — lance start.bat pour le creer")
+        warn("Virtualenv .venv missing - run start.bat to create it")
 
     for folder in ("downloads", "downloads/music"):
         path = BASE / folder
         if path.is_dir():
             count = sum(1 for _ in path.rglob('*') if _.is_file())
-            ok(f"Dossier {folder}/ OK ({count} fichiers)")
+            ok(f"Folder {folder}/ OK ({count} files)")
         else:
             path.mkdir(parents=True, exist_ok=True)
-            ok(f"Dossier {folder}/ cree")
+            ok(f"Folder {folder}/ created")
     info(f"Session log : {SESSION_LOG}")
 
 
 def check_deps() -> None:
-    section("Dependances Python")
+    section("Python dependencies")
     for mod in ("flask", "yt_dlp", "playwright", "requests", "rich"):
         try:
             m = importlib.import_module(mod)
             ver = getattr(m, "__version__", "?")
             ok(f"{mod} v{ver}")
         except Exception as e:
-            fail(f"{mod} absent — {e}")
+            fail(f"{mod} missing - {e}")
 
     section("Imports codebase")
     modules = (
@@ -209,12 +209,12 @@ def check_git_update() -> None:
             check=False,
         )
         if remote_result.returncode != 0:
-            warn("Impossible de verifier GitHub")
+            warn("Unable to check GitHub")
             return
 
         remote_head = remote_result.stdout.split()[0] if remote_result.stdout.split() else ""
         if remote_head == local_head:
-            ok(f"Projet a jour ({local_head[:12]})")
+            ok(f"Project is up to date ({local_head[:12]})")
         else:
             changes = subprocess.run(
                 ["git", "status", "--porcelain"],
@@ -224,12 +224,12 @@ def check_git_update() -> None:
                 check=False,
             )
             if changes.stdout.strip():
-                warn("Mise a jour disponible, mais des changements locaux sont presents")
+                warn("Update available, but local changes are present")
             else:
-                warn(f"Mise a jour disponible : {remote_head[:12]}")
+                warn(f"Update available: {remote_head[:12]}")
         info(f"Depot : {GITHUB_REPO}")
     except (OSError, subprocess.SubprocessError) as exc:
-        warn(f"Verification GitHub impossible — {exc}")
+        warn(f"GitHub check failed - {exc}")
 
 
 def check_tools() -> None:
@@ -240,7 +240,7 @@ def check_tools() -> None:
         if path:
             ok(f"{tool} → {path}")
         elif tool == "aria2c":
-            warn(f"{tool} absent (optionnel, accelere les DL)")
+            warn(f"{tool} missing (optional, speeds up downloads)")
         else:
             fail(f"{tool} introuvable")
 
@@ -261,7 +261,7 @@ def check_playwright() -> None:
     try:
         from playwright.sync_api import sync_playwright
     except Exception as e:
-        fail(f"Module playwright absent — {e}")
+        fail(f"Playwright module missing - {e}")
         return
 
     ok("Module playwright importe")
@@ -271,7 +271,7 @@ def check_playwright() -> None:
             page = browser.new_page()
             page.goto("about:blank")
             browser.close()
-        ok("Chromium lance + page blanche OK")
+        ok("Chromium launched + blank page OK")
     except Exception as e:
         warn(f"Chromium KO — tentative d'install : {e}")
         try:
@@ -286,7 +286,7 @@ def check_playwright() -> None:
     profile = BASE / "browser_profile"
     if not profile.is_dir():
         profile.mkdir(parents=True, exist_ok=True)
-        ok("browser_profile/ cree")
+        ok("browser_profile/ created")
     else:
         ok("browser_profile/ present")
 
@@ -312,11 +312,11 @@ def test_ytdlp() -> None:
         ok(f"Duree   : {meta.get('duration')} s")
         ok(f"Formats : {len(meta.get('formats') or [])}")
     except Exception as e:
-        fail(f"yt-dlp erreur — {e}")
+        fail(f"yt-dlp error - {e}")
 
 
 def test_network() -> None:
-    section("Reseau / DNS")
+    section("Network / DNS")
     for host in ("8.8.8.8", "1.1.1.1"):
         try:
             sock = socket.create_connection((host, 53), timeout=2)
@@ -325,7 +325,7 @@ def test_network() -> None:
         except OSError:
             fail(f"Pas de reponse {host}")
 
-    section("Sites cibles")
+    section("Target sites")
     targets = (
         "https://www.youtube.com",
         "https://franime.fr",
@@ -342,7 +342,7 @@ def test_network() -> None:
 
 
 def check_codebase() -> None:
-    section("Fichiers essentiels")
+    section("Essential files")
     files = [
         "app.py",
         "playlist.py",
@@ -377,7 +377,7 @@ def check_codebase() -> None:
         else:
             fail(f"{rel} MANQUANT")
 
-    section("Healthcheck Flask APIs")
+    section("Flask API health check")
     try:
         import threading
         import requests
@@ -419,14 +419,14 @@ def check_database() -> None:
         from database import _conn  # noqa: PLC2701
 
         if not db_is_ready():
-            warn(f"DB absente ou vide : {DB_PATH}")
+            warn(f"Database missing or empty: {DB_PATH}")
             return
         ok(f"DB : {DB_PATH} ({DB_PATH.stat().st_size} octets)")
         counts = download_count_by_status()
         info(f"Stats status : {counts or '{}'}")
         rows = download_list(limit=8)
         if not rows:
-            info("Aucun telechargement enregistre")
+            info("No downloads recorded")
             return
         log_line(f"  {C.DIM}Derniers telechargements :{C.RESET}")
         for row in rows:
@@ -448,7 +448,7 @@ def check_database() -> None:
                     f"ok={s['success_count']} fail={s['fail_count']}"
                 )
     except Exception as e:
-        fail(f"Database — {e}")
+        fail(f"Database - {e}")
 
 
 def check_config_dump() -> None:
@@ -468,10 +468,10 @@ def check_config_dump() -> None:
 
 
 def clean_partials() -> None:
-    section("Nettoyage fichiers partiels (.part / .aria2 / .ytdl)")
+    section("Clean partial files (.part / .aria2 / .ytdl)")
     downloads = BASE / "downloads"
     if not downloads.is_dir():
-        warn("Pas de dossier downloads/")
+        warn("No downloads/ folder")
         return
     patterns = ("*.part", "*.aria2", "*.ytdl")
     removed = 0
@@ -483,17 +483,17 @@ def clean_partials() -> None:
                 path.unlink()
                 removed += 1
                 freed += size
-                info(f"Supprime : {path.relative_to(BASE)}")
+                info(f"Removed: {path.relative_to(BASE)}")
             except OSError as e:
                 fail(f"{path.name} — {e}")
     if removed:
-        ok(f"{removed} fichier(s) supprime(s), {freed / 1024 / 1024:.1f} Mo liberes")
+        ok(f"{removed} file(s) removed, {freed / 1024 / 1024:.1f} MB freed")
     else:
-        ok("Aucun fichier partiel trouve")
+        ok("No partial files found")
 
 
 def open_folders() -> None:
-    section("Ouvrir dossiers")
+    section("Open folders")
     choices = {
         "1": BASE / "logs",
         "2": BASE / "downloads",
@@ -503,8 +503,8 @@ def open_folders() -> None:
     print("  Option 1 - logs/")
     print("  Option 2 - downloads/")
     print("  Option 3 - downloads/music/")
-    print("  Option 4 - racine projet")
-    print("  Option 0 - annuler")
+    print("  Option 4 - project root")
+    print("  Option 0 - cancel")
     choice = input(f"\n  {C.BOLD}Choix : {C.RESET}").strip()
     path = choices.get(choice)
     if not path:
@@ -518,7 +518,7 @@ def open_folders() -> None:
 
 
 def start_debug_server() -> None:
-    section("Demarrage DowFlow en mode DEBUG")
+    section("Start DowFlow in DEBUG mode")
     ensure_path_tools()
     env = os.environ.copy()
     env["DOWFLOW_DEBUG"] = "1"
@@ -526,7 +526,7 @@ def start_debug_server() -> None:
     env["PYTHONUNBUFFERED"] = "1"
     info("DOWFLOW_DEBUG=1  FLASK_DEBUG=1")
     info("URL : http://127.0.0.1:5001")
-    info("Ctrl+C pour arreter")
+    info("Press Ctrl+C to stop")
     if os.name == "nt":
         subprocess.Popen(["cmd", "/c", "start", "", "http://127.0.0.1:5001"])
     try:
@@ -536,7 +536,7 @@ def start_debug_server() -> None:
 
 
 def full_diagnostic() -> None:
-    log_line(f"\n  {C.BOLD}DIAGNOSTIC COMPLET{C.RESET}")
+    log_line(f"\n  {C.BOLD}FULL DIAGNOSTIC{C.RESET}")
     check_python()
     check_git_update()
     check_deps()
@@ -547,26 +547,26 @@ def full_diagnostic() -> None:
     check_config_dump()
     test_network()
     log_line()
-    ok(f"Rapport sauvegarde : {SESSION_LOG}")
+    ok(f"Report saved: {SESSION_LOG}")
 
 
 # ── Menu ─────────────────────────────────────────────────────────────────────
 
 MENU = [
-    ("1", "Diagnostic COMPLET (tous les checks)", full_diagnostic),
-    ("2", "Verifier Python + dossiers downloads", check_python),
-    ("3", "Verifier dependances + imports codebase", check_deps),
-    ("4", "Verifier FFmpeg / FFprobe / aria2c / Chrome", check_tools),
-    ("5", "Verifier Playwright + navigateur", check_playwright),
+    ("1", "Full diagnostic (all checks)", full_diagnostic),
+    ("2", "Check Python + download folders", check_python),
+    ("3", "Check dependencies + code imports", check_deps),
+    ("4", "Check FFmpeg / FFprobe / aria2c / Chrome", check_tools),
+    ("5", "Check Playwright + browser", check_playwright),
     ("6", "Test yt-dlp YouTube (metadata)", test_ytdlp),
-    ("7", "Test reseau + sites cibles (YouTube, Deezer...)", test_network),
-    ("8", "Fichiers projet + healthcheck APIs", check_codebase),
-    ("9", "Historique SQLite + strategies sites", check_database),
-    ("10", "Dump config (formats, qualites, env)", check_config_dump),
-    ("11", "Nettoyer fichiers partiels (.part / .aria2)", clean_partials),
-    ("12", "Ouvrir logs / downloads / music / projet", open_folders),
-    ("13", "Demarrer DowFlow en mode DEBUG", start_debug_server),
-    ("14", "Verifier le commit GitHub", check_git_update),
+    ("7", "Test network + target sites (YouTube, Deezer...)", test_network),
+    ("8", "Project files + API health check", check_codebase),
+    ("9", "SQLite history + site strategies", check_database),
+    ("10", "Config dump (formats, quality, environment)", check_config_dump),
+    ("11", "Clean partial files (.part / .aria2)", clean_partials),
+    ("12", "Open logs / downloads / music / project", open_folders),
+    ("13", "Start DowFlow in DEBUG mode", start_debug_server),
+    ("14", "Check GitHub commit", check_git_update),
 ]
 
 
@@ -575,16 +575,16 @@ def show_menu() -> None:
     print()
     print(f"  {C.BOLD}{'=' * 58}{C.RESET}")
     print(f"  {C.BOLD}       DOWFLOW DEBUG CENTER{C.RESET}")
-    print(f"  {C.DIM}       Diagnostic toolkit — ASCII / lisible{C.RESET}")
+    print(f"  {C.DIM}       Diagnostic toolkit - readable ASCII{C.RESET}")
     print(f"  {C.BOLD}{'=' * 58}{C.RESET}")
     print(f"  {C.DIM}Log session : {SESSION_LOG.name}{C.RESET}")
     print(f"  {C.DIM}Dossier     : {BASE}{C.RESET}")
     print()
-    print(f"  {C.BOLD}Options :{C.RESET}")
+    print(f"  {C.BOLD}Options:{C.RESET}")
     print(f"  {'-' * 58}")
     for key, label, _ in MENU:
         print(f"  {C.YEL}Option {key:>2}{C.RESET}  -  {label}")
-    print(f"  {C.YEL}Option  0{C.RESET}  -  Quitter")
+    print(f"  {C.YEL}Option  0{C.RESET}  -  Quit")
     print(f"  {'-' * 58}")
     print()
 
@@ -602,14 +602,14 @@ def main() -> int:
     actions = {key: fn for key, _, fn in MENU}
     while True:
         show_menu()
-        choice = input(f"  {C.BOLD}Choisis une option : {C.RESET}").strip()
+        choice = input(f"  {C.BOLD}Choose an option: {C.RESET}").strip()
         if choice in {"0", "q", "Q"}:
             clear()
-            print(f"\n  Rapport : {SESSION_LOG}\n")
+            print(f"\n  Report: {SESSION_LOG}\n")
             return 0
         action = actions.get(choice)
         if not action:
-            warn("Option inconnue")
+            warn("Unknown option")
             time.sleep(0.8)
             continue
         clear()
@@ -619,7 +619,7 @@ def main() -> int:
         except KeyboardInterrupt:
             warn("Interrompu")
         except Exception as e:
-            fail(f"Erreur : {e}")
+            fail(f"Error: {e}")
             import traceback
             traceback.print_exc()
         if choice != "13":

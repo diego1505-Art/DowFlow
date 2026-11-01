@@ -34,19 +34,19 @@ app = Flask(__name__)
 
 DOWNLOAD_FOLDER.mkdir(exist_ok=True)
 
-# Catégories du grand menu non encore implementees
+# Categories not available yet in the main menu
 COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
     "film": (
-        "Film / Serie",
-        "Telechargement de films et series (multi-saisons, pistes audio, sous-titres).",
+        "Movies / Series",
+        "Download movies and series with multiple seasons, audio tracks and subtitles.",
     ),
     "anime": (
-        "Anime / Dessin anime",
-        "Animes, dessins animes et catalogues de diffusion en continu.",
+        "Anime / Animation",
+        "Anime, animated shows and streaming catalogs.",
     ),
     "image": (
-        "Manhwa / Manga / BD / Image",
-        "Chapitres, planches et images (manhwa, manga, bandes dessinees).",
+        "Manhwa / Manga / Comics / Images",
+        "Chapters, pages and images.",
     ),
 }
 
@@ -150,7 +150,7 @@ def coming_soon_page():
     """Categories du menu pas encore disponibles."""
     category = request.path.strip("/")
     label, description = COMING_SOON_CATEGORIES.get(
-        category, ("Bientot disponible", "Cette categorie arrive prochainement.")
+        category, ("Coming soon", "This category will be available in a future update.")
     )
     return render_template(
         "coming_soon.html",
@@ -193,7 +193,7 @@ def music_download():
     data = request.get_json(silent=True) or {}
     url = str(data.get("url") or "").strip()
     if not url:
-        return jsonify({"success": False, "error": "Aucun morceau selectionne."}), 400
+        return jsonify({"success": False, "error": "No track selected."}), 400
 
     audio_format = str(data.get("audio_format") or "mp3")
     if audio_format not in AUDIO_OUTPUT_FORMATS:
@@ -246,12 +246,12 @@ def music_delete():
     data = request.get_json(silent=True) or {}
     filename = data.get("filename")
     if not filename:
-        return jsonify({"success": False, "error": "Fichier non specifie."}), 400
+        return jsonify({"success": False, "error": "Filename is required."}), 400
     
     success = music.delete_track(filename)
     if success:
-        return jsonify({"success": True, "message": "Morceau supprime."})
-    return jsonify({"success": False, "error": "Morceau introuvable."}), 404
+        return jsonify({"success": True, "message": "Track deleted."})
+    return jsonify({"success": False, "error": "Track not found."}), 404
 
 
 @app.route("/check-ffmpeg")
@@ -299,7 +299,7 @@ def download_async():
         data = request.get_json() or {}
         source_value = (data.get("url") or "").strip().replace("\n", "").replace("\r", "")
         if not source_value:
-            return jsonify({"success": False, "error": "URL manquante."}), 400
+            return jsonify({"success": False, "error": "URL is required."}), 400
 
         # Chemins locaux : reponse immediate (pas de job)
         local_path = Path(source_value).expanduser()
@@ -314,12 +314,12 @@ def download_async():
                     "source_type": "local",
                     "source_label": str(local_path),
                     "previewable": local_path.suffix.lower() in PREVIEWABLE_EXTENSIONS,
-                    "message": "Fichier local pret sans copie.",
+                    "message": "Local file ready without copying.",
                 }
             )
 
         if not is_http_url(source_value):
-            return jsonify({"success": False, "error": "URL invalide ou chemin local introuvable."}), 400
+            return jsonify({"success": False, "error": "Invalid URL or local path not found."}), 400
 
         download_type = data.get("type", "video")
         quality = data.get("quality", "best")
@@ -392,11 +392,11 @@ def upload_local():
     try:
         file = request.files.get("file")
         if file is None or not file.filename:
-            return jsonify({"success": False, "error": "Aucun fichier local recu."}), 400
+            return jsonify({"success": False, "error": "No local file received."}), 400
 
         suffix = Path(file.filename).suffix.lower()
         if suffix not in ALLOWED_LOCAL_EXTENSIONS:
-            return jsonify({"success": False, "error": "Format de fichier non supporte."}), 400
+            return jsonify({"success": False, "error": "Unsupported file format."}), 400
 
         safe_name = secure_filename(file.filename) or f"local-{uuid.uuid4().hex}{suffix}"
         stored_name = f"{uuid.uuid4().hex[:8]}-{safe_name}"
@@ -410,12 +410,12 @@ def upload_local():
                 "file_url": f"/media/{stored_name}",
                 "source_type": "local",
                 "source_label": file.filename,
-                "message": "Fichier local charge avec succes.",
+                "message": "Local file uploaded successfully.",
                 "previewable": Path(stored_name).suffix.lower() in PREVIEWABLE_EXTENSIONS,
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "error": f"Upload local impossible: {e}"}), 500
+        return jsonify({"success": False, "error": f"Local upload failed: {e}"}), 500
 
 
 @app.route("/url-options", methods=["POST"])
@@ -426,7 +426,7 @@ def url_options():
         url = (data.get("url") or "").strip()
         log.info("[url-options] url=%s", url or "(vide)")
         if not url:
-            return jsonify({"success": False, "error": "URL manquante."}), 400
+            return jsonify({"success": False, "error": "URL is required."}), 400
         from url_expanders import options_payload
         payload = options_payload(url)
         log.info(
@@ -448,7 +448,7 @@ def expand_url_route():
         data = request.get_json() or {}
         url = (data.get("url") or "").strip()
         if not url:
-            return jsonify({"success": False, "error": "URL manquante."}), 400
+            return jsonify({"success": False, "error": "URL is required."}), 400
         options = data.get("options") or {}
         # Compat ancien client
         if "current_only" in data and "scope" not in options:
@@ -479,7 +479,7 @@ def fetch_episodes():
         data = request.get_json() or {}
         url = (data.get("url") or "").strip()
         if not url:
-            return jsonify({"success": False, "error": "URL manquante."}), 400
+            return jsonify({"success": False, "error": "URL is required."}), 400
         options = {
             "scope": "season" if data.get("current_only") else "all",
             "current_only": bool(data.get("current_only")),
@@ -522,7 +522,7 @@ def download():
         )
 
         if not source_value:
-            return jsonify({"success": False, "error": "Merci de renseigner une URL ou un chemin local."}), 400
+            return jsonify({"success": False, "error": "Enter a URL or a local path."}), 400
 
         local_path = Path(source_value).expanduser()
         if not is_http_url(source_value) and is_allowed_local_file(local_path):
@@ -530,7 +530,7 @@ def download():
             return jsonify(
                 {
                     "success": True,
-                    "message": "Fichier local pret sans copie.",
+                    "message": "Local file ready without copying.",
                     "filename": registered["filename"],
                     "file_url": registered["file_url"],
                     "source_type": "local",
@@ -540,7 +540,7 @@ def download():
             )
 
         if not is_http_url(source_value):
-            return jsonify({"success": False, "error": "URL invalide ou chemin local introuvable."}), 400
+            return jsonify({"success": False, "error": "Invalid URL or local path not found."}), 400
 
         result = download_media(
             source_value,
@@ -560,22 +560,22 @@ def download():
         if result.get("skipped"):
             reason = result.get("reason")
             if reason == "already_exists":
-                reason_msg = "Déjà téléchargé."
+                reason_msg = "Already downloaded."
             elif reason == "page_blocked":
-                reason_msg = "Page bloquée par le serveur distant."
+                reason_msg = "Page blocked by the remote server."
             else:
-                reason_msg = "Introuvable ou indisponible."
+                reason_msg = "Not found or unavailable."
             return jsonify({
                 "success": True,
                 "skipped": True,
                 "reason": reason,
-                "message": f"Episode sauté : {reason_msg}",
+                "message": f"Episode skipped: {reason_msg}",
                 "filename": filename,
                 "source_label": source_value
             })
 
         if not filename:
-            return jsonify({"success": False, "error": result.get("error", "Fichier telecharge mais introuvable.")}), 500
+            return jsonify({"success": False, "error": result.get("error", "Downloaded file could not be found.")}), 500
 
         from urllib.parse import urlparse
 
@@ -583,7 +583,7 @@ def download():
         previewable = Path(filename).suffix.lower() in PREVIEWABLE_EXTENSIONS
         payload = {
             "success": True,
-            "message": f"Telecharge depuis {domain} : {filename}",
+            "message": f"Downloaded from {domain}: {filename}",
             "filename": filename,
             "file_url": f"/media/{relative_path}",
             "source_type": domain,
@@ -593,9 +593,9 @@ def download():
         }
 
         if download_type == "audio":
-            payload["message"] = f"Audio telecharge : {filename}"
+            payload["message"] = f"Audio downloaded: {filename}"
         elif not previewable:
-            payload["message"] = f"Telecharge : {filename} (apercu non supporte par le navigateur)"
+            payload["message"] = f"Downloaded: {filename} (browser preview is not supported)"
 
         return jsonify(payload)
 
@@ -606,7 +606,7 @@ def download():
             return jsonify(
                 {
                     "success": False,
-                    "error": "FFmpeg est requis mais n'est pas installe. Installe FFmpeg pour continuer.",
+                    "error": "FFmpeg is required but not installed. Install FFmpeg to continue.",
                     "is_ffmpeg_error": True,
                 }
             ), 500

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1163,7 +1163,7 @@
                     <div class="brand-mark">▼</div>
                     <div class="brand-copy">
                         <h1>DowFlow</h1>
-                        <p>Multi-Site Downloader + Lecteur local</p>
+                        <p>Multi-Site Downloader + Local player</p>
                     </div>
                 </div>
 
@@ -1171,28 +1171,28 @@
                     <a href="/" style="padding:9px 16px;border-radius:999px;text-decoration:none;font-size:0.86rem;font-weight:600;color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12)">← Menu</a>
                     <div class="ffmpeg-status">
                         <span class="dot{% if has_ffmpeg %} online{% endif %}" id="ffmpegDot"></span>
-                        <span id="ffmpegText">FFmpeg : {% if has_ffmpeg %}OK{% else %}non installé{% endif %}</span>
+                        <span id="ffmpegText">FFmpeg: {% if has_ffmpeg %}OK{% else %}not installed{% endif %}</span>
                     </div>
                 </div>
             </header>
 
             <section class="hero">
                 <div class="hero-copy">
-                    <div class="eyebrow">Universal Media Downloader · +1000 sites supportés</div>
-                    <h2>Telecharge et regarde tes videos.</h2>
+                    <div class="eyebrow">Universal Media Downloader · 1000+ supported sites</div>
+                    <h2>Download and watch your videos.</h2>
                     <p>
-                        Colle n'importe quelle URL (YouTube, Twitch, Vimeo, TikTok, Twitter/X,
-                        Dailymotion, Instagram, SoundCloud…) pour telecharger la video ou l'audio,
-                        puis regarde-la directement avec les controles de vitesse, boucle et acceleration.
+                        Paste any URL (YouTube, Twitch, Vimeo, TikTok, Twitter/X,
+                        Dailymotion, Instagram, SoundCloud...) to download video or audio,
+                        then watch it with speed, loop and playback controls.
                     </p>
 
                     <div class="media-stage empty" id="mediaStage">
                         <div class="source-card" id="sourceCard">
-                            <span class="source-chip" id="sourceChip">Aucune source</span>
-                            <div class="source-value" id="sourceValue">L'URL ou le fichier local charge apparaitra ici.</div>
+                            <span class="source-chip" id="sourceChip">No source</span>
+                            <div class="source-value" id="sourceValue">The URL or local file will appear here.</div>
                         </div>
                         <p class="media-stage-note" id="mediaStageNote">
-                            La video telechargee s'affichera ici avec tous les controles.
+                            The downloaded video will appear here with all controls.
                         </p>
                     </div>
                 </div>
@@ -1200,14 +1200,14 @@
                 <aside class="hero-panel" id="download-panel">
                     <div class="panel-header">
                         <div>
-                            <h3>Telecharger une video</h3>
-                            <p class="field-label">YouTube, Twitch, Vimeo, TikTok, ou fichier local</p>
+                            <h3>Download a video</h3>
+                            <p class="field-label">YouTube, Twitch, Vimeo, TikTok or a local file</p>
                         </div>
                         <span class="chip">yt-dlp</span>
                     </div>
 
                     <form class="downloader-form" id="downloaderForm">
-                        <label class="field-label">URL de la video ou chemin local</label>
+                        <label class="field-label">Video URL or local path</label>
                         <div class="field-group">
                             <input
                                 id="videoUrl"
@@ -1219,22 +1219,22 @@
                         </div>
 
                         <div class="local-picker">
-                            <button class="btn btn-secondary" type="button" id="pickLocalFile">Choisir une video locale</button>
+                            <button class="btn btn-secondary" type="button" id="pickLocalFile">Choose a local video</button>
                             <input id="localVideoFile" type="file" accept="video/*,audio/*,.mkv,.m4v,.avi,.mov,.webm" hidden>
                         </div>
-                        <div class="local-file-name" id="localFileName">Aucun fichier local selectionne.</div>
+                        <div class="local-file-name" id="localFileName">No local file selected.</div>
 
-                        <label class="field-label">Type de telechargement</label>
+                        <label class="field-label">Download type</label>
                         <div class="download-type-selector">
                             <button class="btn btn-secondary" type="button" data-type="audio">Audio</button>
                             <button class="btn btn-secondary active" type="button" data-type="video">Video</button>
                         </div>
 
                         <div class="format-selector" id="videoFormatSelector">
-                            <label class="field-label" style="font-size:0.82rem;margin-bottom:2px">Format video</label>
+                            <label class="field-label" style="font-size:0.82rem;margin-bottom:2px">Video format</label>
                             <select class="format-select" id="videoFormatSelect">
-                                <option value="mp4" selected>MP4 (universel)</option>
-                                <option value="best">Auto (meilleur possible)</option>
+                                <option value="mp4" selected>MP4 (universal)</option>
+                                <option value="best">Auto (best available)</option>
                                 <option value="mkv">MKV (matroska)</option>
                                 <option value="webm">WebM (libre)</option>
                                 <option value="mov">MOV (QuickTime)</option>
@@ -1243,13 +1243,13 @@
                         </div>
 
                         <div class="format-selector visible" id="audioFormatSelector" style="display:none">
-                            <label class="field-label" style="font-size:0.82rem;margin-bottom:2px">Format audio</label>
+                            <label class="field-label" style="font-size:0.82rem;margin-bottom:2px">Audio format</label>
                             <select class="format-select" id="audioFormatSelect">
                                 <option value="mp3" selected>MP3 (192 kbps)</option>
-                                <option value="best">Auto (meilleur possible)</option>
+                                <option value="best">Auto (best available)</option>
                                 <option value="mp3_320">MP3 (320 kbps HQ)</option>
                                 <option value="flac">FLAC (lossless)</option>
-                                <option value="wav">WAV (non compressé)</option>
+                                <option value="wav">WAV (uncompressed)</option>
                                 <option value="aac">AAC (256 kbps)</option>
                                 <option value="m4a">M4A (iTunes)</option>
                                 <option value="opus">Opus (160 kbps)</option>
@@ -1272,23 +1272,23 @@
 
                         <div class="subtitles-toggle" style="margin-top:0;margin-bottom:8px">
                             <input type="checkbox" id="adaptiveQualityToggle" checked>
-                            <label for="adaptiveQualityToggle">Ajuster la qualité selon le débit (mode adaptatif)</label>
+                            <label for="adaptiveQualityToggle">Adapt quality to network speed</label>
                         </div>
 
                         <div class="adaptive-banner" id="adaptiveBanner">
-                            Mode adaptatif actif : le téléchargement démarre en qualité maximale, le débit réel est mesuré pendant 10 secondes, puis la qualité descend automatiquement (8K → 4K → 1440p → 1080p → 720p…) si la vitesse est insuffisante.
+                            Adaptive mode: the download starts at the highest quality, measures real speed for 10 seconds, then lowers quality automatically if the connection is too slow.
                         </div>
 
                         <div class="language-selector">
-                            <label class="field-label" style="font-size:0.82rem;margin-bottom:2px">Langue (audio / sous-titres)</label>
+                            <label class="field-label" style="font-size:0.82rem;margin-bottom:2px">Language (audio / subtitles)</label>
                             <select class="language-select" id="languageSelect">
                                 <option value="" selected>Auto (détection URL)</option>
-                                <optgroup label="── Français / Francophone ──">
-                                    <option value="vf">VF (Français doublé)</option>
-                                    <option value="vo">VOSTFR (VO sous-titrée FR)</option>
-                                    <option value="fr">Français</option>
+                                <optgroup label="── French ──">
+                                    <option value="vf">French dub</option>
+                                    <option value="vo">French subtitles</option>
+                                    <option value="fr">French</option>
                                 </optgroup>
-                                <optgroup label="── Internationales principales ──">
+                                <optgroup label="── Main international languages ──">
                                     <option value="en">English</option>
                                     <option value="es">Español / Spanish</option>
                                     <option value="de">Deutsch</option>
@@ -1300,7 +1300,7 @@
                                     <option value="ko">한국어 / Korean</option>
                                     <option value="zh">中文 / Chinese</option>
                                 </optgroup>
-                                <optgroup label="── Autres langues ──">
+                                <optgroup label="── Other languages ──">
                                     <option value="ar">العربية / Arabic</option>
                                     <option value="hi">हिन्दी / Hindi</option>
                                     <option value="tr">Türkçe / Turkish</option>
@@ -1328,19 +1328,19 @@
                                     <option value="te">తెలుగు / Telugu</option>
                                     <option value="bn">বাংলা / Bengali</option>
                                     <option value="ur">اردو / Urdu</option>
-                                    <option value="multi">Multi-langues / toutes</option>
+                                    <option value="multi">Multiple languages / all</option>
                                 </optgroup>
                             </select>
                         </div>
 
                         <div class="subtitles-toggle">
                             <input type="checkbox" id="writeSubtitlesToggle">
-                            <label for="writeSubtitlesToggle">Télécharger les sous-titres si disponibles</label>
+                            <label for="writeSubtitlesToggle">Download subtitles when available</label>
                         </div>
 
                         <div class="input-actions">
-                            <button class="btn btn-primary" type="submit" id="downloadBtn">Telecharger</button>
-                            <button class="btn btn-secondary" type="button" id="openBatchBtn">URLs multiples</button>
+                            <button class="btn btn-primary" type="submit" id="downloadBtn">Download</button>
+                            <button class="btn btn-secondary" type="button" id="openBatchBtn">Multiple URLs</button>
                         </div>
 
                         <div class="progress-bar" id="progressBar">
@@ -1357,14 +1357,14 @@
 
                         <div class="control-cluster">
                             <div class="control-row">
-                                <strong>Vitesse</strong>
+                                <strong>Speed</strong>
                                 <div class="speed-grid" id="speedBoard"></div>
                             </div>
 
                             <div class="control-row">
                                 <strong>Actions</strong>
                                 <button class="pill-toggle" type="button" id="loopToggle">Loop off</button>
-                                <button class="pill-toggle" type="button" id="playPauseToggle">Lire</button>
+                                <button class="pill-toggle" type="button" id="playPauseToggle">Play</button>
                                 <button class="pill-toggle" type="button" id="resetSpeed">x1</button>
                                 <button class="pill-toggle" type="button" id="subtitleToggle" style="display:none">CC off</button>
                             </div>
@@ -1377,22 +1377,22 @@
 
             <section class="features">
                 <article class="feature">
-                    <strong>+1000 sites supportes</strong>
-                    <p>YouTube, Twitch, Vimeo, TikTok, Twitter/X, Instagram, Dailymotion, SoundCloud… grace a yt-dlp.</p>
+                    <strong>1000+ supported sites</strong>
+                    <p>YouTube, Twitch, Vimeo, TikTok, Twitter/X, Instagram, Dailymotion and SoundCloud through yt-dlp.</p>
                 </article>
                 <article class="feature">
-                    <strong>Controles avances</strong>
-                    <p>Vitesse de lecture de 0.25x a 16x, boucle automatique, et lecture/pause rapide.</p>
+                    <strong>Advanced controls</strong>
+                    <p>Playback speed from 0.25x to 16x, automatic looping and quick play/pause.</p>
                 </article>
                 <article class="feature">
-                    <strong>Audio ou Video</strong>
-                    <p>Choisis entre telecharger l'audio seul (MP3) ou la video complete (MP4) en plusieurs qualites.</p>
+                    <strong>Audio or video</strong>
+                    <p>Choose audio-only (MP3) or full video (MP4) downloads in multiple qualities.</p>
                 </article>
             </section>
 
             <footer class="footer">
                 <p class="footer-note">DowFlow - Multi-Site Media Downloader</p>
-                <p class="footer-note">Propulse par yt-dlp · <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" style="color:inherit;opacity:0.7">Sites supportes</a></p>
+                <p class="footer-note">Powered by yt-dlp · <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" style="color:inherit;opacity:0.7">Supported sites</a></p>
             </footer>
         </section>
     </main>
@@ -1401,8 +1401,8 @@
         <div class="batch-dialog" id="batchDialog" role="dialog" aria-modal="true" aria-labelledby="batchTitle">
             <div class="batch-header">
                 <div>
-                    <h3 id="batchTitle">Telecharger plusieurs URLs</h3>
-                    <p>Colle une URL par ligne. Les options audio/video et qualite actuelles seront utilisees.</p>
+                    <h3 id="batchTitle">Download multiple URLs</h3>
+                    <p>Paste one URL per line. Current audio, video and quality options will be used.</p>
                 </div>
                 <button class="batch-close" type="button" id="closeBatchBtn" aria-label="Fermer">×</button>
             </div>
@@ -1443,7 +1443,7 @@ https://example.com/video..."
                             <p class="batch-options-help" id="urlOptionsHelp">Colle une URL puis ouvre les options.</p>
                         </div>
                         <div class="batch-options-actions">
-                            <button class="btn btn-secondary btn-find" type="button" id="applyUrlOptionsBtn">Rechercher</button>
+                            <button class="btn btn-secondary btn-find" type="button" id="applyUrlOptionsBtn">Search</button>
                         </div>
                     </div>
                     <div class="batch-options-grid" id="urlOptionsGrid"></div>
@@ -1537,7 +1537,7 @@ https://example.com/video..."
                 })
                 .catch(() => {
                     ffmpegDot.classList.remove("online");
-                    ffmpegText.textContent = "Serveur: hors ligne";
+                    ffmpegText.textContent = "Server: offline";
                 });
         }
 
@@ -1558,7 +1558,7 @@ https://example.com/video..."
             const isAdaptiveMode = currentType === "video" && isBestQuality && adaptiveQualityToggle.checked;
             adaptiveBanner.classList.toggle("visible", Boolean(adaptiveBanner.dataset.show === "true" && isAdaptiveMode));
             if (isAdaptiveMode && adaptiveBanner.dataset.show !== "true") {
-                adaptiveBanner.textContent = "Mode adaptatif actif : démarrage en qualité maximale, mesure du débit réel pendant 10 s, puis descente automatique (8K: 3min, 4K: 5min, 1440p: 10min, 1080p: 15min…) si l'ETA dépasse le seuil.";
+                adaptiveBanner.textContent = "Adaptive mode: starts at maximum quality, measures real speed for 10 seconds, then lowers quality if the ETA is too long.";
             }
         }
 
@@ -1573,7 +1573,7 @@ https://example.com/video..."
             adaptiveBanner.dataset.show = "true";
             adaptiveBanner.textContent = (result && result.adaptive_note)
                 ? result.adaptive_note
-                : `Qualité ajustée automatiquement : Auto max → ${label} pour garder le téléchargement compatible avec le débit actuel.`;
+                    : `Quality adjusted automatically: Auto max → ${label} to match the current network speed.`;
             adaptiveBanner.classList.add("visible");
         }
 
@@ -1589,7 +1589,7 @@ https://example.com/video..."
                 const response = await fetch(`/jobs/${jobId}`);
                 const payload = await response.json();
                 if (!response.ok || !payload.success || !payload.job) {
-                    throw new Error((payload && payload.error) || "Suivi du job impossible");
+                    throw new Error((payload && payload.error) || "Unable to track the download");
                 }
                 const job = payload.job;
                 if (typeof onProgress === "function") {
@@ -1614,7 +1614,7 @@ https://example.com/video..."
                 return {
                     url: `/media/${relative}`,
                     lang: lang || "und",
-                    label: lang ? lang.toUpperCase() : "Sous-titres"
+                    label: lang ? lang.toUpperCase() : "Subtitles"
                 };
             });
         }
@@ -1676,7 +1676,7 @@ https://example.com/video..."
             });
             const start = await response.json();
             if (!response.ok || !start.success) {
-                throw new Error(start.error || "Telechargement impossible");
+                throw new Error(start.error || "Download failed");
             }
             if (!start.async) {
                 return start;
@@ -1878,7 +1878,7 @@ https://example.com/video..."
             }
 
             urlOptionsBtn.disabled = true;
-            addBatchResult(`Chargement des options pour ${firstUrl}...`, "");
+                addBatchResult(`Loading options for ${firstUrl}...`, "");
 
             try {
                 const response = await fetch("/url-options", {
@@ -1888,7 +1888,7 @@ https://example.com/video..."
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
-                    throw new Error(data.error || "Impossible de charger les options.");
+                    throw new Error(data.error || "Unable to load options.");
                 }
 
                 currentUrlOptionsProfile = data;
@@ -1896,8 +1896,8 @@ https://example.com/video..."
                 urlOptionsSite.textContent = data.label || data.site_id || "Site";
                 urlOptionsHelp.textContent = data.help_text
                     || (data.available
-                        ? "Ajuste les options puis clique Rechercher."
-                        : "Aucune expansion automatique pour ce domaine.");
+                        ? "Adjust the options, then click Search."
+                        : "No automatic expansion is available for this domain.");
                 urlOptionsGrid.innerHTML = "";
                 (data.options || []).forEach((option) => {
                     urlOptionsGrid.appendChild(renderUrlOptionControl(option));
@@ -1906,18 +1906,18 @@ https://example.com/video..."
                 if (!(data.options || []).length) {
                     const empty = document.createElement("div");
                     empty.className = "batch-option-help";
-                    empty.textContent = "Pas d'options specifiques pour ce site.";
+                    empty.textContent = "No site-specific options available.";
                     urlOptionsGrid.appendChild(empty);
                 }
 
                 setUrlOptionsPanelVisible(true);
                 addBatchResult(
-                    `Options ${data.label || data.site_id}: ${(data.options || []).length} champ(s).`,
+                    `Options for ${data.label || data.site_id}: ${(data.options || []).length} field(s).`,
                     "ok"
                 );
                 return true;
             } catch (error) {
-                addBatchResult(`Erreur options: ${error.message}`, "fail");
+                addBatchResult(`Options error: ${error.message}`, "fail");
                 return false;
             } finally {
                 urlOptionsBtn.disabled = false;
@@ -1944,7 +1944,7 @@ https://example.com/video..."
             fetchEpisodesBtn.disabled = true;
             applyUrlOptionsBtn.disabled = true;
             urlOptionsBtn.disabled = true;
-            addBatchResult(`Recherche en cours (${currentUrlOptionsProfile.label || "site"})...`, "");
+                addBatchResult(`Searching (${currentUrlOptionsProfile.label || "site"})...`, "");
 
             try {
                 const response = await fetch("/expand-url", {
@@ -1959,10 +1959,10 @@ https://example.com/video..."
                     addBatchResult(`✓ ${data.count || data.urls.length} URL(s) trouvees — ${title}`, "ok");
                     updateStatus(`${data.count || data.urls.length} URL(s) trouvees.`, "success");
                 } else {
-                    addBatchResult(`Erreur: ${data.error || "Aucune URL trouvee."}`, "fail");
+                    addBatchResult(`Error: ${data.error || "No URL found."}`, "fail");
                 }
             } catch (error) {
-                addBatchResult(`Erreur reseau: ${error.message}`, "fail");
+                addBatchResult(`Network error: ${error.message}`, "fail");
             } finally {
                 fetchEpisodesBtn.disabled = false;
                 applyUrlOptionsBtn.disabled = false;
@@ -1973,7 +1973,7 @@ https://example.com/video..."
         async function runBatchDownload() {
             const urls = parseBatchUrls(batchUrls.value);
             if (urls.length === 0) {
-                addBatchResult("Aucune URL valide dans la liste.", "fail");
+                    addBatchResult("No valid URL in the list.", "fail");
                 return;
             }
 
@@ -2003,7 +2003,7 @@ https://example.com/video..."
                     if (data.skipped) {
                         skippedCount += 1;
                         const skipState = data.reason === "already_exists" ? "ok" : "fail";
-                        addBatchResult(`SAUTE: ${url} (${data.message || "Lecteur non capture ou indisponible"})`, skipState);
+                        addBatchResult(`SKIPPED: ${url} (${data.message || "Player not captured or unavailable"})`, skipState);
                         continue;
                     }
 
@@ -2021,7 +2021,7 @@ https://example.com/video..."
                     }
                 } catch (error) {
                     failCount += 1;
-                    addBatchResult(`Erreur: ${url} - ${error.message}`, "fail");
+                    addBatchResult(`Error: ${url} - ${error.message}`, "fail");
                 }
             }
 
@@ -2072,7 +2072,7 @@ https://example.com/video..."
             subtitles.forEach((sub) => {
                 const track = document.createElement("track");
                 track.kind = "subtitles";
-                track.label = sub.label || sub.lang || "Sous-titres";
+                track.label = sub.label || sub.lang || "Subtitles";
                 track.srclang = sub.lang || "und";
                 track.src = sub.url;
                 track.default = false;
@@ -2081,7 +2081,7 @@ https://example.com/video..."
             });
 
             subtitleToggle.style.display = "";
-            subtitleToggle.title = `${subtitles.length} piste(s) de sous-titres disponible(s)`;
+                subtitleToggle.title = `${subtitles.length} subtitle track(s) available`;
         }
 
         // Bouton CC : cycle Off → piste 1 → piste 2 → … → Off
@@ -2145,7 +2145,7 @@ https://example.com/video..."
                 <span>Duree: ${mins}:${secs.toString().padStart(2, "0")}</span>
                 <span>Resolution: ${resolution}</span>
                 <span>Qualite source: ${qualityLabel}</span>
-                ${subtitleTrackState.tracks.length ? `<span>Sous-titres: ${subtitleTrackState.tracks.length} piste(s) disponible(s)</span>` : ""}
+                ${subtitleTrackState.tracks.length ? `<span>Subtitles: ${subtitleTrackState.tracks.length} track(s) available</span>` : ""}
                 ${shouldWarn ? '<span class="warning-chip">Cette source est inferieure a 1080p, le plein ecran peut paraitre flou</span>' : ""}
             `;
         }
@@ -2251,7 +2251,7 @@ https://example.com/video..."
         videoPlayer.addEventListener("play", () => playPauseToggle.textContent = "Pause");
         videoPlayer.addEventListener("pause", () => playPauseToggle.textContent = "Lire");
         videoPlayer.addEventListener("error", () => {
-            updateStatus("Lecture impossible pour ce media ou format non supporte.", "error");
+            updateStatus("Unable to play this media or unsupported format.", "error");
         });
 
         videoPlayer.addEventListener("loadedmetadata", renderPlayerMeta);
@@ -2286,7 +2286,7 @@ https://example.com/video..."
             updateSourceCard(sourceType, sourceLabel || filename);
             const subCount = Array.isArray(subtitles) ? subtitles.length : 0;
             updateStatus(
-                "Video prete: " + filename + (subCount ? ` (${subCount} piste(s) de sous-titres)` : ""),
+                "Video ready: " + filename + (subCount ? ` (${subCount} subtitle track(s))` : ""),
                 "success"
             );
         }
@@ -2328,7 +2328,7 @@ https://example.com/video..."
                 batchResults.classList.remove("visible");
                 updateStatus(`Liste importee: ${file.name}`, "success");
             } catch (error) {
-                updateStatus("Impossible de lire le fichier d'URLs.", "error");
+                updateStatus("Unable to read the URL file.", "error");
             } finally {
                 batchFileInput.value = "";
             }
@@ -2375,13 +2375,13 @@ https://example.com/video..."
         localVideoFile.addEventListener("change", () => {
             const file = localVideoFile.files[0];
             if (file) {
-                localFileName.textContent = "Fichier local: " + file.name;
+                localFileName.textContent = "Local file: " + file.name;
                 updateSourceCard("LOCAL", file.name);
                 input.value = "";
                 loadLocalFileDirectly();
                 updateStatus("Video locale chargee directement.", "success");
             } else {
-                localFileName.textContent = "Aucune video locale selectionnee.";
+                localFileName.textContent = "No local video selected.";
             }
         });
 
@@ -2393,7 +2393,7 @@ https://example.com/video..."
                     currentLocalObjectUrl = null;
                 }
                 localVideoFile.value = "";
-                localFileName.textContent = "Aucune video locale selectionnee.";
+                localFileName.textContent = "No local video selected.";
                 updateSourceCard("URL", value);
             }
         });
@@ -2405,7 +2405,7 @@ https://example.com/video..."
             const url = input.value.trim();
             const hasLocalFile = Boolean(localVideoFile.files[0]);
             if (!url && !hasLocalFile) {
-                updateStatus("Entre une URL (YouTube, Twitch, Vimeo…) ou choisis un fichier local.", "error");
+                updateStatus("Enter a URL (YouTube, Twitch, Vimeo...) or choose a local file.", "error");
                 return;
             }
 
@@ -2450,11 +2450,11 @@ https://example.com/video..."
                     }
                 } else {
                     resetPlayerDisplay();
-                    updateStatus("Erreur: " + data.error, "error");
+                    updateStatus("Error: " + data.error, "error");
                 }
             } catch (error) {
                 resetPlayerDisplay();
-                updateStatus("Erreur: " + error.message, "error");
+                updateStatus("Error: " + error.message, "error");
             }
 
             resetProgressUI();

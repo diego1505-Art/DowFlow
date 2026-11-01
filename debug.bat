@@ -37,11 +37,11 @@ for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\aria2.aria2*") do (
     )
 )
 
-"%PYTHON%" "%~dp0debug_center.py"
+"%PYTHON%" "%~dp0tools\debug_center.py"
 set "ERR=%ERRORLEVEL%"
 if not "%ERR%"=="0" (
     echo.
-    echo [ERREUR] debug_center.py a quitte avec le code %ERR%.
+    echo [ERREUR] tools\debug_center.py a quitte avec le code %ERR%.
     pause
 )
 exit /b %ERR%

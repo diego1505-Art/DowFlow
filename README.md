@@ -2,6 +2,8 @@
 
 DowFlow est une application Windows Flask pour telecharger, organiser et lire des videos et de la musique localement.
 
+Utilisez DowFlow uniquement a titre personnel et avec des contenus que vous avez le droit de telecharger, lire et conserver.
+
 ## Fonctionnalites
 
 - Telechargement video et audio avec `yt-dlp`.
@@ -81,7 +83,9 @@ Les telechargements, logs, bases SQLite, profils navigateur, caches Python et en
 | `music_dataset.py` | Interface du catalogue local |
 | `browser_extractor.py` | Extraction via navigateur |
 | `url_expanders/` | Expansion des URLs et episodes |
-| `debug_center.py` | Diagnostic interactif |
+| `tools/debug_center.py` | Diagnostic interactif |
+| `tools/fix_videos.py` | Remux des fichiers MP4 |
+| `tools/extract_urls_from_txt.py` | Extraction d'URLs depuis un fichier |
 | `templates/` et `static/` | Interface web |
 | `downloads/` | Medias telecharges localement |
 | `logs/` | Journaux locaux |
@@ -92,6 +96,12 @@ Les options principales sont dans `config.py` :
 
 - `DOWFLOW_BROWSER_VISIBLE` affiche le navigateur Playwright.
 - `DOWFLOW_CONNECTIONS` force le nombre de connexions paralleles.
-- `DOWFLOW_PROXY_AUTO` active la recuperation de proxys publics.
+- `DOWFLOW_PROXY_AUTO` active la recuperation de proxys publics (desactive par defaut).
 - `DOWFLOW_YOUTUBE_COOKIES` definit un fichier de cookies alternatif.
+
+Les proxys publics sont volontairement desactives par defaut : ils sont instables et peuvent ralentir ou compromettre les telechargements.
+
+## Licence
+
+DowFlow est distribue sous licence Apache-2.0. Voir [LICENSE](LICENSE).
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DowFlow Debug Center — menu interactif lisible (ASCII).
-Lance via debug.bat ou : python debug_center.py
+Lance via debug.bat ou : python tools/debug_center.py
 """
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent
+BASE = Path(__file__).resolve().parent.parent
+if str(BASE) not in sys.path:
+    sys.path.insert(0, str(BASE))
 LOG_DIR = BASE / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_LOG = LOG_DIR / f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -137,7 +139,7 @@ def check_python() -> None:
         ok(f"Virtualenv present : {venv}")
     else:
         warn("Virtualenv .venv absent — lance start.bat pour le creer")
-    
+
     for folder in ("downloads", "downloads/music"):
         path = BASE / folder
         if path.is_dir():
@@ -354,7 +356,10 @@ def check_codebase() -> None:
         "browser_extractor.py",
         "franime_extractor.py",
         "templates/menu.html",
-        "templates/dowload.html",
+        "templates/download.html",
+        "tools/debug_center.py",
+        "tools/fix_videos.py",
+        "tools/extract_urls_from_txt.py",
         "templates/music.html",
         "templates/coming_soon.html",
         "requirements.txt",
@@ -384,7 +389,7 @@ def check_codebase() -> None:
         t = threading.Thread(target=run_server, daemon=True)
         t.start()
         time.sleep(2)
-        
+
         # Check /config
         r = requests.get("http://127.0.0.1:5099/config", timeout=5)
         data = r.json()
@@ -592,7 +597,7 @@ def main() -> int:
     if venv_py.is_file() and Path(sys.executable).resolve() != venv_py.resolve():
         # Relancer dans le venv pour les checks deps
         if "--no-reexec" not in sys.argv:
-            return subprocess.call([str(venv_py), str(BASE / "debug_center.py"), "--no-reexec"])
+            return subprocess.call([str(venv_py), str(BASE / "tools" / "debug_center.py"), "--no-reexec"])
 
     actions = {key: fn for key, _, fn in MENU}
     while True:

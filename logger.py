@@ -11,11 +11,11 @@ Usage dans n'importe quel fichier :
     log.success("OK ! Fichier %s", path)           # niveau custom SUCCESS
 
 Caractéristiques :
-  • 2 sorties simultanées : console COULEUR + fichier logs/dowflow_YYYYMMDD.log
+    • 2 sorties simultanées : console COULEUR + fichier logs/dowflow.log
   • Niveau fichier = DEBUG (tout), niveau console = INFO (lisible)
   • Rotation automatique par jour, rétention 30 jours
   • Thread-safe, idempotent (appeler get_logger() 10x = même logger)
-  • Niveau custom SUCCESS = vert console, tag [%tag[%]
+    • Niveau custom SUCCESS = vert console, tag [SUCCESS]
   • Format machine : timestamp | NIVEAU | logger | message  → parseable par outils
 """
 from __future__ import annotations

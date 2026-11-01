@@ -276,10 +276,14 @@ _SPEED_TEST_URLS = (
 def _measure_network_speed_mbps(url: str | None = None, timeout_seconds: float = 8.0) -> float:
     """Mesure un débit réseau réel (échantillon ~5 Mo) pour choisir la qualité admissible."""
     candidates = (url,) if url else _SPEED_TEST_URLS
+    deadline = time.monotonic() + 10.0
     for candidate in candidates:
         try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             start = time.time()
-            with urlopen(candidate, timeout=timeout_seconds) as resp:
+            with urlopen(candidate, timeout=min(timeout_seconds, remaining)) as resp:
                 # On lit un échantillon significatif (5 Mo) pour éviter les mesures faussées
                 # par les petits fichiers (ex. favicon) dont le débit ne reflète pas la bande passante.
                 chunk = resp.read(5 * 1024 * 1024)

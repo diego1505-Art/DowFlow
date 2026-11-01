@@ -116,7 +116,7 @@ def application_status():
 @app.route("/video")
 def video_page():
     """Telechargeur video / audio generique (template historique)."""
-    return render_template("dowload.html", has_ffmpeg=has_ffmpeg())
+    return render_template("download.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/music")
@@ -224,7 +224,7 @@ def music_delete():
     success = music.delete_track(filename)
     if success:
         return jsonify({"success": True, "message": "Morceau supprime."})
-    return jsonify({"success": False, "error": "Impossible de supprimer le morceau."}), 500
+    return jsonify({"success": False, "error": "Morceau introuvable."}), 404
 
 
 @app.route("/check-ffmpeg")
@@ -586,23 +586,30 @@ def download():
         return jsonify({"success": False, "error": f"Echec du telechargement: {error_msg}"}), 500
 
 
+def _start_network_detection() -> None:
+    """Mesure le reseau sans bloquer le lancement du serveur Flask."""
+    def worker() -> None:
+        try:
+            from playlist import _measure_network_speed_mbps, detect_connection_tier
+
+            log.info("Analyse du reseau en arriere-plan...")
+            speed = _measure_network_speed_mbps()
+            if speed > 0:
+                log.success("Debit detecte : %.2f Mbps", speed)
+            else:
+                log.warning("Debit non detecte (verifiez votre connexion).")
+            detect_connection_tier(speed)
+        except Exception as exc:
+            log.debug("Detection reseau ignoree : %s", exc, exc_info=True)
+
+    threading.Thread(target=worker, name="dowflow-network-detection", daemon=True).start()
+
+
 if __name__ == "__main__":
     from logger import banner
     banner(log, "DowFlow — Multi-Site Media Downloader")
 
-    # Analyse rapide du réseau au lancement
-    try:
-        from playlist import _measure_network_speed_mbps, detect_connection_tier
-        log.info("Analyse du réseau au démarrage...")
-        speed = _measure_network_speed_mbps()
-        if speed > 0:
-            log.success("Débit détecté : %.2f Mbps", speed)
-        else:
-            log.warning("Débit non détecté (vérifiez votre connexion).")
-        # Palier de connexions (8/16/32/64/128) selon la puissance du PC et le débit.
-        detect_connection_tier(speed)
-    except Exception:
-        pass
+    _start_network_detection()
 
     log.success("Serveur démarré sur http://127.0.0.1:5001")
     if DEBUG_MODE:

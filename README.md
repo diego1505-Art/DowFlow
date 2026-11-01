@@ -70,7 +70,20 @@ python -m unittest discover -v
 
 ## Cookies and local data
 
-Some sites require a session. A local Chrome profile or a `youtube_cookies.txt` file in Netscape format can be used. These files give access to your accounts and are excluded from the repository by `.gitignore`.
+Some sites, including YouTube, may require a signed-in session. DowFlow can use a Netscape-format cookie export instead of reading Chrome's locked cookie database.
+
+### Export YouTube cookies
+
+1. Sign in to YouTube in Chrome.
+2. Open YouTube, then use a trusted cookie-export extension such as **Cookie Exporter** to export cookies for `youtube.com` in **Netscape** format. Do not copy cookie values manually from Chrome DevTools.
+3. Save the exported file in the project root, next to `app.py`. DowFlow accepts either `youtube_cookies.txt` or the extension's common filename, `youtube.com_cookies.txt`.
+4. Start a new download. After YouTube requests a session, the log should say `retrying with youtube_cookies.txt` or `retrying with youtube.com_cookies.txt`, then continue with the download.
+
+The cookie file contains credentials for your account. Do not share it or commit it to Git; both supported filenames are excluded by `.gitignore`. If you exposed the file or its contents, revoke the affected sessions and export a fresh file.
+
+If the log says `retrying with Chrome browser cookies` instead, DowFlow did not find an export at the project root. Set `DOWFLOW_YOUTUBE_COOKIES` to the full path of the file if you want to store it elsewhere.
+
+On Windows, Chrome may lock its cookie database while running. This is the yt-dlp issue [#7271](https://github.com/yt-dlp/yt-dlp/issues/7271), not the `browser_profile/` folder used by DowFlow's Playwright extractors. The cookie export avoids that database lock.
 
 Downloads, logs, SQLite databases, browser profiles, Python caches and virtual environments are local and ignored by Git.
 

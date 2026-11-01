@@ -250,16 +250,26 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertEqual(retry_options["cookiefile"], str(cookie_file))
         self.assertNotIn("cookiesfrombrowser", retry_options)
 
+    def test_resolve_cookie_file_accepts_youtube_com_export_name(self):
+        with tempfile.TemporaryDirectory() as output:
+            default_file = Path(output) / "youtube_cookies.txt"
+            exported_file = Path(output) / "youtube.com_cookies.txt"
+            exported_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+            with patch.object(playlist, "YOUTUBE_COOKIES_FILE", default_file):
+                with patch.dict(os.environ, {"DOWFLOW_YOUTUBE_COOKIES": ""}):
+                    self.assertEqual(playlist._resolve_cookie_file(), str(exported_file))
+
     def test_youtube_bot_check_without_cookie_file_reports_actionable_error(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", BotCheckLockedChromeYoutubeDL):
             with tempfile.TemporaryDirectory() as output:
-                with patch.object(playlist, "YOUTUBE_COOKIES_FILE", Path(output) / "missing.txt"):
-                    with self.assertRaisesRegex(RuntimeError, "youtube_cookies.txt"):
-                        playlist._ydlp_download(
-                            "https://www.youtube.com/shorts/12345678901",
-                            output_path=output,
-                            quality="240p",
-                        )
+                with patch.dict(os.environ, {"DOWFLOW_YOUTUBE_COOKIES": ""}):
+                    with patch.object(playlist, "YOUTUBE_COOKIES_FILE", Path(output) / "missing.txt"):
+                        with self.assertRaisesRegex(RuntimeError, "youtube_cookies.txt"):
+                            playlist._ydlp_download(
+                                "https://www.youtube.com/shorts/12345678901",
+                                output_path=output,
+                                quality="240p",
+                            )
 
         # 4 instances : Turbo (sans cookies, puis Chrome cookies) -> Fallback Native (sans cookies, puis Chrome cookies)
         self.assertEqual(len(BotCheckLockedChromeYoutubeDL.instances), 4)
@@ -281,14 +291,21 @@ class DownloadStabilityTests(unittest.TestCase):
         with patch.object(playlist.yt_dlp, "YoutubeDL", InstagramAccessDeniedDL):
             with tempfile.TemporaryDirectory() as output:
                 # On simule la présence de cookies Chrome
-                with patch.object(playlist, "yt_dlp_runtime_options", side_effect=lambda include_browser_cookies=False: 
-                                  {"cookiesfrombrowser": ("chrome",)} if include_browser_cookies else {}):
-                    result = playlist._ydlp_download(
-                        "https://www.instagram.com/reel/123/",
-                        output_path=output,
-                        quality="240p",
-                    )
-                    self.assertTrue(Path(result["filepath"]).is_file())
+                with patch.dict(os.environ, {"DOWFLOW_YOUTUBE_COOKIES": ""}):
+                    with patch.object(playlist, "YOUTUBE_COOKIES_FILE", Path(output) / "missing.txt"):
+                        with patch.object(
+                            playlist,
+                            "yt_dlp_runtime_options",
+                            side_effect=lambda include_browser_cookies=False: {
+                                "cookiesfrombrowser": ("chrome",)
+                            } if include_browser_cookies else {},
+                        ):
+                            result = playlist._ydlp_download(
+                                "https://www.instagram.com/reel/123/",
+                                output_path=output,
+                                quality="240p",
+                            )
+                            self.assertTrue(Path(result["filepath"]).is_file())
 
         self.assertEqual(len(InstagramAccessDeniedDL.instances), 2)
         self.assertIn("cookiesfrombrowser", InstagramAccessDeniedDL.instances[1].options)
@@ -303,9 +320,11 @@ class DownloadStabilityTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(message)
+        self.assertIn("Close all Chrome processes", message)
+        self.assertIn("--disable-features=LockProfileCookieDatabase", message)
+        self.assertIn("Netscape format", message)
         self.assertIn("youtube_cookies.txt", message)
-        self.assertIn("ne le partagez pas", message)
-        self.assertIn("YouTube/Instagram", message)
+        self.assertIn("do not share or publish it", message)
 
     def test_other_sites_use_aria2_when_available(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL):

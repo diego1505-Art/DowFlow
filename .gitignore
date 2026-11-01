@@ -33,6 +33,7 @@ downloads/*
 browser_profile/
 youtube_profile/
 youtube_cookies.txt
+youtube.com_cookies.txt
 
 # Logs
 *.log

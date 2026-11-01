@@ -198,7 +198,7 @@ def start_download_job(download_fn: Callable[..., dict[str, Any]], url: str, **k
                     finished_at=time.time(),
                 )
         except Exception as e:
-            log.error("Job %s echoue : %s", job_id, e, exc_info=True)
+            log.error("Job %s failed: %s", job_id, e, exc_info=True)
             update_job(
                 job_id,
                 status="failed",

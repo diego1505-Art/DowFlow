@@ -82,24 +82,34 @@ def _friendly_cookie_error(error: Exception) -> str | None:
     message = str(error).lower()
     if "could not copy chrome cookie database" in message or ("permission denied" in message and "cookies" in message):
         return (
-            "Windows bloque la lecture des cookies de votre profil Chrome. Pour garder votre "
-            "navigateur ouvert, exportez les cookies (YouTube/Instagram) au format Netscape dans "
-            "youtube_cookies.txt à la racine du projet. Ce fichier donne accès à votre compte : "
-            "ne le partagez pas et ne le publiez pas."
+            "yt-dlp cannot read Chrome's cookie database because Chrome or Windows has locked it "
+            "(yt-dlp issue #7271). Close all Chrome processes and retry, or launch Chrome with "
+            "--disable-features=LockProfileCookieDatabase. Alternatively, export cookies in "
+            "Netscape format to youtube_cookies.txt in the project root. This file grants access "
+            "to your account; do not share or publish it."
         )
     if any(t in message for t in ("sign in to confirm", "not a bot", "login", "log in", "inaccessible")):
         return (
-            "Le site demande une session connectée ou l'accès est bloqué. Connectez-vous sur le site "
-            "dans votre navigateur Chrome, ou fournissez un fichier youtube_cookies.txt valide."
+            "The site requires a signed-in session or is blocking access. Sign in to the site in "
+            "Chrome, or provide a valid youtube_cookies.txt file."
         )
     return None
 
 
 def _resolve_cookie_file() -> str | None:
-    """Recherche un fichier de cookies Netscape (youtube_cookies.txt par défaut)."""
+    """Find a Netscape cookie export, including the common youtube.com filename."""
     configured_path = os.environ.get("DOWFLOW_YOUTUBE_COOKIES")
-    cookie_path = Path(configured_path).expanduser() if configured_path else YOUTUBE_COOKIES_FILE
-    return str(cookie_path) if cookie_path.is_file() else None
+    if configured_path:
+        cookie_path = Path(configured_path).expanduser()
+        return str(cookie_path) if cookie_path.is_file() else None
+
+    for cookie_path in (
+        YOUTUBE_COOKIES_FILE,
+        YOUTUBE_COOKIES_FILE.with_name("youtube.com_cookies.txt"),
+    ):
+        if cookie_path.is_file():
+            return str(cookie_path)
+    return None
 
 
 def _needs_session(error: Exception) -> bool:
@@ -717,7 +727,7 @@ def download_media(
     parsed_global = urlparse(url)
     domain_global = parsed_global.netloc.lower().replace("www.", "") or "remote"
     dl_id = download_start(url, domain=domain_global, download_type=download_type, quality=quality)
-    log.info("Nouveau téléchargement #%d — %s", dl_id, url[:100])
+    log.info("New download #%d — %s", dl_id, url[:100])
 
     # ── Check existance ──────────────────────────────────────────────────────
     if _re.match(r"https?://(?:www\.)?franime\.fr/", url, _re.I):
@@ -931,9 +941,10 @@ def _extract_info_with_cookie_retry(url: str, ydl_opts: dict[str, Any]) -> dict[
         if not _needs_session(e):
             raise
         cookie_file = _resolve_cookie_file()
+        cookie_source = Path(cookie_file).name if cookie_file else "Chrome browser cookies"
         log.warning(
-            "[cookies] Accès restreint ou session requise ; nouvelle tentative avec %s",
-            "le fichier youtube_cookies.txt" if cookie_file else "les cookies du navigateur Chrome",
+            "[cookies] Access restricted or session required; retrying with %s",
+            cookie_source,
         )
         retry_opts = _cookie_retry_options(ydl_opts, cookie_file)
         with ydl_class(retry_opts) as ydl:  # pyright: ignore[reportArgumentType]
@@ -1075,11 +1086,11 @@ def _ydlp_download(
 
     if use_turbo:
         log.info(
-            "[turbo] aria2c activé (x%d connexions max)",
+            "[turbo] aria2c active (up to %d connections)",
             aria2_connections,
         )
     else:
-        log.info("[native] Téléchargeur yt-dlp activé (x%d fragments)", connection_tier)
+        log.info("[native] yt-dlp downloader active (x%d fragments)", connection_tier)
 
     before_files = set(os.listdir(output_path))
 
@@ -1133,7 +1144,7 @@ def _ydlp_download(
                         for k in ("403", "forbidden", "inaccessible", "429", "denied", "aria2c exited with code")
                     )
                     if is_blocking:
-                        log.warning("[fallback] Blocage détecté en mode Turbo -> passage en mode Natif discret")
+                        log.warning("[fallback] Turbo mode blocked -> switching to native downloader")
                         force_native = True
                         _cleanup_partial_files(output_path, before_files)
                         continue
@@ -1191,7 +1202,7 @@ def _ydlp_download(
         cookie_error = _friendly_cookie_error(e)
         if cookie_error:
             log.error("[cookies] %s", cookie_error)
-            raise RuntimeError(cookie_error) from e
+            raise RuntimeError(cookie_error) from None
         if "ffmpeg" in str(e).lower() or "ffprobe" in str(e).lower():
             log.critical("FFmpeg introuvable ou en erreur — %s", e)
             log.error("FFmpeg est requis pour conversion audio / fusion conteneurs.")

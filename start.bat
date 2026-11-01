@@ -55,6 +55,7 @@ for /f %%H in ('git rev-parse HEAD') do set "DOWFLOW_NEW_HEAD=%%H"
 if "!DOWFLOW_OLD_HEAD!"=="!DOWFLOW_NEW_HEAD!" goto :after_update
 
 REM Relance le script : sa version a pu changer pendant la mise a jour.
+del /q "%~dp0.venv\deps_ok.flag" >nul 2>&1
 endlocal & call "%~f0" --updated & exit /b
 
 :after_update
@@ -70,32 +71,40 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
 )
 set "VIRTUAL_ENV=%VENV_DIR%"
 set "PATH=%VENV_DIR%\Scripts;%PATH%"
+set "DOWFLOW_WARN=0"
 
-REM -- Dependances Python : verifier et mettre a jour a chaque lancement --
-echo Verification des dependances Python...
-set "DOWFLOW_DEPS_FAILED=0"
-"%VENV_DIR%\Scripts\python.exe" -m pip install -q -r requirements.txt
-if errorlevel 1 (
-    set "DOWFLOW_DEPS_FAILED=1"
-)
-"%VENV_DIR%\Scripts\python.exe" -m pip install -q -U yt-dlp
-if errorlevel 1 (
-    set "DOWFLOW_DEPS_FAILED=1"
-)
-if "!DOWFLOW_DEPS_FAILED!"=="1" (
-    echo [ATTENTION] La verification des dependances Python a echoue.
+REM -- Dependances et Playwright : verification une fois par jour ---------
+set "DOWFLOW_DEPS_FLAG=%VENV_DIR%\deps_ok.flag"
+set "DOWFLOW_DEPS_FRESH=0"
+if exist "%DOWFLOW_DEPS_FLAG%" (
+    forfiles /p "%VENV_DIR%" /m deps_ok.flag /d 0 /c "cmd /c exit 0" >nul 2>&1
+    if not errorlevel 1 set "DOWFLOW_DEPS_FRESH=1"
 )
 
-REM -- Playwright / Chromium : verifier a chaque lancement ----------------
-python -c "from playwright.sync_api import sync_playwright as s; p=s().start(); b=p.chromium.launch(headless=True); b.close(); p.stop()" 1>nul 2>nul
-if errorlevel 1 (
-    echo [INFO] Playwright Chromium manquant ou corrompu.
-    echo [INFO] Tentative d'installation rapide...
-    echo [INFO] Si cela prend trop de temps, vous pouvez fermer cette fenetre.
-    python -m playwright install chromium
+if "!DOWFLOW_DEPS_FRESH!"=="0" (
+    echo Verification quotidienne des dependances...
+    set "DOWFLOW_DEPS_FAILED=0"
+    "%VENV_DIR%\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt
     if errorlevel 1 (
-        echo [ATTENTION] L'installation de Playwright a echoue. 
-        echo [ATTENTION] Les telechargements Franime pourraient ne pas fonctionner.
+        set "DOWFLOW_DEPS_FAILED=1"
+    )
+    "%VENV_DIR%\Scripts\python.exe" -m pip install --disable-pip-version-check -q -U yt-dlp
+    if errorlevel 1 (
+        set "DOWFLOW_DEPS_FAILED=1"
+    )
+
+    python -c "from playwright.sync_api import sync_playwright as s; p=s().start(); b=p.chromium.launch(headless=True); b.close(); p.stop()" 1>nul 2>nul
+    if errorlevel 1 (
+        echo [INFO] Playwright Chromium manquant ou corrompu.
+        python -m playwright install chromium
+        if errorlevel 1 set "DOWFLOW_DEPS_FAILED=1"
+    )
+
+    if "!DOWFLOW_DEPS_FAILED!"=="0" (
+        >"%DOWFLOW_DEPS_FLAG%" echo verification-ok
+    ) else (
+        set "DOWFLOW_WARN=1"
+        echo [ATTENTION] La verification des dependances a echoue.
     )
 )
 
@@ -117,13 +126,12 @@ for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*") do (
     )
 )
 
-color 0C
-echo.
-echo [DOWFLOW] Initialisation...
-for %%A in (1 2 3) do (
-    <nul set /p "=."
-    >nul ping 127.0.0.1 -n 2
+cls
+if "!DOWFLOW_WARN!"=="1" (
+    echo [ATTENTION] Le demarrage a rencontre un probleme de dependances.
+    echo Consulte logs\dowflow.log ou lance debug.bat.
+    echo.
 )
-echo.
 python startup.py
+if "!DOWFLOW_WARN!"=="1" pause
 pause

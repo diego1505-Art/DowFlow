@@ -23,7 +23,7 @@ if str(BASE) not in sys.path:
 LOG_DIR = BASE / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_LOG = LOG_DIR / f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-GITHUB_REPO = "https://github.com/diego1505-Art/DowFlow-V13.git"
+GITHUB_REPO = "https://github.com/diego1505-Art/DowFlow.git"
 
 # Forcer UTF-8 console Windows
 if hasattr(sys.stdout, "reconfigure"):

@@ -33,7 +33,7 @@ From the project root:
 
 On startup, the script:
 
-1. Checks the latest `main` commit on [GitHub](https://github.com/diego1505-Art/DowFlow-V13).
+1. Checks the latest `main` commit on [GitHub](https://github.com/diego1505-Art/DowFlow).
 2. Temporarily stashes tracked changes with Git if needed.
 3. Applies a fast-forward update, then restores your local changes.
 4. Creates `.venv` if needed.

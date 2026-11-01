@@ -56,7 +56,7 @@ def profile_for(url: str, host: str) -> SiteProfile | None:
         for key, _ in parse_qsl(parsed.query, keep_blank_values=True)
         if key not in {"s", "ep", "lang", "anime_id"}
     )
-    extras = f" Paramètres conservés : {', '.join(extra_keys)}." if extra_keys else ""
+    extras = f" Preserved parameters: {', '.join(extra_keys)}." if extra_keys else ""
 
     # ── Langues : VF + VO en premier, puis toutes les ISO triées par label ──
     top_langs = [("vf", "VF"), ("vo", "VO / VOSTFR")]
@@ -74,45 +74,45 @@ def profile_for(url: str, host: str) -> SiteProfile | None:
         label="Franime",
         available=True,
         help_text=(
-            f"Détecté : saison {season}, langue {_display_lang(lang)}. "
-            "Trouver / Rechercher génère la liste d'épisodes à partir de la première URL."
+            f"Detected: season {season}, language {_display_lang(lang)}. "
+            "Search generates the episode list from the first URL."
             f"{extras}"
         ),
         options=[
             OptionDef(
                 key="scope",
-                label="Portée",
+                label="Scope",
                 kind="select",
                 default="season",
-                help_text="Saison de l'URL, ou toutes les saisons connues.",
+                help_text="The URL season, or all known seasons.",
                 choices=[
-                    {"value": "season", "label": "Saison de l'URL seulement"},
-                    {"value": "all", "label": "Toutes les saisons"},
+                    {"value": "season", "label": "URL season only"},
+                    {"value": "all", "label": "All seasons"},
                 ],
             ),
             OptionDef(
                 key="lang",
-                label="Langue",
+                label="Language",
                 kind="select",
                 default=lang if lang in {"vf", "vo"} or lang in LANGUAGES else "vf",
-                help_text="VF, VOSTFR, ou code ISO de n'importe quelle langue. Pris depuis l'URL si présent.",
+                help_text="Dubbed, subtitles, or any ISO language code. Read from the URL when available.",
                 choices=lang_choices,
             ),
             OptionDef(
                 key="only_available",
-                label="Uniquement épisodes dispo",
+                label="Available episodes only",
                 kind="toggle",
                 default=True,
-                help_text="Ignore les épisodes sans lecteur pour la langue choisie.",
+                help_text="Skip episodes without a player for the selected language.",
             ),
             OptionDef(
                 key="max_episodes",
-                label="Limite d'épisodes",
+                label="Episode limit",
                 kind="number",
                 default=0,
                 min_value=0,
                 max_value=500,
-                help_text="0 = pas de limite. Utile pour tester sans générer 100+ URLs.",
+                help_text="0 = no limit. Useful for testing without generating 100+ URLs.",
             ),
         ],
     )

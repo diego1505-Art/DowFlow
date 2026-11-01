@@ -16,31 +16,31 @@ def profile_for(url: str, host: str) -> SiteProfile | None:
     # Ne s'affiche que si aucun expander spécialisé n'a matché
     # (appelé depuis detect_profile qui itère dans l'ordre — youtube/franime retournent avant)
     # Ici on retourne toujours un profil générique quand on est le module appelé en dernier.
-    label = host or "Site distant"
+    label = host or "Remote site"
     return SiteProfile(
         site_id="generic",
         label=label,
         available=True,
         help_text=(
-            "Site non spécialisé. Trouver tente d'étendre une playlist / série "
-            "si yt-dlp la reconnaît. Sinon, colle les URLs à la main."
+            "Generic site. Search will try to expand a playlist or series "
+            "if yt-dlp recognizes it. Otherwise, paste URLs manually."
         ),
         options=[
             OptionDef(
                 key="expand_playlist",
-                label="Étendre si playlist",
+                label="Expand if playlist",
                 kind="toggle",
                 default=True,
-                help_text="Utilise yt-dlp en mode flat-playlist quand c'est possible.",
+                help_text="Use yt-dlp flat-playlist mode when possible.",
             ),
             OptionDef(
                 key="max_items",
-                label="Limite d'éléments",
+                label="Item limit",
                 kind="number",
                 default=30,
                 min_value=1,
                 max_value=300,
-                help_text="Nombre max d'URLs générées.",
+                help_text="Maximum generated URLs.",
             ),
         ],
     )
@@ -51,7 +51,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
         return ExpandResult(
             success=False,
             site_id="generic",
-            error="Option « Étendre si playlist » désactivée.",
+            error="'Expand if playlist' is disabled.",
         )
 
     try:
@@ -63,7 +63,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
     try:
         import yt_dlp
     except ImportError:
-        return ExpandResult(success=False, site_id="generic", error="yt-dlp non installé.")
+        return ExpandResult(success=False, site_id="generic", error="yt-dlp is not installed.")
 
     ydl_opts = {
         "quiet": True,
@@ -81,18 +81,18 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
         return ExpandResult(
             success=False,
             site_id="generic",
-            error=f"Pas d'expansion automatique pour ce site ({exc}).",
+            error=f"No automatic expansion for this site ({exc}).",
         )
 
     if not info:
-        return ExpandResult(success=False, site_id="generic", error="Aucune info retournée.")
+        return ExpandResult(success=False, site_id="generic", error="No information returned.")
 
     entries = info.get("entries")
     if not entries:
         return ExpandResult(
             success=False,
             site_id="generic",
-            error="Ce lien n'est pas une playlist/série reconnue. Ajoute les URLs manuellement.",
+            error="This link is not a recognized playlist or series. Add URLs manually.",
         )
 
     urls: list[str] = []
@@ -111,13 +111,13 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
             break
 
     if not urls:
-        return ExpandResult(success=False, site_id="generic", error="Aucune URL exploitable.")
+        return ExpandResult(success=False, site_id="generic", error="No usable URL found.")
 
     title = info.get("title") or info.get("extractor") or "Playlist"
     return ExpandResult(
         success=True,
         urls=urls,
         count=len(urls),
-        title=f"{title} ({len(urls)} éléments)",
+        title=f"{title} ({len(urls)} items)",
         site_id="generic",
     )

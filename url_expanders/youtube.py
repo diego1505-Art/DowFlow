@@ -24,12 +24,12 @@ def profile_for(url: str, host: str) -> SiteProfile | None:
     is_channel = any(p in parsed.path for p in ("/channel/", "/@", "/c/", "/user/"))
 
     if is_playlist:
-        help_text = "Playlist YouTube détectée. Trouver extrait les vidéos de la playlist."
+        help_text = "YouTube playlist detected. Search can extract its videos."
     elif is_channel:
-        help_text = "Chaîne YouTube détectée. Trouver peut lister les vidéos récentes."
+        help_text = "YouTube channel detected. Search can list recent videos."
     else:
         help_text = (
-            "Vidéo YouTube seule. Coche « Étendre si playlist » si l'URL contient un paramètre list=."
+            "Single YouTube video. Enable 'Expand playlist' if the URL contains a list= parameter."
         )
 
     return SiteProfile(
@@ -40,27 +40,27 @@ def profile_for(url: str, host: str) -> SiteProfile | None:
         options=[
             OptionDef(
                 key="expand_playlist",
-                label="Étendre la playlist",
+                label="Expand playlist",
                 kind="toggle",
                 default=True if is_playlist else bool(query.get("list")),
-                help_text="Remplace l'URL par toutes les vidéos de la playlist associée.",
+                help_text="Replace the URL with every video from the associated playlist.",
             ),
             OptionDef(
                 key="expand_channel",
-                label="Lister la chaîne",
+                label="List channel videos",
                 kind="toggle",
                 default=False,
                 enabled=is_channel,
-                help_text="Disponible seulement pour une URL de chaîne / @handle.",
+                help_text="Available only for a channel URL or @handle.",
             ),
             OptionDef(
                 key="max_items",
-                label="Limite d'éléments",
+                label="Item limit",
                 kind="number",
                 default=50,
                 min_value=1,
                 max_value=500,
-                help_text="Nombre max d'URLs à générer (protège contre les énormes playlists).",
+                help_text="Maximum URLs to generate (protects against huge playlists).",
             ),
         ],
     )
@@ -89,13 +89,13 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
             site_id="youtube",
             urls=[url],
             count=1,
-            title="URL YouTube unique (pas de playlist / chaîne détectée)",
+            title="Single YouTube URL (no playlist or channel detected)",
         )
 
     try:
         import yt_dlp
     except ImportError:
-        return ExpandResult(success=False, site_id="youtube", error="yt-dlp non installé.")
+        return ExpandResult(success=False, site_id="youtube", error="yt-dlp is not installed.")
 
     ydl_opts = {
         "quiet": True,
@@ -113,7 +113,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
         return ExpandResult(success=False, site_id="youtube", error=f"yt-dlp: {exc}")
 
     if not info:
-        return ExpandResult(success=False, site_id="youtube", error="Aucune info retournée.")
+        return ExpandResult(success=False, site_id="youtube", error="No information returned.")
 
     entries = info.get("entries") or []
     urls: list[str] = []
@@ -135,13 +135,13 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
         urls = [f"https://www.youtube.com/watch?v={info['id']}"]
 
     if not urls:
-        return ExpandResult(success=False, site_id="youtube", error="Aucune vidéo trouvée.")
+        return ExpandResult(success=False, site_id="youtube", error="No videos found.")
 
     title = info.get("title") or "YouTube"
     return ExpandResult(
         success=True,
         urls=urls,
         count=len(urls),
-        title=f"{title} ({len(urls)} éléments)",
+        title=f"{title} ({len(urls)} items)",
         site_id="youtube",
     )

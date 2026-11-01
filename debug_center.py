@@ -21,6 +21,7 @@ BASE = Path(__file__).resolve().parent
 LOG_DIR = BASE / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_LOG = LOG_DIR / f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+GITHUB_REPO = "https://github.com/diego1505-Art/DowFlow-V13.git"
 
 # Forcer UTF-8 console Windows
 if hasattr(sys.stdout, "reconfigure"):
@@ -109,19 +110,14 @@ def clear() -> None:
 def ensure_path_tools() -> None:
     """Ajoute FFmpeg / aria2 Winget au PATH de la session."""
     local = Path(os.environ.get("LOCALAPPDATA", ""))
-    ffmpeg = (
-        local
-        / "Microsoft"
-        / "WinGet"
-        / "Packages"
-        / "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
-        / "ffmpeg-8.1.1-full_build"
-        / "bin"
-    )
-    if ffmpeg.is_dir() and str(ffmpeg) not in os.environ.get("PATH", ""):
-        os.environ["PATH"] = str(ffmpeg) + os.pathsep + os.environ.get("PATH", "")
-
     packages = local / "Microsoft" / "WinGet" / "Packages"
+    ffmpeg_bins = sorted(packages.glob("Gyan.FFmpeg*/ffmpeg-*/bin"), reverse=True)
+    for ffmpeg in ffmpeg_bins:
+        if (ffmpeg / "ffmpeg.exe").is_file():
+            if str(ffmpeg) not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = str(ffmpeg) + os.pathsep + os.environ.get("PATH", "")
+            break
+
     if packages.is_dir():
         for d in packages.glob("aria2.aria2*"):
             for sub in d.glob("aria2*"):
@@ -155,7 +151,7 @@ def check_python() -> None:
 
 def check_deps() -> None:
     section("Dependances Python")
-    for mod in ("flask", "yt_dlp", "playwright", "requests"):
+    for mod in ("flask", "yt_dlp", "playwright", "requests", "rich"):
         try:
             m = importlib.import_module(mod)
             ver = getattr(m, "__version__", "?")
@@ -184,6 +180,54 @@ def check_deps() -> None:
             ok(name)
         except Exception as e:
             fail(f"{name} — {e}")
+
+
+def check_git_update() -> None:
+    """Compare le commit local avec main sur GitHub sans modifier le depot."""
+    section("Projet GitHub")
+    try:
+        local_result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=BASE,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if local_result.returncode != 0:
+            warn("Depot Git introuvable ou non initialise")
+            return
+
+        local_head = local_result.stdout.strip()
+        remote_result = subprocess.run(
+            ["git", "ls-remote", GITHUB_REPO, "refs/heads/main"],
+            cwd=BASE,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if remote_result.returncode != 0:
+            warn("Impossible de verifier GitHub")
+            return
+
+        remote_head = remote_result.stdout.split()[0] if remote_result.stdout.split() else ""
+        if remote_head == local_head:
+            ok(f"Projet a jour ({local_head[:12]})")
+        else:
+            changes = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=BASE,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if changes.stdout.strip():
+                warn("Mise a jour disponible, mais des changements locaux sont presents")
+            else:
+                warn(f"Mise a jour disponible : {remote_head[:12]}")
+        info(f"Depot : {GITHUB_REPO}")
+    except (OSError, subprocess.SubprocessError) as exc:
+        warn(f"Verification GitHub impossible — {exc}")
 
 
 def check_tools() -> None:
@@ -314,6 +358,7 @@ def check_codebase() -> None:
         "templates/music.html",
         "templates/coming_soon.html",
         "requirements.txt",
+        ".gitattributes",
         "url_expanders/__init__.py",
         "url_expanders/base.py",
         "url_expanders/franime.py",
@@ -488,6 +533,7 @@ def start_debug_server() -> None:
 def full_diagnostic() -> None:
     log_line(f"\n  {C.BOLD}DIAGNOSTIC COMPLET{C.RESET}")
     check_python()
+    check_git_update()
     check_deps()
     check_tools()
     check_playwright()
@@ -515,6 +561,7 @@ MENU = [
     ("11", "Nettoyer fichiers partiels (.part / .aria2)", clean_partials),
     ("12", "Ouvrir logs / downloads / music / projet", open_folders),
     ("13", "Demarrer DowFlow en mode DEBUG", start_debug_server),
+    ("14", "Verifier le commit GitHub", check_git_update),
 ]
 
 

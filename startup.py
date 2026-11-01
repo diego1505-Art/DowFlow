@@ -213,11 +213,7 @@ def _format_output_line(line: str) -> Text:
     log_match = _LOG_ENTRY_RE.match(plain)
     if log_match:
         message = log_match["message"]
-        adaptive_change = (
-            log_match["logger"].strip() == "playlist"
-            and message.startswith("[adaptive] Baisse de qualité après 10 s :")
-        )
-        text = Text("\n" if adaptive_change else "")
+        text = Text()
         text.append(log_match["time"], style="dim")
         text.append(" | ", style="bright_black")
         level = log_match["level"]
@@ -259,6 +255,22 @@ def _format_output_line(line: str) -> Text:
     if plain.startswith("WARNING:"):
         return Text(plain, style="bold yellow")
     return source
+
+
+def _is_adaptive_change_line(line: str) -> bool:
+    match = _LOG_ENTRY_RE.match(Text.from_ansi(line).plain.strip())
+    return bool(
+        match
+        and match["logger"].strip() == "playlist"
+        and match["message"].startswith("[adaptive] ")
+        and "retry at 0%." in match["message"]
+    )
+
+
+def _print_output_line(console: Console, line: str) -> None:
+    if _is_adaptive_change_line(line):
+        console.print()
+    console.print(_format_output_line(line), soft_wrap=True)
 
 
 def _should_show_output_line(line: str) -> bool:
@@ -311,7 +323,12 @@ def _logs_panel(lines: deque[str], max_lines: int) -> Panel:
     visible_lines = list(lines)[-max_lines:]
     if not visible_lines:
         visible_lines = ["Waiting for server logs..."]
-    content = Group(*(_format_output_line(line) for line in visible_lines))
+    content_lines: list[Text] = []
+    for line in visible_lines:
+        if _is_adaptive_change_line(line):
+            content_lines.append(Text(""))
+        content_lines.append(_format_output_line(line))
+    content = Group(*content_lines)
     return Panel(content, title="System logs", border_style="#7d2829")
 
 
@@ -440,7 +457,7 @@ def main() -> int:
                 if line is None:
                     output_finished = True
                 elif _should_show_output_line(line):
-                    console.print(_format_output_line(line), soft_wrap=True)
+                    _print_output_line(console, line)
             exit_code = process.wait()
     except KeyboardInterrupt:
         if process is not None and process.poll() is None:

@@ -442,8 +442,8 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
         if threshold and eta > threshold:
             state["decided"] = True
             note = (
-                f"Baisse de qualité après 10 s : {tier} → {next_quality} "
-                f"(ETA {int(eta)} s > seuil {threshold} s)."
+                f"{tier} -> {next_quality}; ETA {int(eta)} s > {threshold} s; "
+                "retry at 0%."
             )
             if user_hook is not None:
                 user_hook({
@@ -976,7 +976,8 @@ def _ydlp_download(
     monitor_adaptive = bool(adaptive_quality and download_type == "video" and quality == "best")
     # yt-dlp ne relaie les hooks aria2c qu'à la fin du fichier : pas de mesure
     # exploitable pour décider d'un downgrade pendant un téléchargement Turbo.
-    use_turbo = bool(aria2c_path) and connection_tier <= 16 and not monitor_adaptive
+    aria2_connections = min(connection_tier, 16)
+    use_turbo = bool(aria2c_path) and not monitor_adaptive
 
     def build_ydl_opts(quality_key: str, force_native: bool = False) -> dict[str, Any]:
         """Options yt-dlp pour une qualité donnée (reconstruites à chaque tentative)."""
@@ -1035,7 +1036,6 @@ def _ydlp_download(
 
         # Stratégie Turbo (aria2c) vs Native
         if use_turbo and not force_native:
-            connections = min(connection_tier, 16)
             opts["external_downloader"] = "aria2c"
             args = [
                 *(
@@ -1043,10 +1043,10 @@ def _ydlp_download(
                     if download_id is not None and download_id < 0x1000000
                     else []
                 ),
-                f"--max-connection-per-server={connections}",
-                f"--split={connections}",
+                f"--max-connection-per-server={aria2_connections}",
+                f"--split={aria2_connections}",
                 "--min-split-size=1M",
-                f"--max-concurrent-downloads={connections}",
+                f"--max-concurrent-downloads={aria2_connections}",
                 "--optimize-concurrent-downloads=true",
                 "--file-allocation=none",
                 "--disk-cache=64M",
@@ -1074,7 +1074,10 @@ def _ydlp_download(
     adaptive_note: str | None = None
 
     if use_turbo:
-        log.info("[turbo] Téléchargeur rapide activé (x%d connexions)", connection_tier)
+        log.info(
+            "[turbo] aria2c activé (x%d connexions max)",
+            aria2_connections,
+        )
     else:
         log.info("[native] Téléchargeur yt-dlp activé (x%d fragments)", connection_tier)
 

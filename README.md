@@ -1,47 +1,48 @@
+
 # DowFlow V13
 
-DowFlow est une application Windows Flask pour telecharger, organiser et lire des videos et de la musique localement.
+DowFlow is a Windows Flask application for downloading, organizing and playing videos and music locally.
 
-Utilisez DowFlow uniquement a titre personnel et avec des contenus que vous avez le droit de telecharger, lire et conserver.
+Use DowFlow only for personal purposes and with content you have the right to download, play and keep.
 
-## Fonctionnalites
+## Features
 
-- Telechargement video et audio avec `yt-dlp`.
-- Acceleration optionnelle avec `aria2c` et connexions paralleles.
-- Qualite adaptative, sous-titres VTT et reprise des telechargements.
-- Recherche musicale, pochettes, favoris et bibliotheque locale.
-- Extraction navigateur avec Playwright pour les sites non pris en charge directement.
-- Historique SQLite, jobs asynchrones et organisation par domaine.
+- Video and audio downloads with `yt-dlp`.
+- Optional acceleration with `aria2c` and parallel connections.
+- Adaptive quality, VTT subtitles and resumable downloads.
+- Music search, album covers, favorites and a local library.
+- Browser-based extraction with Playwright for sites that are not supported directly.
+- SQLite history, asynchronous jobs and per-domain organization.
 
-## Prerequis
+## Requirements
 
-- Windows 10 ou version ulterieure.
-- Python 3.10 ou ulterieur dans le `PATH`.
-- Git pour les mises a jour automatiques du projet.
-- Connexion Internet.
+- Windows 10 or later.
+- Python 3.10 or later in the `PATH`.
+- Git for automatic project updates.
+- Internet connection.
 
-`start.bat` detecte ou installe Playwright Chromium, `aria2c` et FFmpeg via WinGet quand ils sont absents. Node.js LTS peut fournir davantage de formats YouTube.
+`start.bat` detects or installs Playwright Chromium, `aria2c` and FFmpeg via WinGet when they are missing. Node.js LTS can provide more YouTube formats.
 
-## Lancement
+## Getting started
 
-Depuis la racine du projet :
+From the project root:
 
 ```powershell
 .\start.bat
 ```
 
-Au demarrage, le script :
+On startup, the script:
 
-1. Verifie le dernier commit de `main` sur [GitHub](https://github.com/diego1505-Art/DowFlow-V13).
-2. Sauvegarde temporairement les changements suivis avec Git si necessaire.
-3. Applique une mise a jour fast-forward puis restaure les changements locaux.
-4. Cree `.venv` si besoin.
-5. Verifie `requirements.txt` et met a jour `yt-dlp`.
-6. Verifie Playwright, `aria2c` et FFmpeg.
+1. Checks the latest `main` commit on [GitHub](https://github.com/diego1505-Art/DowFlow-V13).
+2. Temporarily stashes tracked changes with Git if needed.
+3. Applies a fast-forward update, then restores your local changes.
+4. Creates `.venv` if needed.
+5. Checks `requirements.txt` and updates `yt-dlp`.
+6. Checks Playwright, `aria2c` and FFmpeg.
 
-L'application est ensuite disponible sur <http://127.0.0.1:5001>.
+The application is then available at <http://127.0.0.1:5001>.
 
-Pour une installation manuelle :
+For a manual installation:
 
 ```powershell
 python -m venv .venv
@@ -51,15 +52,15 @@ python -m playwright install chromium
 python app.py
 ```
 
-## Diagnostic
+## Diagnostics
 
-Le centre de diagnostic utilise le venv, les couleurs ANSI et des controles non destructifs :
+The diagnostic center uses the venv, ANSI colors and non-destructive checks:
 
 ```powershell
 .\debug.bat
 ```
 
-Il peut verifier Python, les dependances, les imports, FFmpeg, FFprobe, `aria2c`, Chrome, Playwright, le reseau, SQLite, les APIs Flask et le commit disponible sur GitHub. Les resultats sont conserves dans `logs/debug_*.log`.
+It can check Python, dependencies, imports, FFmpeg, FFprobe, `aria2c`, Chrome, Playwright, the network, SQLite, the Flask APIs and the latest commit available on GitHub. Results are kept in `logs/debug_*.log`.
 
 ## Tests
 
@@ -67,41 +68,40 @@ Il peut verifier Python, les dependances, les imports, FFmpeg, FFprobe, `aria2c`
 python -m unittest discover -v
 ```
 
-## Cookies et donnees locales
+## Cookies and local data
 
-Certains sites demandent une session. Un profil Chrome local ou `youtube_cookies.txt` au format Netscape peut etre utilise. Ces fichiers donnent acces a vos comptes et restent exclus du depot par `.gitignore`.
+Some sites require a session. A local Chrome profile or a `youtube_cookies.txt` file in Netscape format can be used. These files give access to your accounts and are excluded from the repository by `.gitignore`.
 
-Les telechargements, logs, bases SQLite, profils navigateur, caches Python et environnements virtuels sont locaux et ignores par Git.
+Downloads, logs, SQLite databases, browser profiles, Python caches and virtual environments are local and ignored by Git.
 
-## Structure
+## Project structure
 
-| Fichier ou dossier | Role |
+| File or folder | Role |
 | --- | --- |
-| `app.py` | Serveur Flask et routes HTTP |
-| `playlist.py` | Telechargements video et audio |
-| `music.py` | Recherche et bibliotheque musicale |
-| `music_dataset.py` | Interface du catalogue local |
-| `browser_extractor.py` | Extraction via navigateur |
-| `url_expanders/` | Expansion des URLs et episodes |
-| `tools/debug_center.py` | Diagnostic interactif |
-| `tools/fix_videos.py` | Remux des fichiers MP4 |
-| `tools/extract_urls_from_txt.py` | Extraction d'URLs depuis un fichier |
-| `templates/` et `static/` | Interface web |
-| `downloads/` | Medias telecharges localement |
-| `logs/` | Journaux locaux |
+| `app.py` | Flask server and HTTP routes |
+| `playlist.py` | Video and audio downloads |
+| `music.py` | Music search and library |
+| `music_dataset.py` | Local catalog interface |
+| `browser_extractor.py` | Browser-based extraction |
+| `url_expanders/` | URL and episode expansion |
+| `tools/debug_center.py` | Interactive diagnostics |
+| `tools/fix_videos.py` | MP4 file remuxing |
+| `tools/extract_urls_from_txt.py` | URL extraction from a text file |
+| `templates/` and `static/` | Web interface |
+| `downloads/` | Locally downloaded media |
+| `logs/` | Local logs |
 
 ## Configuration
 
-Les options principales sont dans `config.py` :
+The main options are in `config.py`:
 
-- `DOWFLOW_BROWSER_VISIBLE` affiche le navigateur Playwright.
-- `DOWFLOW_CONNECTIONS` force le nombre de connexions paralleles.
-- `DOWFLOW_PROXY_AUTO` active la recuperation de proxys publics (desactive par defaut).
-- `DOWFLOW_YOUTUBE_COOKIES` definit un fichier de cookies alternatif.
+- `DOWFLOW_BROWSER_VISIBLE` shows the Playwright browser.
+- `DOWFLOW_CONNECTIONS` forces the number of parallel connections.
+- `DOWFLOW_PROXY_AUTO` enables fetching public proxies (disabled by default).
+- `DOWFLOW_YOUTUBE_COOKIES` sets an alternative cookies file.
 
-Les proxys publics sont volontairement desactives par defaut : ils sont instables et peuvent ralentir ou compromettre les telechargements.
+Public proxies are intentionally disabled by default: they are unstable and can slow down or compromise downloads.
 
-## Licence
+## License
 
-DowFlow est distribue sous licence Apache-2.0. Voir [LICENSE](LICENSE).
-
+DowFlow is distributed under the Apache-2.0 license. See [LICENSE](LICENSE).

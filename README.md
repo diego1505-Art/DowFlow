@@ -101,6 +101,9 @@ The main options are in `config.py`:
 - `DOWFLOW_YOUTUBE_COOKIES` sets an alternative cookies file.
 
 Public proxies are intentionally disabled by default: they are unstable and can slow down or compromise downloads.
+# images :
+<img width="1917" height="868" alt="image" src="https://github.com/user-attachments/assets/bd83ecb2-018c-42e1-96ee-7d4a367f6657" />
+<img width="1472" height="752" alt="image" src="https://github.com/user-attachments/assets/fdf47423-2cf2-467f-92ae-314e6e2dd885" />
 
 ## License
 

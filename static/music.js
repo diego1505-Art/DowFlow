@@ -1,4 +1,4 @@
-const page = document.body.dataset.page ?? "home";
+let page = document.body.dataset.page ?? "home";
 const storageKeys = {
   liked: "dowflow-music-liked",
   recent: "dowflow-music-recent-history",
@@ -29,13 +29,22 @@ const playerArtist = document.getElementById("player-artist");
 const playerCover = document.getElementById("player-cover");
 const currentTimeLabel = document.getElementById("current-time");
 const totalTimeLabel = document.getElementById("total-time");
-const heroTrackTitle = document.getElementById("hero-track-title");
-const heroTrackArtist = document.getElementById("hero-track-artist");
-const heroProgress = document.getElementById("hero-progress");
-const heroPhoto = document.getElementById("hero-photo");
-const heroCover = document.getElementById("hero-cover");
-const heroSpotifyCode = document.getElementById("hero-spotify-code");
+let heroTrackTitle = document.getElementById("hero-track-title");
+let heroTrackArtist = document.getElementById("hero-track-artist");
+let heroProgress = document.getElementById("hero-progress");
+let heroPhoto = document.getElementById("hero-photo");
+let heroCover = document.getElementById("hero-cover");
+let heroSpotifyCode = document.getElementById("hero-spotify-code");
 let heroCodeSeed = "";
+
+const refreshHeroRefs = () => {
+  heroTrackTitle = document.getElementById("hero-track-title");
+  heroTrackArtist = document.getElementById("hero-track-artist");
+  heroProgress = document.getElementById("hero-progress");
+  heroPhoto = document.getElementById("hero-photo");
+  heroCover = document.getElementById("hero-cover");
+  heroSpotifyCode = document.getElementById("hero-spotify-code");
+};
 
 // VARIABLES POUR LA LECTURE EN BOUCLE DES FAVORIS
 let isLoopingFavorites = false;
@@ -56,6 +65,7 @@ let likedPage = 1;
 let requestedAutoplay = false;
 const pageSize = 1000; // AUGMENTÉ POUR AFFICHER PLUS DE MUSIQUES
 let nextPreloadedFile = "";
+let favoritesReady = false;
 const viewState = {
   exploreTerm: "",
   libraryTerm: "",
@@ -73,6 +83,44 @@ const getLiked = () => {
 
 const setLiked = (liked) => {
   localStorage.setItem(storageKeys.liked, JSON.stringify(liked));
+};
+
+const persistFavorite = async (file, liked) => {
+  try {
+    const response = await fetch(
+      liked ? "/api/music/favorites" : `/api/music/favorites/${encodeURIComponent(file)}`,
+      {
+        method: liked ? "POST" : "DELETE",
+        headers: liked ? { "Content-Type": "application/json" } : undefined,
+        body: liked ? JSON.stringify({ filename: file }) : undefined,
+      },
+    );
+    if (!response.ok) {
+      throw new Error("Favorite sync failed");
+    }
+  } catch {
+    // localStorage remains the immediate fallback when the server is offline.
+  }
+};
+
+const syncFavorites = async () => {
+  const localFavorites = new Set(getLiked());
+  try {
+    const response = await fetch("/api/music/favorites");
+    const payload = await response.json();
+    const serverFavorites = new Set(payload.items || []);
+    const merged = [...new Set([...serverFavorites, ...localFavorites])];
+    setLiked(merged);
+    for (const file of localFavorites) {
+      if (!serverFavorites.has(file)) {
+        void persistFavorite(file, true);
+      }
+    }
+  } catch {
+    // Keep browser favorites available if the database endpoint is unavailable.
+  } finally {
+    favoritesReady = true;
+  }
 };
 
 const getStoredTheme = () => sessionStorage.getItem(storageKeys.activeTheme);
@@ -103,6 +151,9 @@ const toggleLiked = (file) => {
   }
 
   setLiked([...liked]);
+  if (favoritesReady) {
+    void persistFavorite(file, liked.has(file));
+  }
   updateFavoriteButton();
   refreshStatCounters();
   rerenderPageBlocks();
@@ -114,12 +165,12 @@ const toggleLiked = (file) => {
 const parseTrackName = (rawName) => {
   const separator = rawName.includes(" - ") ? " - " : null;
   if (!separator) {
-    return { artist: "Artiste local", title: rawName };
+    return { artist: "Local artist", title: rawName };
   }
 
   const [artist, ...rest] = rawName.split(separator);
   return {
-    artist: artist.trim() || "Artiste local",
+    artist: artist.trim() || "Local artist",
     title: rest.join(separator).trim() || rawName,
   };
 };
@@ -201,7 +252,7 @@ const mapLibraryItem = (item) => {
     file: filename,
     name: filename,
     title: item.title || filename,
-    artist: item.artist || "Artiste local",
+    artist: item.artist || "Local artist",
     cover: item.cover_url || item.cover || "",
     audio_url: item.audio_url || "",
     size: item.size,
@@ -232,7 +283,7 @@ const updateFavoriteButton = () => {
 
   const currentTrack = tracks[currentIndex];
   const liked = currentTrack ? getLiked().includes(currentTrack.file) : false;
-  likeCurrentButton.textContent = liked ? "Retirer" : "Favori";
+  likeCurrentButton.textContent = liked ? "Remove" : "Favorite";
   likeCurrentButton.classList.toggle("is-liked", liked);
 };
 
@@ -292,8 +343,8 @@ const syncPlayerLabels = () => {
   const currentTrack = tracks[currentIndex];
 
   if (!currentTrack) {
-    playerTrack.textContent = "Aucun morceau";
-    playerArtist.textContent = "Bibliothèque locale";
+    playerTrack.textContent = "No track";
+    playerArtist.textContent = "Local library";
     if (playerCover) {
       playerCover.style.backgroundImage = "";
     }
@@ -304,8 +355,8 @@ const syncPlayerLabels = () => {
       heroCover.style.backgroundImage = "";
     }
     if (heroTrackTitle) {
-      heroTrackTitle.textContent = "Aucun morceau";
-      heroTrackArtist.textContent = "Choisis un titre pour commencer";
+      heroTrackTitle.textContent = "No track";
+      heroTrackArtist.textContent = "Choose a track to begin";
     }
     renderSpotifyCode("empty");
     updateFavoriteButton();
@@ -338,10 +389,10 @@ const updatePlaybackUi = () => {
   // Message différent selon le mode
   if (isLoopingFavorites) {
     playToggle.textContent = isPlaying ? "Pause" : "Play";
-    playerStatus.textContent = isPlaying ? "Lecture en boucle des favoris" : "En pause (favoris)";
+    playerStatus.textContent = isPlaying ? "Playing favorites on loop" : "Paused (favorites)";
   } else {
     playToggle.textContent = isPlaying ? "Pause" : "Play";
-    playerStatus.textContent = isPlaying ? "Lecture active" : "En pause";
+    playerStatus.textContent = isPlaying ? "Playing" : "Paused";
   }
   
   document.body.classList.toggle("is-playing", isPlaying);
@@ -354,7 +405,9 @@ const updatePlaybackUi = () => {
   }
 
   // Mise à jour de la couleur de la barre de progression (style Spotify)
-  const progressPercent = (timelineRange.value / (timelineRange.max || 1)) * 100;
+  const progressPercent = audio.duration > 0
+    ? (audio.currentTime / audio.duration) * 100
+    : 0;
   timelineRange.style.background = `linear-gradient(to right, #1ed760 ${progressPercent}%, rgba(255, 255, 255, 0.15) ${progressPercent}%)`;
   if (heroProgress) {
     heroProgress.style.width = `${progressPercent}%`;
@@ -485,7 +538,7 @@ const restorePlaybackState = async () => {
     if (shouldPlay) {
       void playCurrent();
     } else if (playerStatus) {
-      playerStatus.textContent = "Pret a lire";
+      playerStatus.textContent = "Ready to play";
     }
     savePlaybackState();
   };
@@ -519,9 +572,9 @@ const loadTrack = (index, shouldPlay = false) => {
   }
 
   if (isLoopingFavorites) {
-    playerStatus.textContent = "Lecture en boucle des favoris...";
+    playerStatus.textContent = "Playing favorites on loop...";
   } else {
-    playerStatus.textContent = "Chargement...";
+    playerStatus.textContent = "Loading...";
   }
 
   syncPlayerLabels();
@@ -531,7 +584,7 @@ const loadTrack = (index, shouldPlay = false) => {
   if (shouldPlay) {
     audio.load();
   } else if (playerStatus) {
-    playerStatus.textContent = "Pret a lire";
+    playerStatus.textContent = "Ready to play";
   }
 
   if (shouldPlay) {
@@ -569,7 +622,7 @@ const playCurrent = async () => {
   } catch {
     isPlaying = false;
     requestedAutoplay = false;
-    playerStatus.textContent = "Lecture bloquée — appuie sur Play";
+    playerStatus.textContent = "Playback blocked - press Play";
     updatePlaybackUi();
     savePlaybackState();
   }
@@ -604,7 +657,7 @@ const createLikeButton = (track) => {
   const button = document.createElement("button");
   button.className = "ghost-button compact like-button";
   const liked = getLiked().includes(track.file);
-  button.textContent = liked ? "Retirer" : "Ajouter";
+  button.textContent = liked ? "Remove" : "Add";
   button.classList.toggle("is-liked", liked);
   button.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -682,7 +735,7 @@ const renderTrackRows = (container, items, mode = "list") => {
   }
 
   if (!items.length) {
-    renderEmpty(container, "Aucun titre à afficher ici.");
+    renderEmpty(container, "No tracks to show here.");
     return;
   }
 
@@ -760,7 +813,7 @@ const renderHome = () => {
     if (recentHistoryTracks.length > 0) {
       renderTrackRows(recentList, recentHistoryTracks.slice(0, 8), "list");
     } else {
-      renderEmpty(recentList, "Aucune écoute récente pour le moment.");
+      renderEmpty(recentList, "No recent plays yet.");
     }
   }
 
@@ -786,10 +839,10 @@ const renderHome = () => {
   }
 
   if (dailyPlaylistTitle) {
-    dailyPlaylistTitle.textContent = recentHistoryTracks[0]?.title ?? tracks[0]?.title ?? "Aucun morceau";
+    dailyPlaylistTitle.textContent = recentHistoryTracks[0]?.title ?? tracks[0]?.title ?? "No track";
     dailyPlaylistText.textContent = recentHistoryTracks.length
-      ? `${recentHistoryTracks.length} écoutes récentes disponibles.`
-      : `${Math.min(20, tracks.length)} titres pour lancer la session.`;
+      ? `${recentHistoryTracks.length} recent plays available.`
+      : `${Math.min(20, tracks.length)} tracks ready to play.`;
   }
 
   if (playDailyMix) {
@@ -843,14 +896,14 @@ const renderExplore = () => {
     document.body.classList.add("theme-active");
     document.body.style.setProperty("--theme-color", activeTheme.color);
     if (pageEyebrow) pageEyebrow.textContent = activeTheme.name;
-    if (pageTitle) pageTitle.textContent = `${activeTheme.name} : explore les morceaux du thÃ¨me`;
+    if (pageTitle) pageTitle.textContent = `${activeTheme.name}: explore tracks from this theme`;
     if (sidebarEyebrow) sidebarEyebrow.textContent = activeTheme.name;
-    if (sidebarTitle) sidebarTitle.textContent = `Explorer ${activeTheme.name}`;
-    if (sidebarText) sidebarText.textContent = `Affichage filtrÃ© sur le thÃ¨me ${activeTheme.name}.`;
+    if (sidebarTitle) sidebarTitle.textContent = `Explore ${activeTheme.name}`;
+    if (sidebarText) sidebarText.textContent = `Showing tracks for the ${activeTheme.name} theme.`;
     if (exploreMenuItem) exploreMenuItem.textContent = activeTheme.name;
     document.title = `Spoty Wave - ${activeTheme.name}`;
-    if (title) title.textContent = `Thème : ${activeTheme.name}`;
-    if (helper) helper.textContent = `Voici une sélection de titres pour le thème ${activeTheme.name}.`;
+    if (title) title.textContent = `Theme: ${activeTheme.name}`;
+    if (helper) helper.textContent = `Here is a selection of tracks for the ${activeTheme.name} theme.`;
   }
 
   const alphabeticalTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title, "fr", { sensitivity: "base" }));
@@ -876,9 +929,9 @@ const renderExplore = () => {
         return matchesTheme;
       });
     } else if (!normalized) {
-      if (title) title.textContent = "Propositions";
+      if (title) title.textContent = "Suggestions";
       if (helper) {
-        helper.textContent = "Tape un titre ou un artiste de ta bibliothèque locale.";
+        helper.textContent = "Type a title or artist from your local library.";
       }
       results = alphabeticalTracks;
     } else {
@@ -888,9 +941,9 @@ const renderExplore = () => {
         track.artistSearch.includes(normalized) ||
         track.searchText.includes(normalized)
       );
-      if (title) title.textContent = `Propositions pour "${term}"`;
+      if (title) title.textContent = `Suggestions for "${term}"`;
       if (helper) {
-        helper.textContent = `${results.length} titre(s) local(aux) pour "${term}".`;
+        helper.textContent = `${results.length} local track(s) for "${term}".`;
       }
     }
 
@@ -978,7 +1031,7 @@ const renderLibrary = () => {
     }
 
     if (summary) {
-      summary.textContent = `${tracks.length} morceau${tracks.length > 1 ? "x" : ""} dans la bibliothèque`;
+      summary.textContent = `${tracks.length} track${tracks.length > 1 ? "s" : ""} in the library`;
     }
   };
 
@@ -1057,7 +1110,7 @@ const renderLiked = () => {
       
       playTrackByFile(likedTracks[0].file, true);
     } else {
-      playerStatus.textContent = "Aucun favori trouvé";
+      playerStatus.textContent = "No favorites found";
     }
   });
 
@@ -1094,16 +1147,58 @@ const refreshStatCounters = () => {
 const attachMenuNavigation = () => {
   document.querySelectorAll("a[href]").forEach((link) => {
     const href = link.getAttribute("href") || "";
-    if (!href.startsWith("/music")) {
+    if (!href.startsWith("/music") || href.includes("#")) {
       return;
     }
-    link.addEventListener("click", () => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
       if (link.dataset.nav === "explore") {
         clearStoredTheme();
       }
       savePlaybackState();
+      void navigateMusicPage(href, true).catch(() => window.location.assign(href));
     });
   });
+};
+
+const navigateMusicPage = async (href, pushHistory = false) => {
+  const response = await fetch(href, { headers: { "X-DowFlow-Navigation": "1" } });
+  if (!response.ok) {
+    window.location.assign(href);
+    return;
+  }
+  const html = await response.text();
+  const nextDocument = new DOMParser().parseFromString(html, "text/html");
+  const nextShell = nextDocument.querySelector(".app-shell");
+  const currentShell = document.querySelector(".app-shell");
+  if (!nextShell || !currentShell) {
+    window.location.assign(href);
+    return;
+  }
+
+  const previousMain = currentShell.querySelector(".main-content");
+  const nextMain = nextShell.querySelector(".main-content");
+  const previousSidebar = currentShell.querySelector(".sidebar");
+  const nextSidebar = nextShell.querySelector(".sidebar");
+  if (previousMain && nextMain) previousMain.replaceWith(nextMain);
+  if (previousSidebar && nextSidebar) previousSidebar.replaceWith(nextSidebar);
+
+  const nextPage = nextDocument.body.dataset.page || "home";
+  document.body.classList.add("is-page-transitioning");
+  page = nextPage;
+  document.body.dataset.page = nextPage;
+  document.title = nextDocument.title;
+  if (pushHistory) history.pushState({ musicPage: nextPage }, "", href);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  refreshHeroRefs();
+  setActiveNav();
+  attachMenuNavigation();
+  rerenderPageBlocks();
+  initOnlineDownload();
+  initOnlineCollapse();
+  refreshStatCounters();
+  requestAnimationFrame(() => document.body.classList.remove("is-page-transitioning"));
 };
 
 const attachGlobalEvents = () => {
@@ -1202,7 +1297,7 @@ const attachGlobalEvents = () => {
     }
 
     if (currentIndex !== -1 && !isPlaying) {
-      playerStatus.textContent = "Prêt à lire";
+      playerStatus.textContent = "Ready to play";
     }
   });
   audio?.addEventListener("play", () => {
@@ -1228,26 +1323,26 @@ const attachGlobalEvents = () => {
     savePlaybackState();
   });
   audio?.addEventListener("stalled", () => {
-    playerStatus.textContent = "Chargement...";
+    playerStatus.textContent = "Loading...";
   });
   audio?.addEventListener("waiting", () => {
-    playerStatus.textContent = "Mise en tampon...";
+    playerStatus.textContent = "Buffering...";
   });
   audio?.addEventListener("error", () => {
     const mediaError = audio.error;
     if (!mediaError) {
-      playerStatus.textContent = "Erreur audio";
+      playerStatus.textContent = "Audio error";
       return;
     }
 
     const messages = {
-      1: "Lecture interrompue",
-      2: "Erreur réseau",
-      3: "Fichier audio corrompu",
-      4: "Format audio non supporté",
+      1: "Playback interrupted",
+      2: "Network error",
+      3: "Corrupted audio file",
+      4: "Unsupported audio format",
     };
 
-    playerStatus.textContent = messages[mediaError.code] ?? "Erreur audio";
+    playerStatus.textContent = messages[mediaError.code] ?? "Audio error";
     isPlaying = false;
     requestedAutoplay = false;
     updatePlaybackUi();
@@ -1305,16 +1400,16 @@ const pollJob = async (jobId) => {
     const res = await fetch(`/jobs/${jobId}`);
     const payload = await res.json();
     if (!res.ok || !payload.success || !payload.job) {
-      throw new Error((payload && payload.error) || "Suivi du job impossible");
+      throw new Error((payload && payload.error) || "Unable to track the download");
     }
     const job = payload.job;
     const pct = Math.max(0, Math.min(99, Number(job.progress) || 0));
     setOnlineProgress(pct);
-    setOnlineStatus(`Téléchargement ${pct.toFixed(0)}%`, "");
+    setOnlineStatus(`Downloading ${pct.toFixed(0)}%`, "");
     if (["success", "failed", "skipped"].includes(job.status)) return job;
     await sleep(2000);
   }
-  throw new Error("Téléchargement trop long (timeout)");
+  throw new Error("Download timed out");
 };
 
 const renderOnlineTracks = (container, trackList, emptyText) => {
@@ -1336,10 +1431,10 @@ const renderOnlineTracks = (container, trackList, emptyText) => {
     row.innerHTML = `
       ${thumb}
       <div class="meta">
-        <div class="name">${escapeHtml(track.title || "Sans titre")}</div>
+        <div class="name">${escapeHtml(track.title || "Untitled")}</div>
         <div class="sub">${sub || "—"}</div>
       </div>
-      <button class="dl" type="button">↓ Télécharger</button>
+      <button class="dl" type="button">↓ Download</button>
     `;
     const btn = row.querySelector(".dl");
     btn.addEventListener("click", () => downloadOnlineTrack(track, btn));
@@ -1352,9 +1447,9 @@ const downloadOnlineTrack = async (track, button) => {
   const coverToggle = document.getElementById("coverToggle");
   const original = button.textContent;
   button.disabled = true;
-  button.textContent = "En cours…";
+  button.textContent = "Downloading...";
   setOnlineProgress(0);
-  setOnlineStatus(`Préparation de « ${track.title} »…`, "");
+  setOnlineStatus(`Preparing "${track.title}"...`, "");
   try {
     const res = await fetch("/api/music/download", {
       method: "POST",
@@ -1368,15 +1463,15 @@ const downloadOnlineTrack = async (track, button) => {
       }),
     });
     const start = await res.json();
-    if (!res.ok || !start.success) throw new Error(start.error || "Téléchargement impossible");
+    if (!res.ok || !start.success) throw new Error(start.error || "Download failed");
     const job = await pollJob(start.job_id);
     if (job.status === "success") {
       setOnlineProgress(100);
       const name = (job.result && job.result.filename) || track.title;
-      setOnlineStatus(`Terminé : ${name}`, "success");
+      setOnlineStatus(`Complete: ${name}`, "success");
       await reloadLibrary({ keepCurrent: true });
     } else {
-      throw new Error(job.error || job.message || "Échec du téléchargement");
+      throw new Error(job.error || job.message || "Download failed");
     }
   } catch (err) {
     setOnlineStatus(err.message || "Erreur", "error");
@@ -1394,10 +1489,10 @@ const loadOnlinePopular = async () => {
     const res = await fetch("/api/music/popular?limit=24");
     const data = await res.json();
     const popularTracks = (data && data.tracks) || [];
-    if (count) count.textContent = popularTracks.length ? `${popularTracks.length} titres` : "";
-    renderOnlineTracks(list, popularTracks, "Aucun titre populaire disponible.");
+    if (count) count.textContent = popularTracks.length ? `${popularTracks.length} tracks` : "";
+    renderOnlineTracks(list, popularTracks, "No popular tracks available.");
   } catch {
-    renderOnlineTracks(list, [], "Impossible de charger les titres populaires.");
+    renderOnlineTracks(list, [], "Unable to load popular tracks.");
   }
 };
 
@@ -1414,7 +1509,7 @@ const initOnlineDownload = () => {
     const query = input.value.trim();
     if (!query) return;
     if (btn) btn.disabled = true;
-    results.innerHTML = `<div class="search-helper">Recherche…</div>`;
+    results.innerHTML = `<div class="search-helper">Searching...</div>`;
     if (resultsCount) resultsCount.textContent = "";
     try {
       const res = await fetch("/api/music/search", {
@@ -1424,10 +1519,10 @@ const initOnlineDownload = () => {
       });
       const data = await res.json();
       const found = (data && data.tracks) || [];
-      if (resultsCount) resultsCount.textContent = found.length ? `${found.length} résultats` : "";
-      renderOnlineTracks(results, found, "Aucun résultat pour cette recherche.");
+      if (resultsCount) resultsCount.textContent = found.length ? `${found.length} results` : "";
+      renderOnlineTracks(results, found, "No results for this search.");
     } catch {
-      renderOnlineTracks(results, [], "La recherche a échoué.");
+      renderOnlineTracks(results, [], "Search failed.");
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -1446,7 +1541,7 @@ const initOnlineCollapse = () => {
   const applyCollapsed = (collapsed) => {
     section.classList.toggle("is-collapsed", collapsed);
     btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-    btn.title = collapsed ? "Développer" : "Réduire";
+    btn.title = collapsed ? "Expand" : "Collapse";
     btn.textContent = "×";
     localStorage.setItem(storageKeys.onlineCollapsed, collapsed ? "1" : "0");
   };
@@ -1475,7 +1570,7 @@ const reloadLibrary = async ({ keepCurrent = false } = {}) => {
   rerenderPageBlocks();
 
   if (!tracks.length) {
-    if (playerStatus) playerStatus.textContent = "Bibliothèque vide";
+    if (playerStatus) playerStatus.textContent = "Library is empty";
     return;
   }
 
@@ -1509,6 +1604,10 @@ const init = async () => {
   attachGlobalEvents();
   window.addEventListener("pagehide", savePlaybackState);
   window.addEventListener("beforeunload", savePlaybackState);
+  window.addEventListener("popstate", () => {
+    void navigateMusicPage(window.location.pathname + window.location.search);
+  });
+  await syncFavorites();
   await reloadLibrary();
   initOnlineDownload();
   initOnlineCollapse();

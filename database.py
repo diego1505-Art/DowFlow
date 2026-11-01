@@ -119,6 +119,11 @@ def init_db() -> None:
                 key   TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS music_favorites (
+                filename   TEXT PRIMARY KEY,
+                created_at REAL NOT NULL
+            );
             """
         )
 
@@ -243,6 +248,31 @@ def download_count_by_status() -> dict[str, int]:
             "SELECT status, COUNT(*) AS n FROM downloads GROUP BY status"
         ).fetchall()
     return {r["status"]: int(r["n"]) for r in rows}
+
+
+def favorite_list() -> list[str]:
+    """Retourne les fichiers musicaux marques comme favoris."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT filename FROM music_favorites ORDER BY created_at DESC"
+        ).fetchall()
+    return [str(row["filename"]) for row in rows]
+
+
+def favorite_add(filename: str) -> None:
+    """Ajoute un fichier musical aux favoris de facon idempotente."""
+    with _conn() as c:
+        c.execute(
+            "INSERT OR IGNORE INTO music_favorites(filename, created_at) VALUES (?, ?)",
+            (filename, time.time()),
+        )
+
+
+def favorite_remove(filename: str) -> bool:
+    """Retire un favori et indique s'il existait."""
+    with _conn() as c:
+        cursor = c.execute("DELETE FROM music_favorites WHERE filename=?", (filename,))
+        return cursor.rowcount > 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────

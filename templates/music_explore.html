@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DowFlow Music - Explorer</title>
+    <title>DowFlow Music - Explore</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='music.css') }}?v=20261031b" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='music.css') }}?v=20261101a" />
   </head>
   <body data-page="explore" oncontextmenu="return false">
     <div class="app-shell">
@@ -13,32 +13,32 @@
         <a class="brand" href="{{ url_for('music_page') }}">
           <div class="brand-mark"></div>
           <div>
-            <p class="eyebrow">Espace musique</p>
+            <p class="eyebrow">Music space</p>
             <h1>DowFlow Music</h1>
           </div>
         </a>
         <nav class="menu">
-          <a class="menu-item" data-nav="home" href="{{ url_for('music_page') }}">Accueil</a>
-          <a class="menu-item active" data-nav="explore" href="{{ url_for('music_explore_page') }}">Explorer</a>
-          <a class="menu-item" data-nav="liked" href="{{ url_for('music_liked_page') }}">Favoris</a>
+          <a class="menu-item" data-nav="home" href="{{ url_for('music_page') }}">Home</a>
+          <a class="menu-item active" data-nav="explore" href="{{ url_for('music_explore_page') }}">Explore</a>
+          <a class="menu-item" data-nav="liked" href="{{ url_for('music_liked_page') }}">Favorites</a>
         </nav>
         <nav class="menu sidebar-menu-extra">
-          <a class="menu-item" href="{{ url_for('index') }}">← Menu DowFlow</a>
+          <a class="menu-item" href="{{ url_for('index') }}">← DowFlow menu</a>
         </nav>
         <section class="sidebar-card sidebar-card-photo">
-          <p class="eyebrow" id="explore-sidebar-eyebrow">Recherche</p>
-          <h2 id="explore-sidebar-title">Explorer ta collec</h2>
-          <p id="explore-sidebar-text">Filtre ta bibliothèque locale ou télécharge en ligne.</p>
-          <a class="ghost-button button-link" href="#online-download">Télécharger en ligne</a>
+          <p class="eyebrow" id="explore-sidebar-eyebrow">Search</p>
+          <h2 id="explore-sidebar-title">Explore your library</h2>
+          <p id="explore-sidebar-text">Filter your local library or download online.</p>
+          <a class="ghost-button button-link" href="#online-download">Download online</a>
         </section>
         <section class="sidebar-stats">
           <div>
             <strong id="stat-track-count">0</strong>
-            <span>Titres</span>
+            <span>Tracks</span>
           </div>
           <div>
             <strong id="stat-favorite-count">0</strong>
-            <span>Favoris</span>
+            <span>Favorites</span>
           </div>
         </section>
       </aside>
@@ -47,23 +47,23 @@
         <section class="page-header">
           <div class="page-header-copy">
             <div class="page-header-topline">
-              <p class="eyebrow" id="explore-page-eyebrow">Explorer</p>
-              <span class="page-header-pill">Recherche fluide</span>
+              <p class="eyebrow" id="explore-page-eyebrow">Explore</p>
+              <span class="page-header-pill">Live search</span>
             </div>
-            <h2>Tape le debut d'un titre et vois les propositions</h2>
+            <h2>Type the beginning of a title to see suggestions</h2>
             <div class="page-header-meta" aria-hidden="true">
-              <span class="page-header-chip">Suggestions instantanees</span>
+              <span class="page-header-chip">Instant suggestions</span>
             </div>
           </div>
           <label class="search-box search-box-top">
-            <span>Bibliothèque</span>
-            <input id="explore-search" type="search" placeholder="Ex: z, zazie, zoo, zouk..." autocomplete="off" autocapitalize="none" spellcheck="false" />
+            <span>Library</span>
+            <input id="explore-search" type="search" placeholder="e.g. z, zazie, zoo, zouk..." autocomplete="off" autocapitalize="none" spellcheck="false" />
           </label>
         </section>
 
         <section class="content-section" id="online-download">
           <div class="section-heading online-heading">
-            <h3>Télécharger en ligne</h3>
+            <h3>Download online</h3>
             <div class="online-heading-actions">
               <span id="online-results-count"></span>
               <button type="button" class="online-toggle-btn" id="onlineCollapseBtn" aria-expanded="true" aria-controls="onlinePanelBody" title="Réduire">×</button>
@@ -72,10 +72,10 @@
           <div class="panel online-panel" id="onlinePanelBody">
             <form class="online-toolbar" id="onlineSearchForm">
               <label class="search-box">
-                <span>Recherche YouTube</span>
-                <input id="onlineSearchInput" type="search" placeholder="Titre, artiste…" autocomplete="off" spellcheck="false" />
+                <span>YouTube search</span>
+                <input id="onlineSearchInput" type="search" placeholder="Title, artist..." autocomplete="off" spellcheck="false" />
               </label>
-              <button class="ghost-button" type="submit" id="onlineSearchBtn">Rechercher</button>
+              <button class="ghost-button" type="submit" id="onlineSearchBtn">Search</button>
             </form>
             <div class="online-options">
               <label for="audioFormatSelect">Format</label>
@@ -91,34 +91,34 @@
               </select>
               <label class="toggle" for="coverToggle">
                 <input type="checkbox" id="coverToggle" checked />
-                Pochette
+                Cover art
               </label>
             </div>
             <div class="online-progress" id="onlineProgressWrap">
               <div class="online-progress-bar"><div class="online-progress-fill" id="onlineProgressFill"></div></div>
-              <div class="online-status" id="onlineStatusMessage">Prêt.</div>
+              <div class="online-status" id="onlineStatusMessage">Ready.</div>
             </div>
             <div class="section-heading" style="margin-top: 18px;">
-              <h3>Résultats</h3>
+              <h3>Results</h3>
             </div>
             <div class="online-track-list" id="onlineResultsList"></div>
             <div class="section-heading" style="margin-top: 22px;">
-              <h3>Musiques populaires</h3>
+              <h3>Popular music</h3>
               <span id="onlinePopularCount"></span>
             </div>
-            <div class="online-track-list" id="onlinePopularList">
-              <div class="search-helper">Chargement des titres populaires…</div>
+            <div class="online-track-list popular-track-list" id="onlinePopularList">
+              <div class="search-helper">Loading popular tracks...</div>
             </div>
           </div>
         </section>
 
         <section class="content-section">
           <div class="section-heading">
-            <h3 id="explore-results-title">Propositions</h3>
+            <h3 id="explore-results-title">Suggestions</h3>
           </div>
           <div class="panel">
             <div class="search-helper" id="explore-helper">
-              Tape une lettre ou un debut de titre. Exemple : `z` pour voir les titres qui commencent par z.
+              Type a letter or the beginning of a title to search your local library.
             </div>
             <div class="table-list" id="explore-results"></div>
             <div class="pagination" id="explore-pagination"></div>
@@ -131,15 +131,15 @@
       <div class="player-track">
         <div class="player-cover" id="player-cover"></div>
         <div>
-          <strong id="player-track">Aucun morceau</strong>
-          <p id="player-artist">Bibliotheque locale</p>
+          <strong id="player-track">No track</strong>
+          <p id="player-artist">Local library</p>
         </div>
       </div>
       <div class="player-controls">
         <div class="control-row">
-          <button class="icon-button" id="prev-track" aria-label="Precedent">|&#60;</button>
-          <button class="play-button" id="play-toggle" aria-label="Lecture">Play</button>
-          <button class="icon-button" id="next-track" aria-label="Suivant">&#62;|</button>
+          <button class="icon-button" id="prev-track" aria-label="Previous">|&#60;</button>
+          <button class="play-button" id="play-toggle" aria-label="Play">Play</button>
+          <button class="icon-button" id="next-track" aria-label="Next">&#62;|</button>
         </div>
         <div class="timeline">
           <span id="current-time">0:00</span>
@@ -148,12 +148,12 @@
         </div>
       </div>
       <div class="player-meta">
-        <button class="ghost-button compact" id="like-current">Favori</button>
-        <p id="player-status">Pret</p>
+        <button class="ghost-button compact" id="like-current">Favorite</button>
+        <p id="player-status">Ready</p>
       </div>
     </footer>
 
     <audio id="audio-player" preload="metadata" crossorigin="anonymous"></audio>
-    <script src="{{ url_for('static', filename='music.js') }}?v=20261031b"></script>
+    <script src="{{ url_for('static', filename='music.js') }}?v=20261101a"></script>
   </body>
 </html>

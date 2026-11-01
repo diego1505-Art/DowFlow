@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DowFlow Music - Accueil</title>
+    <title>DowFlow Music - Home</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='music.css') }}?v=20261031d" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='music.css') }}?v=20261101a" />
   </head>
   <body data-page="home" oncontextmenu="return false">
     <div class="app-shell">
@@ -13,38 +13,38 @@
         <a class="brand" href="{{ url_for('music_page') }}">
           <div class="brand-mark"></div>
           <div>
-            <p class="eyebrow">Espace musique</p>
+            <p class="eyebrow">Music space</p>
             <h1>DowFlow Music</h1>
           </div>
         </a>
 
         <nav class="menu">
-          <a class="menu-item active" data-nav="home" href="{{ url_for('music_page') }}">Accueil</a>
-          <a class="menu-item" data-nav="explore" href="{{ url_for('music_explore_page') }}">Explorer</a>
-          <a class="menu-item" data-nav="liked" href="{{ url_for('music_liked_page') }}">Favoris</a>
+          <a class="menu-item active" data-nav="home" href="{{ url_for('music_page') }}">Home</a>
+          <a class="menu-item" data-nav="explore" href="{{ url_for('music_explore_page') }}">Explore</a>
+          <a class="menu-item" data-nav="liked" href="{{ url_for('music_liked_page') }}">Favorites</a>
         </nav>
 
         <nav class="menu sidebar-menu-extra">
-          <a class="menu-item" href="{{ url_for('index') }}">← Menu DowFlow</a>
+          <a class="menu-item" href="{{ url_for('index') }}">← DowFlow menu</a>
         </nav>
 
         <section class="sidebar-card sidebar-card-photo" style="display: none;">
-          <p class="eyebrow">Playlist du jour</p>
+          <p class="eyebrow">Daily playlist</p>
           <h2 id="daily-playlist-title">Chargement...</h2>
           <p id="daily-playlist-text">
-            Une sélection automatique à partir de ta collection locale.
+            An automatic selection from your local collection.
           </p>
-          <button class="ghost-button" id="play-daily-mix">Écouter</button>
+          <button class="ghost-button" id="play-daily-mix">Listen</button>
         </section>
 
         <section class="sidebar-stats">
           <div>
             <strong id="stat-track-count">0</strong>
-            <span>Titres</span>
+            <span>Tracks</span>
           </div>
           <div>
             <strong id="stat-favorite-count">0</strong>
-            <span>Favoris</span>
+            <span>Favorites</span>
           </div>
         </section>
       </aside>
@@ -58,9 +58,12 @@
             <div class="hero-stage hero-stage-now">
               <div class="hero-cover-large" id="hero-cover"></div>
               <div class="hero-stage-copy">
-                <p class="eyebrow">En écoute</p>
-                <h2 id="hero-track-title">Aucun morceau</h2>
-                <p id="hero-track-artist">Choisis un titre pour commencer</p>
+                <p class="eyebrow">Now playing</p>
+                <h2 id="hero-track-title">No track</h2>
+                <p id="hero-track-artist">Choose a track to begin</p>
+                <div class="hero-progress-track" aria-label="Playback progress">
+                  <div class="hero-progress-fill" id="hero-progress"></div>
+                </div>
                 <div class="spotify-code" id="hero-spotify-code" aria-hidden="true"></div>
               </div>
             </div>
@@ -70,16 +73,16 @@
         <section class="content-section split-layout">
           <div class="panel">
             <div class="section-heading">
-              <h3>Précédemment écoutés</h3>
-              <button class="inline-link" id="clear-history">Effacer</button>
+              <h3>Recently played</h3>
+              <button class="inline-link" id="clear-history">Clear</button>
             </div>
             <div class="list-block" id="recent-list"></div>
           </div>
 
           <div class="panel">
             <div class="section-heading">
-              <h3>Favoris rapides</h3>
-              <a href="{{ url_for('music_liked_page') }}">Ouvrir les favoris</a>
+              <h3>Quick favorites</h3>
+              <a href="{{ url_for('music_liked_page') }}">Open favorites</a>
             </div>
             <div class="list-block" id="liked-preview"></div>
           </div>
@@ -91,16 +94,16 @@
       <div class="player-track">
         <div class="player-cover" id="player-cover"></div>
         <div>
-          <strong id="player-track">Aucun morceau</strong>
-          <p id="player-artist">Bibliothèque locale</p>
+          <strong id="player-track">No track</strong>
+          <p id="player-artist">Local library</p>
         </div>
       </div>
 
       <div class="player-controls">
         <div class="control-row">
-          <button class="icon-button" id="prev-track" aria-label="Précédent">|&#60;</button>
-          <button class="play-button" id="play-toggle" aria-label="Lecture">Play</button>
-          <button class="icon-button" id="next-track" aria-label="Suivant">&#62;|</button>
+          <button class="icon-button" id="prev-track" aria-label="Previous">|&#60;</button>
+          <button class="play-button" id="play-toggle" aria-label="Play">Play</button>
+          <button class="icon-button" id="next-track" aria-label="Next">&#62;|</button>
         </div>
         <div class="timeline">
           <span id="current-time">0:00</span>
@@ -110,12 +113,12 @@
       </div>
 
       <div class="player-meta">
-        <button class="ghost-button compact" id="like-current">Favori</button>
-        <p id="player-status">Prêt</p>
+        <button class="ghost-button compact" id="like-current">Favorite</button>
+        <p id="player-status">Ready</p>
       </div>
     </footer>
 
     <audio id="audio-player" preload="metadata" crossorigin="anonymous"></audio>
-    <script src="{{ url_for('static', filename='music.js') }}?v=20261031d"></script>
+    <script src="{{ url_for('static', filename='music.js') }}?v=20261101a"></script>
   </body>
 </html>

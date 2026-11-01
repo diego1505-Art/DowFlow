@@ -19,7 +19,13 @@ from utils import has_ffmpeg, is_http_url
 from playlist import download_media, get_frontend_config
 from logger import get_logger
 from jobs import start_download_job, get_job, list_jobs
-from database import download_list, download_count_by_status
+from database import (
+    download_list,
+    download_count_by_status,
+    favorite_list,
+    favorite_add,
+    favorite_remove,
+)
 import music
 
 log = get_logger("app")
@@ -212,6 +218,27 @@ def music_library():
     except (TypeError, ValueError):
         limit = 200
     return jsonify({"success": True, "items": music.list_library(max(1, min(limit, 500)))})
+
+
+@app.get("/api/music/favorites")
+def music_favorites():
+    return jsonify({"success": True, "items": favorite_list()})
+
+
+@app.post("/api/music/favorites")
+def music_favorite_add():
+    data = request.get_json(silent=True) or {}
+    filename = str(data.get("filename") or "").strip()
+    if not filename:
+        return jsonify({"success": False, "error": "Filename is required."}), 400
+    favorite_add(filename)
+    return jsonify({"success": True, "filename": filename})
+
+
+@app.delete("/api/music/favorites/<path:filename>")
+def music_favorite_remove(filename: str):
+    removed = favorite_remove(filename)
+    return jsonify({"success": True, "removed": removed, "filename": filename})
 
 
 @app.route("/api/music/delete", methods=["POST"])
@@ -611,14 +638,16 @@ if __name__ == "__main__":
 
     _start_network_detection()
 
-    log.success("Serveur démarré sur http://127.0.0.1:5001")
+    configured_host = os.environ.get("DOWFLOW_HOST", "127.0.0.1")
+    configured_port = int(os.environ.get("DOWFLOW_PORT", "5001"))
+    log.success("Serveur démarré sur http://%s:%d", configured_host, configured_port)
     if DEBUG_MODE:
         log.info("DEBUG: historique=/history  jobs=/jobs  async=/download-async")
     log.info("Ctrl+C pour arrêter")
     app.run(
         debug=DEBUG_MODE,
         host=os.environ.get("DOWFLOW_HOST", "127.0.0.1"),
-        port=int(os.environ.get("DOWFLOW_PORT", "5001")),
+        port=configured_port,
         use_reloader=False,
         threaded=True,
     )

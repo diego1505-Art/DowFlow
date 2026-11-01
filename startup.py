@@ -24,6 +24,7 @@ from rich.table import Table
 from rich.text import Text
 
 STARTUP_PANEL_HEIGHT = 18
+POST_READY_CAPTURE_SECONDS = 2.0
 APP_VERSION = "V13"
 _LOG_ENTRY_RE = re.compile(
     r"^(?P<time>\d{2}:\d{2}:\d{2})\s*\|\s*(?P<level>[A-Z]+)\s*\|\s*"
@@ -368,6 +369,7 @@ def main() -> int:
     output_finished = False
     exit_code = 1
     version_text = ""
+    ready_since: float | None = None
     log_lines: deque[str] = deque(["Démarrage du serveur DowFlow..."], maxlen=500)
     layout = Layout()
     layout.split_column(
@@ -383,6 +385,7 @@ def main() -> int:
                 if not ready and failure is None:
                     if process is not None and _port_is_open(probe_host, port):
                         ready = True
+                        ready_since = time.monotonic()
                         version_text = _startup_version_text()
                         log_lines.append(f"Serveur démarré sur {url}")
                         try:
@@ -422,7 +425,7 @@ def main() -> int:
                     complete=ready,
                     version_text=version_text,
                 )
-                if ready:
+                if ready and ready_since is not None and time.monotonic() - ready_since >= POST_READY_CAPTURE_SECONDS:
                     break
 
                 frame_number += 1

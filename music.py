@@ -282,6 +282,21 @@ def fetch_cover_url(artist: str | None, title: str | None) -> str | None:
     return None
 
 
+_COVER_CACHE: dict[tuple[str, str], tuple[float, str | None]] = {}
+_COVER_TTL_SECONDS = 600.0
+
+
+def fetch_cover_url_cached(artist: str | None, title: str | None) -> str | None:
+    """Comme fetch_cover_url, mais mémorise aussi les échecs pendant 10 min."""
+    key = ((artist or "").strip().lower(), (title or "").strip().lower())
+    hit = _COVER_CACHE.get(key)
+    if hit and time.time() - hit[0] < _COVER_TTL_SECONDS:
+        return hit[1]
+    url = fetch_cover_url(artist, title)
+    _COVER_CACHE[key] = (time.time(), url)
+    return url
+
+
 def _save_cover_image(media_path: str, cover_url: str | None, video_id: str | None) -> str | None:
     """Écrit la pochette à côté du fichier audio ; repli miniature YouTube."""
     candidates = [cover_url] if cover_url else []
@@ -385,7 +400,7 @@ def list_library(limit: int = 200) -> list[dict[str, Any]]:
             f"/media/{MUSIC_SUBFOLDER}/{quote(cover_name)}" if cover_name else None
         )
         if not cover_url:
-            cover_url = fetch_cover_url(None, path.stem)
+            cover_url = fetch_cover_url_cached(None, path.stem)
 
         stat = path.stat()
         items.append(

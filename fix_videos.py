@@ -1,6 +1,5 @@
 import os
 import subprocess
-import shutil
 
 def fix_videos(directory):
     for root, dirs, files in os.walk(directory):
@@ -14,15 +13,13 @@ def fix_videos(directory):
                     # On tente de remuxer proprement
                     cmd = [
                         'ffmpeg', '-y', '-i', input_path, 
-                        '-c', 'copy', '-map', '0:v', '-map', '0:a', 
+                        '-c', 'copy', '-map', '0:v', '-map', '0:a?',
                         output_path
                     ]
                     result = subprocess.run(cmd, capture_output=True, text=True)
                     
                     if result.returncode == 0:
-                        # Si ça a marché, on remplace l'ancien par le nouveau
-                        os.remove(input_path)
-                        os.rename(output_path, input_path)
+                        os.replace(output_path, input_path)
                         print(f"✓ {file} réparé.")
                     else:
                         if os.path.exists(output_path):

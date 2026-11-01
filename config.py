@@ -5,15 +5,12 @@ BASE_DIR = Path(__file__).resolve().parent
 DOWNLOAD_FOLDER = BASE_DIR / "downloads"
 
 # FFmpeg configuration
-FFMPEG_FALLBACK_DIRS = [
-    Path(os.environ.get("LOCALAPPDATA", ""))
-    / "Microsoft"
-    / "WinGet"
-    / "Packages"
-    / "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe"
-    / "ffmpeg-8.1.1-full_build"
-    / "bin"
-]
+def _winget_ffmpeg_bins() -> list[Path]:
+    root = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"
+    return sorted(root.glob("Gyan.FFmpeg*/ffmpeg-*/bin"), reverse=True)
+
+
+FFMPEG_FALLBACK_DIRS = _winget_ffmpeg_bins()
 
 # Media settings
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mkv", ".m4v", ".mov", ".avi", ".flv", ".wmv", ".ts", ".m2ts", ".3gp", ".ogv"}
@@ -133,6 +130,7 @@ def normalize_language(lang_value: str | None) -> str:
 def detect_language_from_url(url: str) -> str:
     """Tente de détecter une langue à partir d'une URL (paramètres, chemin, domaine)."""
     from urllib.parse import parse_qs, urlparse
+    _AMBIGUOUS_TOKENS = {"id", "no", "it", "is", "all", "sub", "subs", "multi"}
     try:
         parsed = urlparse(url)
     except Exception:
@@ -151,6 +149,8 @@ def detect_language_from_url(url: str) -> str:
     for key, meta in LANGUAGES.items():
         candidates = {key, *meta["aliases"]}
         for token in candidates:
+            if token in _AMBIGUOUS_TOKENS:
+                continue
             if len(token) < 2:
                 continue
             if f"/{token}/" in path_lower or path_lower.endswith(f"/{token}"):
@@ -163,7 +163,7 @@ def detect_language_from_url(url: str) -> str:
         for token in candidates:
             if len(token) != 2:
                 continue
-            if host.startswith(f"{token}.") or host.endswith(f".{token}"):
+            if host.startswith(f"{token}."):
                 return key
 
     return ""

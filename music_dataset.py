@@ -1,15 +1,11 @@
 """
 DowFlow — Point d'intégration d'un dataset musical local (prévu, non requis).
 
-Un dataset local (par ex. les archives MusicBrainz / Tidal / Spotify / Deezer
-issues du torrent « MusicBrainz Tidal Spotify Deezer Dataset ») pourra être
-importé ici sous une forme interrogeable (ex. SQLite) pour alimenter la
-recherche et les pochettes même hors-ligne.
+Un catalogue local (par exemple sous forme SQLite) pourra être importé ici
+pour alimenter la recherche et les pochettes même hors-ligne.
 
 Tant qu'aucun dataset n'est présent, `get_dataset()` renvoie `None` et le
 service musique (`music.py`) fonctionne uniquement via YouTube + l'API Deezer.
-Aucune dépendance au torrent n'est nécessaire pour utiliser la partie musique.
-
 Pour brancher un dataset plus tard : exposer le chemin du fichier via la
 variable d'environnement `DOWFLOW_MUSIC_DATASET` (base SQLite) puis retourner
 une instance de `MusicDataset` depuis `get_dataset()`.

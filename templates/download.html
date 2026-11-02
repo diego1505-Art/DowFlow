@@ -913,7 +913,7 @@
             object-fit: contain;
         }
 
-        /* Style des sous-titres (WebVTT) */
+        /* WebVTT subtitle styles. */
         .video-board video::cue {
             background-color: rgba(8, 8, 8, 0.75);
             color: #ffffff;
@@ -1213,7 +1213,7 @@
                                 id="videoUrl"
                                 name="videoUrl"
                                 type="text"
-                                placeholder="https://www.youtube.com/watch?v=... ou n'importe quelle URL de média"
+                                placeholder="https://www.youtube.com/watch?v=... or any media URL"
                                 autocomplete="off"
                             >
                         </div>
@@ -1236,7 +1236,7 @@
                                 <option value="mp4" selected>MP4 (universal)</option>
                                 <option value="best">Auto (best available)</option>
                                 <option value="mkv">MKV (matroska)</option>
-                                <option value="webm">WebM (libre)</option>
+                                <option value="webm">WebM (open format)</option>
                                 <option value="mov">MOV (QuickTime)</option>
                                 <option value="avi">AVI (legacy)</option>
                             </select>
@@ -1282,7 +1282,7 @@
                         <div class="language-selector">
                             <label class="field-label" style="font-size:0.82rem;margin-bottom:2px">Language (audio / subtitles)</label>
                             <select class="language-select" id="languageSelect">
-                                <option value="" selected>Auto (détection URL)</option>
+                                <option value="" selected>Auto (URL detection)</option>
                                 <optgroup label="── French ──">
                                     <option value="vf">French dub</option>
                                     <option value="vo">French subtitles</option>
@@ -1290,44 +1290,44 @@
                                 </optgroup>
                                 <optgroup label="── Main international languages ──">
                                     <option value="en">English</option>
-                                    <option value="es">Español / Spanish</option>
-                                    <option value="de">Deutsch</option>
-                                    <option value="it">Italiano</option>
-                                    <option value="pt">Português</option>
-                                    <option value="pt-br">Português (BR)</option>
-                                    <option value="ru">Русский / Russian</option>
-                                    <option value="ja">日本語 / Japanese</option>
-                                    <option value="ko">한국어 / Korean</option>
-                                    <option value="zh">中文 / Chinese</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="de">German</option>
+                                    <option value="it">Italian</option>
+                                    <option value="pt">Portuguese</option>
+                                    <option value="pt-br">Portuguese (Brazil)</option>
+                                    <option value="ru">Russian</option>
+                                    <option value="ja">Japanese</option>
+                                    <option value="ko">Korean</option>
+                                    <option value="zh">Chinese</option>
                                 </optgroup>
                                 <optgroup label="── Other languages ──">
-                                    <option value="ar">العربية / Arabic</option>
-                                    <option value="hi">हिन्दी / Hindi</option>
-                                    <option value="tr">Türkçe / Turkish</option>
-                                    <option value="pl">Polski / Polish</option>
-                                    <option value="nl">Nederlands / Dutch</option>
-                                    <option value="sv">Svenska / Swedish</option>
-                                    <option value="no">Norsk / Norwegian</option>
-                                    <option value="da">Dansk / Danish</option>
-                                    <option value="fi">Suomi / Finnish</option>
-                                    <option value="cs">Čeština / Czech</option>
-                                    <option value="hu">Magyar / Hungarian</option>
-                                    <option value="ro">Română / Romanian</option>
-                                    <option value="bg">Български / Bulgarian</option>
-                                    <option value="el">Ελληνικά / Greek</option>
-                                    <option value="he">עברית / Hebrew</option>
-                                    <option value="th">ไทย / Thai</option>
-                                    <option value="vi">Tiếng Việt / Vietnamese</option>
-                                    <option value="id">Indonesia / Indonesian</option>
-                                    <option value="ms">Melayu / Malay</option>
-                                    <option value="uk">Українська / Ukrainian</option>
-                                    <option value="ca">Català / Catalan</option>
-                                    <option value="eu">Euskara / Basque</option>
-                                    <option value="fa">فارسی / Persian</option>
-                                    <option value="ta">தமிழ் / Tamil</option>
-                                    <option value="te">తెలుగు / Telugu</option>
-                                    <option value="bn">বাংলা / Bengali</option>
-                                    <option value="ur">اردو / Urdu</option>
+                                    <option value="ar">Arabic</option>
+                                    <option value="hi">Hindi</option>
+                                    <option value="tr">Turkish</option>
+                                    <option value="pl">Polish</option>
+                                    <option value="nl">Dutch</option>
+                                    <option value="sv">Swedish</option>
+                                    <option value="no">Norwegian</option>
+                                    <option value="da">Danish</option>
+                                    <option value="fi">Finnish</option>
+                                    <option value="cs">Czech</option>
+                                    <option value="hu">Hungarian</option>
+                                    <option value="ro">Romanian</option>
+                                    <option value="bg">Bulgarian</option>
+                                    <option value="el">Greek</option>
+                                    <option value="he">Hebrew</option>
+                                    <option value="th">Thai</option>
+                                    <option value="vi">Vietnamese</option>
+                                    <option value="id">Indonesian</option>
+                                    <option value="ms">Malay</option>
+                                    <option value="uk">Ukrainian</option>
+                                    <option value="ca">Catalan</option>
+                                    <option value="eu">Basque</option>
+                                    <option value="fa">Persian</option>
+                                    <option value="ta">Tamil</option>
+                                    <option value="te">Telugu</option>
+                                    <option value="bn">Bengali</option>
+                                    <option value="ur">Urdu</option>
                                     <option value="multi">Multiple languages / all</option>
                                 </optgroup>
                             </select>
@@ -1347,7 +1347,7 @@
                             <div class="progress-bar-fill" id="progressFill"></div>
                         </div>
 
-                        <div class="status" id="statusMessage">Pret a telecharger</div>
+                        <div class="status" id="statusMessage">Ready to download</div>
                     </form>
 
                     <section class="player-shell" id="playerShell">
@@ -1404,13 +1404,13 @@
                     <h3 id="batchTitle">Download multiple URLs</h3>
                     <p>Paste one URL per line. Current audio, video and quality options will be used.</p>
                 </div>
-                <button class="batch-close" type="button" id="closeBatchBtn" aria-label="Fermer">×</button>
+                <button class="batch-close" type="button" id="closeBatchBtn" aria-label="Close">×</button>
             </div>
 
             <div class="batch-body">
                 <div class="batch-main">
-                    <section class="batch-section" aria-label="Liste d'URLs">
-                        <div class="batch-section-label">Liste</div>
+                    <section class="batch-section" aria-label="URL list">
+                        <div class="batch-section-label">List</div>
                         <textarea
                             class="batch-input"
                             id="batchUrls"
@@ -1422,14 +1422,14 @@ https://example.com/video..."
 
                     <div class="batch-toolbar">
                         <div class="batch-toolbar-group">
-                            <button class="btn btn-secondary" type="button" id="importBatchFileBtn">Importer un .txt</button>
+                            <button class="btn btn-secondary" type="button" id="importBatchFileBtn">Import .txt</button>
                             <input id="batchFileInput" type="file" accept=".txt,.list,.csv" hidden>
-                            <button class="btn btn-secondary" type="button" id="urlOptionsBtn" title="Options selon le site de la premiere URL">Options site</button>
-                            <button class="btn btn-secondary btn-find" type="button" id="fetchEpisodesBtn">Trouver</button>
-                            <button class="btn btn-secondary" type="button" id="clearBatchBtn">Vider</button>
+                            <button class="btn btn-secondary" type="button" id="urlOptionsBtn" title="Options for the first URL's site">Site options</button>
+                            <button class="btn btn-secondary btn-find" type="button" id="fetchEpisodesBtn">Find episodes</button>
+                            <button class="btn btn-secondary" type="button" id="clearBatchBtn">Clear</button>
                         </div>
                         <div class="batch-toolbar-group">
-                            <button class="btn btn-primary" type="button" id="startBatchBtn">Telecharger la liste</button>
+                            <button class="btn btn-primary" type="button" id="startBatchBtn">Download list</button>
                         </div>
                     </div>
 
@@ -1440,7 +1440,7 @@ https://example.com/video..."
                     <div class="batch-options-head">
                         <div class="batch-options-identity">
                             <span class="batch-options-site" id="urlOptionsSite">Site</span>
-                            <p class="batch-options-help" id="urlOptionsHelp">Colle une URL puis ouvre les options.</p>
+                            <p class="batch-options-help" id="urlOptionsHelp">Paste a URL, then open its options.</p>
                         </div>
                         <div class="batch-options-actions">
                             <button class="btn btn-secondary btn-find" type="button" id="applyUrlOptionsBtn">Search</button>
@@ -1522,7 +1522,7 @@ https://example.com/video..."
             updateAdaptiveQualityNote();
         });
 
-        // FFmpeg status check (au chargement + focus fenetre, pas de spam)
+        // Check FFmpeg on page load and focus, without spamming requests.
         function checkFFmpeg() {
             fetch("/check-ffmpeg")
                 .then(res => res.json())
@@ -1532,7 +1532,7 @@ https://example.com/video..."
                         ffmpegText.textContent = "FFmpeg: OK";
                     } else {
                         ffmpegDot.classList.remove("online");
-                        ffmpegText.textContent = "FFmpeg: non installe";
+                        ffmpegText.textContent = "FFmpeg: not installed";
                     }
                 })
                 .catch(() => {
@@ -1544,8 +1544,8 @@ https://example.com/video..."
         function formatSpeed(bytesPerSec) {
             if (!bytesPerSec || bytesPerSec <= 0) return "";
             const mb = bytesPerSec / (1024 * 1024);
-            if (mb >= 1) return ` · ${mb.toFixed(1)} Mo/s`;
-            return ` · ${(bytesPerSec / 1024).toFixed(0)} Ko/s`;
+            if (mb >= 1) return ` · ${mb.toFixed(1)} MB/s`;
+            return ` · ${(bytesPerSec / 1024).toFixed(0)} KB/s`;
         }
 
         function updateAdaptiveQualityNote() {
@@ -1600,7 +1600,7 @@ https://example.com/video..."
                 }
                 await sleep(pollMs);
             }
-            throw new Error("Telechargement trop long (timeout suivi)");
+            throw new Error("Download timed out while waiting for completion.");
         }
 
         function buildSubtitleTracks(subtitleFiles) {
@@ -1626,13 +1626,13 @@ https://example.com/video..."
                     success: true,
                     skipped: true,
                     reason: result.reason || job.message,
-                    message: result.message || job.message || "Saute",
+                    message: result.message || job.message || "Skipped",
                     filename: result.filename,
                     source_label: job.url,
                 };
             }
             if (job.status !== "success") {
-                throw new Error(job.error || job.message || result.error || "Echec du telechargement");
+                throw new Error(job.error || job.message || result.error || "Download failed.");
             }
             const filename = result.filename;
             const relative = result.relative_path || filename;
@@ -1647,7 +1647,7 @@ https://example.com/video..."
             }
             return {
                 success: true,
-                message: result.message || `Telecharge : ${filename}`,
+                message: result.message || `Downloaded: ${filename}`,
                 filename,
                 file_url: relative ? `/media/${relative}` : null,
                 source_type: domain,
@@ -1693,8 +1693,8 @@ https://example.com/video..."
                 }
                 const speedTxt = formatSpeed(j.speed);
                 const progressText = hasMeasuredProgress
-                    ? `Telechargement ${pct.toFixed(0)}%${speedTxt}`
-                    : `Telechargement en cours${speedTxt}`;
+                    ? `Downloading ${pct.toFixed(0)}%${speedTxt}`
+                    : `Downloading${speedTxt}`;
                 updateStatus(progressText, "loading");
             });
             return jobResultToDownloadPayload(job);
@@ -1868,7 +1868,7 @@ https://example.com/video..."
         async function loadUrlOptionsPanel(forceReload) {
             const firstUrl = getFirstBatchUrl();
             if (!firstUrl) {
-                addBatchResult("Colle au moins une URL en premiere ligne.", "fail");
+                addBatchResult("Paste a URL on the first line.", "fail");
                 return false;
             }
 
@@ -1927,7 +1927,7 @@ https://example.com/video..."
         async function expandFirstUrl() {
             const firstUrl = getFirstBatchUrl();
             if (!firstUrl) {
-                addBatchResult("Colle au moins une URL en premiere ligne.", "fail");
+                addBatchResult("Paste a URL on the first line.", "fail");
                 return;
             }
 
@@ -1956,8 +1956,8 @@ https://example.com/video..."
                 if (data.success && Array.isArray(data.urls) && data.urls.length > 0) {
                     batchUrls.value = data.urls.join("\n");
                     const title = data.title || data.anime_title || firstUrl;
-                    addBatchResult(`✓ ${data.count || data.urls.length} URL(s) trouvees — ${title}`, "ok");
-                    updateStatus(`${data.count || data.urls.length} URL(s) trouvees.`, "success");
+                    addBatchResult(`✓ ${data.count || data.urls.length} URL(s) found — ${title}`, "ok");
+                    updateStatus(`${data.count || data.urls.length} URL(s) found.`, "success");
                 } else {
                     addBatchResult(`Error: ${data.error || "No URL found."}`, "fail");
                 }
@@ -1988,14 +1988,14 @@ https://example.com/video..."
             let successCount = 0;
             let failCount = 0;
             let skippedCount = 0;
-            updateStatus(`Telechargement en serie: 0/${urls.length}`, "loading");
+            updateStatus(`Batch download: 0/${urls.length}`, "loading");
 
             for (let index = 0; index < urls.length; index += 1) {
                 const url = urls[index];
                 const position = index + 1;
                 setProgress(Math.round((index / urls.length) * 100));
-                updateStatus(`Telechargement en serie: ${position}/${urls.length}`, "loading");
-                addBatchResult(`[${position}/${urls.length}] En cours: ${url}`, "");
+                updateStatus(`Batch download: ${position}/${urls.length}`, "loading");
+                addBatchResult(`[${position}/${urls.length}] In progress: ${url}`, "");
 
                 try {
                     const data = await downloadOneUrl(url);
@@ -2032,7 +2032,7 @@ https://example.com/video..."
             resetProgressUI();
 
             const finalState = failCount ? "error" : "success";
-            updateStatus(`Serie terminee: ${successCount} reussi, ${skippedCount} saute, ${failCount} echoue`, finalState);
+            updateStatus(`Batch complete: ${successCount} succeeded, ${skippedCount} skipped, ${failCount} failed`, finalState);
         }
 
         // Progress bar
@@ -2053,10 +2053,10 @@ https://example.com/video..."
         function updateSourceCard(type, value) {
             sourceCard.classList.add("visible");
             sourceChip.textContent = type;
-            sourceValue.textContent = value || "Source en attente";
+            sourceValue.textContent = value || "Waiting for a source";
         }
 
-        // Sous-titres : injecte les pistes comme balises <track> du lecteur HTML5
+        // Add subtitles as <track> elements to the HTML5 player.
         function applySubtitleTracks(subtitles) {
             Array.from(videoPlayer.querySelectorAll("track")).forEach(track => track.remove());
             subtitleTrackState = { tracks: [], activeIndex: -1 };
@@ -2084,7 +2084,7 @@ https://example.com/video..."
                 subtitleToggle.title = `${subtitles.length} subtitle track(s) available`;
         }
 
-        // Bouton CC : cycle Off → piste 1 → piste 2 → … → Off
+        // CC button: cycle Off → track 1 → track 2 → … → Off.
         subtitleToggle.addEventListener("click", () => {
             const tracks = Array.from(videoPlayer.textTracks).filter(t => t.kind === "subtitles" || t.kind === "captions");
             if (!tracks.length) {
@@ -2119,7 +2119,7 @@ https://example.com/video..."
             if (longestSide >= 1800) return "1080p";
             if (longestSide >= 1200) return "720p";
             if (longestSide >= 900) return "480p";
-            return "basse resolution";
+            return "low resolution";
         }
 
         function renderPlayerMeta() {
@@ -2131,8 +2131,8 @@ https://example.com/video..."
 
             if (!width || !height) {
                 playerMeta.innerHTML = `
-                    <span>Duree: ${mins}:${secs.toString().padStart(2, "0")}</span>
-                    <span>Source: audio ou media sans resolution video</span>
+                    <span>Duration: ${mins}:${secs.toString().padStart(2, "0")}</span>
+                    <span>Source: audio or media without video resolution</span>
                 `;
                 return;
             }
@@ -2142,11 +2142,11 @@ https://example.com/video..."
             const shouldWarn = Math.max(width, height) < 1920;
 
             playerMeta.innerHTML = `
-                <span>Duree: ${mins}:${secs.toString().padStart(2, "0")}</span>
+                <span>Duration: ${mins}:${secs.toString().padStart(2, "0")}</span>
                 <span>Resolution: ${resolution}</span>
-                <span>Qualite source: ${qualityLabel}</span>
+                <span>Source quality: ${qualityLabel}</span>
                 ${subtitleTrackState.tracks.length ? `<span>Subtitles: ${subtitleTrackState.tracks.length} track(s) available</span>` : ""}
-                ${shouldWarn ? '<span class="warning-chip">Cette source est inferieure a 1080p, le plein ecran peut paraitre flou</span>' : ""}
+                ${shouldWarn ? '<span class="warning-chip">This source is below 1080p; fullscreen may look blurry.</span>' : ""}
             `;
         }
 
@@ -2234,7 +2234,7 @@ https://example.com/video..."
 
         playPauseToggle.addEventListener("click", async () => {
             if (!videoPlayer.src) {
-                updateStatus("Telecharge d'abord une video.", "error");
+                updateStatus("Download a video first.", "error");
                 return;
             }
             if (videoPlayer.paused) {
@@ -2242,14 +2242,14 @@ https://example.com/video..."
                 playPauseToggle.textContent = "Pause";
             } else {
                 videoPlayer.pause();
-                playPauseToggle.textContent = "Lire";
+                playPauseToggle.textContent = "Play";
             }
         });
 
         resetSpeed.addEventListener("click", () => setPlaybackRate(1));
 
         videoPlayer.addEventListener("play", () => playPauseToggle.textContent = "Pause");
-        videoPlayer.addEventListener("pause", () => playPauseToggle.textContent = "Lire");
+        videoPlayer.addEventListener("pause", () => playPauseToggle.textContent = "Play");
         videoPlayer.addEventListener("error", () => {
             updateStatus("Unable to play this media or unsupported format.", "error");
         });
@@ -2326,7 +2326,7 @@ https://example.com/video..."
                 batchUrls.value = await file.text();
                 batchResults.innerHTML = "";
                 batchResults.classList.remove("visible");
-                updateStatus(`Liste importee: ${file.name}`, "success");
+                updateStatus(`List imported: ${file.name}`, "success");
             } catch (error) {
                 updateStatus("Unable to read the URL file.", "error");
             } finally {
@@ -2379,7 +2379,7 @@ https://example.com/video..."
                 updateSourceCard("LOCAL", file.name);
                 input.value = "";
                 loadLocalFileDirectly();
-                updateStatus("Video locale chargee directement.", "success");
+                updateStatus("Local video loaded directly.", "success");
             } else {
                 localFileName.textContent = "No local video selected.";
             }
@@ -2412,7 +2412,7 @@ https://example.com/video..."
             downloadBtn.disabled = true;
             showProgress();
             setProgress(0);
-            updateStatus("Telechargement en cours...", "loading");
+            updateStatus("Download in progress...", "loading");
             statusMessage.classList.add("loading-pulse");
 
             try {
@@ -2428,11 +2428,11 @@ https://example.com/video..."
 
                 if (data.success) {
                     if (data.skipped) {
-                        updateStatus(data.message || "Saute", "success");
+                        updateStatus(data.message || "Skipped", "success");
                         resetProgressUI();
                         return;
                     }
-                    const successMessage = data.message || (hasLocalFile ? "Video locale prete: " + data.filename : "Telecharge: " + data.filename);
+                    const successMessage = data.message || (hasLocalFile ? "Local video ready: " + data.filename : "Downloaded: " + data.filename);
                     updateStatus(successMessage, "success");
 
                     if (!hasLocalFile && data.file_url && data.previewable !== false) {

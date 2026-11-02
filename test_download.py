@@ -45,7 +45,7 @@ class FakeYoutubeDL:
 
 
 class BotCheckYoutubeDL(FakeYoutubeDL):
-    """YouTube exige une session connectée tant qu'aucun cookie n'est fourni."""
+    """YouTube requires a signed-in session when no cookie is provided."""
 
     def extract_info(self, url, download=True):
         if not (self.options.get("cookiefile") or self.options.get("cookiesfrombrowser")):
@@ -54,7 +54,7 @@ class BotCheckYoutubeDL(FakeYoutubeDL):
 
 
 class BotCheckLockedChromeYoutubeDL(FakeYoutubeDL):
-    """YouTube exige une session, puis Windows bloque la base de cookies de Chrome."""
+    """YouTube requires a session, then Windows locks Chrome's cookie database."""
 
     def extract_info(self, url, download=True):
         if self.options.get("cookiesfrombrowser"):
@@ -125,7 +125,7 @@ class DownloadStabilityTests(unittest.TestCase):
                     )
                     self.assertTrue(Path(result["filepath"]).is_file())
 
-        # Une qualité fixe reste compatible avec aria2c.
+        # A fixed quality remains compatible with aria2c.
         self.assertEqual(len(FakeYoutubeDL.instances), 1)
         options = FakeYoutubeDL.instances[-1].options
         self.assertNotIn("writesubtitles", options)
@@ -241,7 +241,7 @@ class DownloadStabilityTests(unittest.TestCase):
                     self.assertTrue(Path(result["filepath"]).is_file())
 
         # Pas d'analyse adaptative car quality="240p" (pas "best")
-        # Donc 1er essai sans cookies, puis 2e essai avec cookies.
+        # First attempt without cookies, then retry with cookies.
         self.assertEqual(len(BotCheckYoutubeDL.instances), 2)
         first_options = BotCheckYoutubeDL.instances[0].options
         self.assertNotIn("cookiesfrombrowser", first_options)
@@ -312,7 +312,8 @@ class DownloadStabilityTests(unittest.TestCase):
                                 quality="240p",
                             )
 
-        # 4 instances : Turbo (sans cookies, puis Chrome cookies) -> Fallback Native (sans cookies, puis Chrome cookies)
+        # Four instances: Turbo (no cookies, then Chrome cookies), followed by
+        # native fallback (no cookies, then Chrome cookies).
         self.assertEqual(len(BotCheckLockedChromeYoutubeDL.instances), 4)
         self.assertNotIn(
             "cookiesfrombrowser", BotCheckLockedChromeYoutubeDL.instances[0].options
@@ -326,12 +327,12 @@ class DownloadStabilityTests(unittest.TestCase):
         class InstagramAccessDeniedDL(FakeYoutubeDL):
             def extract_info(self, url, download=True):
                 if not (self.options.get("cookiefile") or self.options.get("cookiesfrombrowser")):
-                    raise RuntimeError("Streams trouvés mais inaccessibles : ['blob:https://instagram.com/123']")
+                    raise RuntimeError("Streams found but inaccessible: ['blob:https://instagram.com/123']")
                 return super().extract_info(url, download)
 
         with patch.object(playlist.yt_dlp, "YoutubeDL", InstagramAccessDeniedDL):
             with tempfile.TemporaryDirectory() as output:
-                # On simule la présence de cookies Chrome
+                # Simulate the presence of Chrome cookies.
                 with patch.dict(os.environ, {"DOWFLOW_YOUTUBE_COOKIES": ""}):
                     with patch.object(playlist, "YOUTUBE_COOKIES_FILE", Path(output) / "missing.txt"):
                         with patch.object(
@@ -399,8 +400,8 @@ class DownloadStabilityTests(unittest.TestCase):
                 )
                 self.assertTrue(Path(result["filepath"]).is_file())
 
-        # Passe unique : les sous-titres sont récupérés dans le même appel que la
-        # vidéo, plus de second `yt-dlp` dédié (source des erreurs 429).
+        # Single pass: fetch subtitles in the same call as the video, avoiding a
+        # second dedicated `yt-dlp` request (a source of HTTP 429 errors).
         self.assertEqual(len(FakeYoutubeDL.instances), 1)
         options = FakeYoutubeDL.instances[0].options
         self.assertTrue(options["writesubtitles"])
@@ -463,9 +464,9 @@ class DownloadStabilityTests(unittest.TestCase):
         base = 1000.0
         with patch.object(playlist.log, "info") as info:
             with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
-                hook(first)  # démarre la fenêtre d'observation
+                hook(first)  # Start the observation window.
                 with self.assertRaises(playlist._AdaptiveDowngrade) as ctx:
-                    hook(second)  # dépasse la fenêtre de 10 s : décision de downgrade
+                    hook(second)  # Exceed the 10-second window and trigger a downgrade.
 
         info.assert_not_called()
 
@@ -507,14 +508,14 @@ class DownloadStabilityTests(unittest.TestCase):
             "downloaded_bytes": 0,
             "total_bytes": 1000 * 1024 * 1024,
         }
-        # 700 Mo en 11 s → ~64 Mo/s : ETA quelques secondes, largement sous le seuil
+        # 700 MB in 11 seconds is about 64 MB/s: ETA is well below the threshold.
         second = {**first, "downloaded_bytes": 700 * 1024 * 1024}
 
         base = 2000.0
         with patch.object(playlist.log, "info"):
             with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
                 hook(first)
-                hook(second)  # doit se terminer sans lever d'exception
+                hook(second)  # Must finish without raising an exception.
 
     def test_adaptive_watch_hook_resets_for_new_file_and_can_retry(self):
         hook = playlist._make_adaptive_watch_hook()
@@ -547,7 +548,7 @@ class DownloadStabilityTests(unittest.TestCase):
     def test_quality_target_uses_resolution_sort_for_portrait_videos(self):
         selector = playlist._build_video_format_string("240p", "mp4", True, prefer_http=True)
 
-        # Un filtre `height<=240` ne matcherait rien sur un Short vertical (144x256)
+        # A `height<=240` filter would not match a portrait Short (144x256).
         self.assertNotIn("height<=", selector)
         self.assertIn("[protocol^=http]", selector)
         self.assertTrue(selector.endswith("bestvideo*+bestaudio/best"))
@@ -568,14 +569,14 @@ class DownloadStabilityTests(unittest.TestCase):
     def test_adaptive_quality_attaches_watch_hook_only_when_enabled(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL):
             with tempfile.TemporaryDirectory() as output:
-                # Activé (par défaut) → un hook de surveillance est branché
+                # Enabled by default: attach a monitoring hook.
                 playlist._ydlp_download(
                     "https://www.youtube.com/watch?v=123",
                     output_path=output,
                     quality="best",
                     adaptive_quality=True,
                 )
-                # Désactivé → aucune surveillance temps réel
+                # Disabled: no real-time monitoring.
                 playlist._ydlp_download(
                     "https://www.youtube.com/watch?v=123",
                     output_path=output,

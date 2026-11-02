@@ -1,9 +1,9 @@
 """
-DowFlow — Couche de persistance SQLite (stdlib, zéro dépendance).
+DowFlow — SQLite persistence layer (stdlib, no dependencies).
 
 Tables :
-    downloads         : historique des téléchargements (succès/échec)
-    site_strategy     : statistiques par domaine
+    downloads         : download history (success/failure)
+    site_strategy     : per-domain statistics
 """
 from __future__ import annotations
 
@@ -29,9 +29,9 @@ _SCHEMA_VERSION = 1
 
 @contextmanager
 def _conn():
-    """Connexion thread-safe avec row_factory activée."""
+    """Open a thread-safe connection with row_factory enabled."""
     if not _LOCK.acquire(timeout=10):
-        raise TimeoutError("Délai dépassé lors de l'attente du verrou SQLite.")
+        raise TimeoutError("Timed out waiting for the SQLite lock.")
     try:
         con = sqlite3.connect(str(DB_PATH), timeout=15)
         con.row_factory = sqlite3.Row
@@ -60,16 +60,16 @@ def _json_loads(raw: str | None) -> Any:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Schéma
+#  Schema
 # ─────────────────────────────────────────────────────────────────────────────
 
 def init_db() -> None:
-    """Crée les tables et les index si elles n'existent pas. Idempotent."""
+    """Create the tables and indexes if they do not exist. Idempotent."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _conn() as c:
         c.executescript(
             """
-            -- Table 1 : Historique téléchargements
+            -- Table 1: Download history
             CREATE TABLE IF NOT EXISTS downloads (
                 id              INTEGER PRIMARY
                   KEY AUTOINCREMENT,
@@ -92,11 +92,11 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_downloads_status  ON downloads(status);
             CREATE INDEX IF NOT EXISTS idx_downloads_started ON downloads(started_at);
 
-            -- Table 2 : Stratégie par site (mémoire de DowFlow)
+            -- Table 2: Per-site strategy (DowFlow memory)
             CREATE TABLE IF NOT EXISTS site_strategy (
                 id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                 domain              TEXT    NOT NULL UNIQUE,
-                url_pattern         TEXT,                     -- regex optionnel
+                url_pattern         TEXT,                     -- optional regex
                 preferred_extractor TEXT,                     -- franime / yt-dlp / browser
                 preferred_player    TEXT,                     -- SIBNET / HLS / etc.
                 preferred_quality   TEXT,                     -- 1080p / best
@@ -114,7 +114,7 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_site_strategy_rate
                 ON site_strategy((success_count - fail_count) DESC);
 
-            -- Meta : version schéma
+            -- Metadata: schema version
             CREATE TABLE IF NOT EXISTS meta (
                 key   TEXT PRIMARY KEY,
                 value TEXT
@@ -138,7 +138,7 @@ def db_is_ready() -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  CRUD downloads
+#  Download CRUD
 # ─────────────────────────────────────────────────────────────────────────────
 
 def download_start(
@@ -147,7 +147,7 @@ def download_start(
     download_type: str = "video",
     quality: str = "best",
 ) -> int:
-    """Insère un nouveau download en statut 'running' → retourne son id."""
+    """Insert a download with 'running' status and return its ID."""
     from urllib.parse import urlparse
     dom = domain or (urlparse(url).netloc.lower().replace("www.", "") if url else "")
     with _conn() as c:
@@ -171,7 +171,7 @@ def download_finish(
     duration_ms: int | None = None,
     metadata: dict | None = None,
 ) -> None:
-    """Finalise un download (apprentissage déclenché en auto)."""
+    """Finalize a download and trigger automatic learning."""
     finished = time.time()
     with _conn() as c:
         row = c.execute(
@@ -221,7 +221,7 @@ def download_finish(
 
 
 def download_list(limit: int = 100, status: str | None = None) -> list[dict]:
-    """Retourne les derniers downloads sous forme de liste de dicts."""
+    """Return the latest downloads as a list of dictionaries."""
     with _conn() as c:
         if status:
             rows = c.execute(
@@ -242,7 +242,7 @@ def download_list(limit: int = 100, status: str | None = None) -> list[dict]:
 
 
 def download_count_by_status() -> dict[str, int]:
-    """Stats rapide : {'success': 42, 'failed': 3, 'skipped': 5, 'running': 0}."""
+    """Return download counts by status."""
     with _conn() as c:
         rows = c.execute(
             "SELECT status, COUNT(*) AS n FROM downloads GROUP BY status"
@@ -251,7 +251,7 @@ def download_count_by_status() -> dict[str, int]:
 
 
 def favorite_list() -> list[str]:
-    """Retourne les fichiers musicaux marques comme favoris."""
+    """Return filenames marked as music favorites."""
     with _conn() as c:
         rows = c.execute(
             "SELECT filename FROM music_favorites ORDER BY created_at DESC"
@@ -260,7 +260,7 @@ def favorite_list() -> list[str]:
 
 
 def favorite_add(filename: str) -> None:
-    """Ajoute un fichier musical aux favoris de facon idempotente."""
+    """Add a music file to favorites idempotently."""
     with _conn() as c:
         c.execute(
             "INSERT OR IGNORE INTO music_favorites(filename, created_at) VALUES (?, ?)",
@@ -269,14 +269,14 @@ def favorite_add(filename: str) -> None:
 
 
 def favorite_remove(filename: str) -> bool:
-    """Retire un favori et indique s'il existait."""
+    """Remove a favorite and report whether it existed."""
     with _conn() as c:
         cursor = c.execute("DELETE FROM music_favorites WHERE filename=?", (filename,))
         return cursor.rowcount > 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Apprentissage auto : site_strategy (mise à jour à chaque download fini)
+#  Automatic learning: site_strategy (updated when each download finishes)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _learn_from_result(
@@ -287,7 +287,7 @@ def _learn_from_result(
     player_name: str | None,
     duration_ms: int,
 ) -> None:
-    """Met à jour les stats par domaine. Est appelé depuis download_finish()."""
+    """Update per-domain statistics. Called from download_finish()."""
     if not domain:
         return
 
@@ -352,6 +352,6 @@ def _learn_from_result(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Auto-init à l'import (si la DB n'existe pas encore)
+#  Auto-initialize on import if the database does not exist yet.
 # ─────────────────────────────────────────────────────────────────────────────
 init_db()

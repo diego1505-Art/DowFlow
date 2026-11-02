@@ -1,4 +1,4 @@
-"""Fallback générique : tenter d'étendre une playlist via yt-dlp pour tout domaine."""
+"""Generic fallback that tries to expand playlists via yt-dlp for any domain."""
 from __future__ import annotations
 
 from typing import Any
@@ -8,14 +8,14 @@ from utils import yt_dlp_runtime_options
 
 
 def supports(url: str, host: str) -> bool:
-    # Toujours candidat en dernier recours
+    # Always eligible as the last resort.
     return True
 
 
 def profile_for(url: str, host: str) -> SiteProfile | None:
-    # Ne s'affiche que si aucun expander spécialisé n'a matché
-    # (appelé depuis detect_profile qui itère dans l'ordre — youtube/franime retournent avant)
-    # Ici on retourne toujours un profil générique quand on est le module appelé en dernier.
+    # Shown only if no specialized expander matched. detect_profile checks
+    # expanders in order, so YouTube and Franime return before this module.
+    # This module always returns a generic profile when called last.
     label = host or "Remote site"
     return SiteProfile(
         site_id="generic",

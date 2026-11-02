@@ -1,4 +1,4 @@
-"""Expansion d'une URL source en liste d'URLs téléchargeables (multi-sites)."""
+"""Expand a source URL into a list of downloadable URLs across multiple sites."""
 from __future__ import annotations
 
 from urllib.parse import urlparse
@@ -9,7 +9,7 @@ from . import franime, youtube, generic
 _EXPANDERS = [
     franime,
     youtube,
-    generic,  # toujours en dernier (fallback)
+    generic,  # Always last (fallback).
 ]
 
 
@@ -25,17 +25,17 @@ def detect_profile(url: str) -> SiteProfile:
             return profile
     return SiteProfile(
         site_id="unknown",
-        label="Site inconnu",
+        label="Unknown site",
         available=False,
         options=[],
-        help_text="Aucune expansion automatique pour ce domaine.",
+        help_text="No automatic expansion is available for this domain.",
     )
 
 
 def expand_url(url: str, options: dict | None = None) -> ExpandResult:
     url = (url or "").strip()
     if not url:
-        return ExpandResult(success=False, error="URL manquante.")
+        return ExpandResult(success=False, error="URL is required.")
 
     host = _host(url)
     opts = options or {}
@@ -46,7 +46,7 @@ def expand_url(url: str, options: dict | None = None) -> ExpandResult:
 
     return ExpandResult(
         success=False,
-        error="Aucune méthode d'expansion pour ce site.",
+        error="No expansion method is available for this site.",
     )
 
 

@@ -22,10 +22,10 @@ def extract_urls(input_path: Path) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Extrait les URLs HTTP presentes dans un fichier texte ou JSON."
+        description="Extract HTTP URLs from a text or JSON file."
     )
-    parser.add_argument("input", nargs="?", default="urls_a_telecharger.txt")
-    parser.add_argument("--output", default="urls_extraites.txt")
+    parser.add_argument("input", nargs="?", default="urls_to_download.txt")
+    parser.add_argument("--output", default="extracted_urls.txt")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -33,7 +33,7 @@ def main() -> None:
     urls = extract_urls(input_path)
 
     output_path.write_text("\n".join(urls) + ("\n" if urls else ""), encoding="utf-8")
-    print(f"{len(urls)} URLs extraites vers {output_path}")
+    print(f"Extracted {len(urls)} URLs to {output_path}")
 
 
 if __name__ == "__main__":

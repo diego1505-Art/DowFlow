@@ -86,9 +86,9 @@ endlocal & call "%~f0" --updated & exit /b
 :after_update
 
 REM -- Venv ---------------------------------------------------------------
-REM Chemin absolu recalcule a chaque lancement : le venv reste valide meme si
-REM le dossier du projet est renomme/deplace (sinon activation cassee -> Python
-REM systeme + yt-dlp trop ancien -> erreurs HTTP 403 sur YouTube).
+REM Recalculate the absolute path at each launch so the venv remains valid if
+REM the project folder is renamed or moved (otherwise system Python and an older
+REM yt-dlp may cause HTTP 403 errors on YouTube).
 set "VENV_DIR=%~dp0.venv"
 set "DOWFLOW_WARN=0"
 if not exist "%VENV_DIR%\Scripts\python.exe" (
@@ -139,7 +139,7 @@ aria2c --version >nul 2>&1
 if errorlevel 1 (
     echo Installing aria2c...
     winget install aria2.aria2 --silent --accept-package-agreements --accept-source-agreements
-    REM Ajouter le chemin winget au PATH pour cette session
+    REM Add the WinGet path to PATH for this session.
     for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\aria2.aria2*") do (
         for /d %%S in ("%%D\aria2*") do set "PATH=%%S;%PATH%"
     )

@@ -1,4 +1,4 @@
-"""Expansion YouTube (playlist / liste plate via yt-dlp)."""
+"""YouTube playlist and flat-list expansion via yt-dlp."""
 from __future__ import annotations
 
 from typing import Any
@@ -80,8 +80,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
     has_list = "list" in query or "/playlist" in parsed.path
     is_channel = any(p in parsed.path for p in ("/channel/", "/@", "/c/", "/user/"))
 
-    # ── Cas "rien à étendre" : retourner simplement l'URL telle quelle
-    #    au lieu d'une erreur 400. Améliore énormément l'UX.
+    # If there is nothing to expand, return the URL as-is instead of a 400 error.
     has_real_work = (expand_playlist and has_list) or (expand_channel and is_channel)
     if not has_real_work:
         return ExpandResult(

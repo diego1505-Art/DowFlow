@@ -18,11 +18,11 @@ from config import (
     PROXY_VALIDATE_URL,
 )
 
-# Detection FFmpeg mise en cache : ces fonctions sont appelees a chaque rendu de page
-# et a chaque telechargement (shutil.which fait un scan du PATH, couteux s'il est repete).
+# Cache FFmpeg detection: these functions are called for each page render and
+# download (shutil.which scans PATH, so repeating it is expensive).
 @lru_cache(maxsize=1)
 def _resolve_ffmpeg_dir() -> str | None:
-    """Retourne le chemin vers FFmpeg s'il est dans les dossiers de fallback, sinon None."""
+    """Return the FFmpeg fallback path, or None if no fallback is available."""
     system_ffmpeg = shutil.which("ffmpeg")
     system_ffprobe = shutil.which("ffprobe")
     if system_ffmpeg and system_ffprobe:
@@ -35,17 +35,17 @@ def _resolve_ffmpeg_dir() -> str | None:
     return None
 @lru_cache(maxsize=1)
 def has_ffmpeg() -> bool:
-    """Vérifie si FFmpeg et FFprobe sont disponibles."""
+    """Check whether FFmpeg and FFprobe are available."""
     if shutil.which("ffmpeg") and shutil.which("ffprobe"):
         return True
     return _resolve_ffmpeg_dir() is not None
 
 def is_http_url(value: str) -> bool:
-    """Vérifie si une chaîne est une URL HTTP(S)."""
+    """Check whether a string is an HTTP(S) URL."""
     return value.startswith("http://") or value.startswith("https://")
 
 def yt_dlp_runtime_options(include_browser_cookies: bool = False) -> dict[str, Any]:
-    """Configure le runtime JavaScript, le solveur EJS et les cookies du navigateur."""
+    """Configure the JavaScript runtime, EJS solver, and browser cookies."""
     options: dict[str, Any] = {"remote_components": ["ejs:github"]}
     if include_browser_cookies:
         options["cookiesfrombrowser"] = ("chrome",)
@@ -55,7 +55,7 @@ def yt_dlp_runtime_options(include_browser_cookies: bool = False) -> dict[str, A
     return options
 
 def find_chrome_binary() -> Path | None:
-    """Retourne le chemin vers l'exécutable Chrome, ou None s'il n'est pas installé."""
+    """Return the Chrome executable path, or None if Chrome is not installed."""
     candidates: list[Path] = []
     if os.name == "nt":
         program_files = [os.environ.get("PROGRAMFILES", r"C:\Program Files"),
@@ -77,15 +77,14 @@ def find_chrome_binary() -> Path | None:
     return None
 
 
-# ── Palier de connexions parallèles (8 → 128) ────────────────────────────────
-# On exploite la puissance de la machine sans la saturer : les cœurs logiques
-# plafonnent le palier, le débit réseau mesuré le limite au strict nécessaire
-# (inutile d'ouvrir plus de connexions que la ligne ne peut en alimenter).
+# ── Parallel connection tiers (8 → 128) ──────────────────────────────────────
+# Use available system capacity without overloading it: logical CPU cores cap
+# the tier, while measured network speed limits it to what the connection can use.
 _CONNECTION_TIERS = (8, 16, 32, 64, 128)
 
 
 def pick_connection_tier(cores: int, speed_mbps: float) -> int:
-    """Choisit le palier de connexions (8/16/32/64/128) selon CPU + débit réseau."""
+    """Choose a connection tier (8/16/32/64/128) based on CPU and network speed."""
     if cores <= 2:
         cpu_tier = 8
     elif cores <= 4:
@@ -98,7 +97,7 @@ def pick_connection_tier(cores: int, speed_mbps: float) -> int:
         cpu_tier = 128
 
     if speed_mbps <= 0:
-        # Débit inconnu : on ne prend aucun risque de saturation.
+        # Unknown speed: avoid risking network saturation.
         return min(cpu_tier, 16)
     if speed_mbps < 10:
         net_tier = 8
@@ -113,14 +112,14 @@ def pick_connection_tier(cores: int, speed_mbps: float) -> int:
     return min(cpu_tier, net_tier)
 
 
-# ── Pool de proxys (gratuits, validés à la volée) ────────────────────────────
+# ── Proxy pool (free, validated on demand) ───────────────────────────────────
 _proxy_lock = threading.RLock()
 _proxy_pool: list[str] = []
 _proxy_fetched_at = 0.0
 
 
 def _fetch_free_proxies(limit: int = 60) -> list[str]:
-    """Récupère une liste de proxys publics gratuits depuis les sources connues."""
+    """Fetch free public proxies from known sources."""
     found: list[str] = []
     seen: set[str] = set()
     for source in PROXY_SOURCES:
@@ -141,7 +140,7 @@ def _fetch_free_proxies(limit: int = 60) -> list[str]:
 
 
 def _validate_proxy(proxy: str) -> bool:
-    """Vérifie qu'un proxy répond réellement (test HTTP court et léger)."""
+    """Check whether a proxy responds to a lightweight HTTP request."""
     try:
         opener = build_opener(ProxyHandler({"http": proxy, "https": proxy}))
         with opener.open(PROXY_VALIDATE_URL, timeout=PROXY_VALIDATE_TIMEOUT) as resp:
@@ -151,7 +150,7 @@ def _validate_proxy(proxy: str) -> bool:
 
 
 def _refresh_proxy_pool() -> list[str]:
-    """Reconstruit le pool (fetch + validation en parallèle) puis le met en cache."""
+    """Rebuild the pool, validate proxies in parallel, and cache the results."""
     global _proxy_pool, _proxy_fetched_at
     candidates = _fetch_free_proxies()
     if not candidates:
@@ -166,10 +165,10 @@ def _refresh_proxy_pool() -> list[str]:
 
 
 def get_active_proxies() -> list[str]:
-    """Proxys utilisables : liste manuelle (config.PROXIES) puis pool gratuit validé.
+    """Return usable proxies: the manual config.PROXIES list, then the validated pool.
 
-    Retourne une liste vide si aucun proxy n'est configuré/activé : le trafic
-    reste alors direct, sans aucune régression.
+    Return an empty list if no proxy is configured or enabled; traffic then
+    continues directly with no behavior change.
     """
     if PROXIES:
         return list(PROXIES)
@@ -183,7 +182,7 @@ def get_active_proxies() -> list[str]:
 
 
 def pick_proxy() -> str | None:
-    """Retourne le premier proxy actif, ou None si le mode direct est utilisé."""
+    """Return the first active proxy, or None when using direct access."""
     proxies = get_active_proxies()
     return proxies[0] if proxies else None
 

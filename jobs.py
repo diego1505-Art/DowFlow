@@ -1,5 +1,5 @@
 """
-DowFlow — File de jobs de telechargement + progres temps reel.
+DowFlow — Download job queue and real-time progress.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ _LOCK = threading.Lock()
 _JOBS: dict[str, dict[str, Any]] = {}
 _MAX_JOBS = 200
 
-# Champs autorises dans job.result (jamais le dict info yt-dlp brut)
+# Allowed fields in job.result (never the raw yt-dlp info dictionary)
 _SAFE_RESULT_KEYS = {
     "success",
     "skipped",
@@ -45,7 +45,7 @@ _SAFE_RESULT_KEYS = {
 
 
 def sanitize_job_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Retire les objets non JSON-serialisables (ex: FFmpegMergerPP dans info)."""
+    """Remove non-JSON-serializable objects (e.g. FFmpegMergerPP in info)."""
     if not isinstance(result, dict):
         return None
     out: dict[str, Any] = {}
@@ -67,7 +67,7 @@ def _new_job(url: str, meta: dict[str, Any] | None = None) -> str:
     now = time.time()
     with _LOCK:
         if len(_JOBS) >= _MAX_JOBS:
-            # purge plus anciens termines
+            # Purge the oldest completed jobs.
             finished = sorted(
                 (
                     (jid, j)
@@ -85,7 +85,7 @@ def _new_job(url: str, meta: dict[str, Any] | None = None) -> str:
             "progress": 0.0,
             "speed": None,
             "eta": None,
-            "message": "En file d'attente",
+            "message": "Queued",
             "result": None,
             "error": None,
             "started_at": now,
@@ -134,10 +134,10 @@ def make_progress_hook(job_id: str) -> Callable[[dict[str, Any]], None]:
                 progress=max(0.0, min(99.0, pct)),
                 speed=speed,
                 eta=eta,
-                message=f"Telechargement {pct:.1f}%",
+                message=f"Downloading {pct:.1f}%",
             )
         elif status == "finished":
-            update_job(job_id, progress=99.0, message="Finalisation / fusion...")
+            update_job(job_id, progress=99.0, message="Finalizing / merging...")
         elif status == "adaptive_quality":
             update_job(
                 job_id,
@@ -148,18 +148,18 @@ def make_progress_hook(job_id: str) -> Callable[[dict[str, Any]], None]:
                 adaptive_note=d.get("adaptive_note"),
                 adaptive_eta_seconds=d.get("adaptive_eta_seconds"),
                 adaptive_threshold_seconds=d.get("adaptive_threshold_seconds"),
-                message=d.get("adaptive_note") or "Qualité abaissée automatiquement",
+                message=d.get("adaptive_note") or "Quality lowered automatically",
             )
         elif status == "error":
-            update_job(job_id, message=str(d.get("error") or "Erreur yt-dlp"))
+            update_job(job_id, message=str(d.get("error") or "yt-dlp error"))
 
     return hook
 
 
 def start_download_job(download_fn: Callable[..., dict[str, Any]], url: str, **kwargs: Any) -> str:
-    """Lance download_fn dans un thread ; retourne job_id immediatement."""
+    """Run download_fn in a thread and return the job ID immediately."""
     job_id = _new_job(url, meta={k: v for k, v in kwargs.items() if k != "progress_hook"})
-    update_job(job_id, status="running", message="Demarrage...")
+    update_job(job_id, status="running", message="Starting...")
 
     def runner() -> None:
         try:
@@ -174,7 +174,7 @@ def start_download_job(download_fn: Callable[..., dict[str, Any]], url: str, **k
                     job_id,
                     status="skipped",
                     progress=100.0,
-                    message=(safe or {}).get("reason") or "Saute",
+                    message=(safe or {}).get("reason") or "Skipped",
                     result=safe,
                     finished_at=time.time(),
                 )
@@ -192,7 +192,7 @@ def start_download_job(download_fn: Callable[..., dict[str, Any]], url: str, **k
                     job_id,
                     status="failed",
                     progress=100.0,
-                    message=(safe or {}).get("error") or "Echec",
+                    message=(safe or {}).get("error") or "Failed",
                     error=(safe or {}).get("error"),
                     result=safe,
                     finished_at=time.time(),

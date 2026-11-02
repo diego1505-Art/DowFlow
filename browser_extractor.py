@@ -1,12 +1,12 @@
 """
-Extracteur générique par navigateur (Playwright + Chrome).
-Fallback automatique pour tout site non supporté par yt-dlp.
+Generic browser extractor (Playwright + Chrome).
+Automatic fallback for sites not supported by yt-dlp.
 
-Responsabilités séparées :
-  - extract_streams()      : ouvre le navigateur, retourne les URLs brutes
-  - _validate_stream()     : valide qu'une URL est réellement téléchargeable
-  - _best_stream()         : choisit la meilleure parmi les URLs validées
-  - download_with_browser(): orchestre le tout et télécharge
+Responsibilities:
+    - extract_streams()       : opens the browser and returns raw URLs
+    - _validate_stream()     : checks whether a URL is actually downloadable
+    - _best_stream()         : selects the best validated URL
+    - download_with_browser(): orchestrates extraction and download
 """
 from __future__ import annotations
 import re, os, shutil, tempfile
@@ -20,7 +20,7 @@ from utils import _resolve_ffmpeg_dir, find_chrome_binary, yt_dlp_runtime_option
 
 log = get_logger("browser_ext")
 
-# ── Patterns de flux vidéo ───────────────────────────────────────────────────
+# ── Video stream patterns ────────────────────────────────────────────────────
 STREAM_PATTERNS = [
     re.compile(r"sibnet\.ru/shell\.php",     re.I),
     re.compile(r"filemoon\.\w+/[ve]/",       re.I),
@@ -54,7 +54,7 @@ SKIP_HOSTS = {
     "yandex.ru", "mail.ru", "hotjar", "amplitude",
 }
 
-# Priorité de sélection du stream (plus bas = meilleur)
+# Stream selection priority (lower is better)
 STREAM_PRIORITY = {
     "shell.php": 0,   # sibnet player page → yt-dlp sait extraire
     ".m3u8":     1,   # HLS direct
@@ -79,9 +79,9 @@ def _stream_priority(url: str) -> int:
 
 def _validate_stream(url: str) -> bool:
     """
-    Vérifie rapidement qu'une URL est accessible avant de lancer yt-dlp dessus.
-    Évite de passer un embed ou une URL non-finale au téléchargeur.
-    Consomme correctement les réponses HTTP pour éviter les fuites.
+    Quickly check whether a URL is accessible before passing it to yt-dlp.
+    Avoid passing an embed or non-final URL to the downloader.
+    Consume HTTP responses to avoid resource leaks.
     """
     import urllib.request
     parsed = urlparse(url)
@@ -91,7 +91,7 @@ def _validate_stream(url: str) -> bool:
         "Referer": referer,
     }
 
-    # Tentative 1 : HEAD (plus rapide, mais souvent bloqué par CDN)
+    # Attempt 1: HEAD (faster, but often blocked by CDNs).
     try:
         req = urllib.request.Request(url, method="HEAD", headers=base_headers)
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -99,18 +99,18 @@ def _validate_stream(url: str) -> bool:
     except Exception:
         pass
 
-    # Tentative 2 : GET avec Range bytes=0-0 (plus fiable), on lit/ferme proprement
+    # Attempt 2: GET with Range bytes=0-0 (more reliable); read and close cleanly.
     try:
         headers = dict(base_headers)
         headers["Range"] = "bytes=0-0"
         req = urllib.request.Request(url, method="GET", headers=headers)
         with urllib.request.urlopen(req, timeout=8) as resp:
             try:
-                resp.read()  # Consomme le corps (1 octet) pour éviter fuite
+                resp.read()  # Consume the body (one byte) to avoid a resource leak.
             except Exception:
                 pass
             code = getattr(resp, "status", 200)
-            # 206 = Partial Content (OK), 2xx/3xx = OK
+            # 206 = Partial Content; 2xx/3xx are also OK.
             return code < 400
     except Exception:
         return False
@@ -122,7 +122,7 @@ def _find_chrome() -> str | None:
 
 
 def _chrome_user_data_dir() -> str | None:
-    """Retourne le PROFIL UTILISATEUR RÉEL de Chrome (pour copier cookies), PAS le profil DowFlow."""
+    """Return Chrome's real user profile (for copying cookies), not DowFlow's profile."""
     import platform
     if platform.system() == "Windows":
         return os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google", "Chrome", "User Data")
@@ -133,15 +133,15 @@ def _chrome_user_data_dir() -> str | None:
 
 def _copy_chrome_profile_light(udata: str) -> str:
     """
-    Copie uniquement les fichiers de cookies/session (pas le cache ni les shaders).
-    Beaucoup plus rapide que de copier tout Default/.
+    Copy only cookie/session files, not the cache or shaders.
+    This is much faster than copying the entire Default/ directory.
     """
     tmp = tempfile.mkdtemp(prefix="dowflow_")
     dst_default = os.path.join(tmp, "Default")
     os.makedirs(dst_default, exist_ok=True)
 
     src_default = os.path.join(udata, "Default")
-    # Seulement les fichiers nécessaires aux cookies et à l'authentification
+    # Only files required for cookies and authentication.
     files_to_copy = ["Cookies", "Login Data", "Local State", "Preferences", "Web Data"]
     for fname in files_to_copy:
         src = os.path.join(src_default, fname)
@@ -149,7 +149,7 @@ def _copy_chrome_profile_light(udata: str) -> str:
             try: shutil.copy2(src, os.path.join(dst_default, fname))
             except Exception: pass
 
-    # Copier Local State (hors Default)
+    # Copy Local State (outside Default).
     ls = os.path.join(udata, "Local State")
     if os.path.isfile(ls):
         try: shutil.copy2(ls, os.path.join(tmp, "Local State"))
@@ -160,14 +160,14 @@ def _copy_chrome_profile_light(udata: str) -> str:
 
 def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
     """
-    Charge page_url dans Chrome, intercepte les flux vidéo.
-    Retourne une liste d'URLs triées par priorité.
-    NB : ne lance PAS d'installation runtime — c'est la responsabilité de start.bat.
+    Load page_url in Chrome and intercept video streams.
+    Return a list of URLs sorted by priority.
+    Note: do not install anything at runtime; start.bat handles installation.
     """
     try:
         from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
     except ImportError:
-        raise RuntimeError("Playwright non installé. Lance : pip install playwright && playwright install chromium")
+        raise RuntimeError("Playwright is not installed. Run: pip install playwright && playwright install chromium")
 
     found: list[str] = []
 
@@ -193,7 +193,7 @@ def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
     with sync_playwright() as pw:
         args = ["--no-sandbox", "--disable-blink-features=AutomationControlled"]
 
-        # Profil léger (cookies seulement) si Chrome disponible
+        # Use a lightweight profile (cookies only) when Chrome is available.
         if chrome and udata and os.path.isdir(os.path.join(udata, "Default")):
             tmp = _copy_chrome_profile_light(udata)
             ctx = pw.chromium.launch_persistent_context(
@@ -214,7 +214,7 @@ def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
         except PwTimeout:
             pass
 
-        # Clics play courants
+        # Common play buttons.
         page.wait_for_timeout(2_000)
         for sel in [
             "button:has-text('Regarder')", "button:has-text('Watch')",
@@ -240,12 +240,12 @@ def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
                 if el: el.click(timeout=2_000); break
             except Exception: pass
 
-        # Attente avec sortie anticipée dès qu'on a un stream validé
+        # Wait, exiting early once a stream is found.
         for i in range(wait_seconds):
             page.wait_for_timeout(1_000)
             if found and i >= 4: break
 
-        # Dernier recours DOM
+        # DOM fallback.
         if not found:
             html = page.content()
             for pat in [r'https?://[^\s"\'<>]+\.m3u8[^\s"\'<>]*',
@@ -266,19 +266,19 @@ def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
         try: shutil.rmtree(tmp, ignore_errors=True)
         except Exception: pass
 
-    # Trier par priorité
+    # Sort by priority.
     found.sort(key=_stream_priority)
     return found
 
 
 def _best_stream(streams: list[str]) -> str | None:
-    """Valide chaque stream dans l'ordre et retourne le premier accessible."""
+    """Validate each stream in order and return the first accessible one."""
     for url in streams:
-        log.info("[browser] Validation : %s", url[:90])
+        log.info("[browser] Validating: %s", url[:90])
         if _validate_stream(url):
-            log.success("[browser] Choisi : %s", url[:90])
+            log.success("[browser] Selected: %s", url[:90])
             return url
-        log.warning("[browser] Inaccessible, suivant...")
+        log.warning("[browser] Inaccessible; trying the next URL...")
     return None
 
 
@@ -287,7 +287,7 @@ def _resolve_ffmpeg_dir_proxy() -> str | None:
 
 
 def _build_video_format(quality: str) -> str:
-    """Version unifiée : accepte les qualités legacy ET les nouvelles 1080p/720p..."""
+    """Accept both legacy quality names and newer values such as 1080p/720p."""
     from playlist import _LEGACY_QUALITY_MAP, _build_video_format_string
     normalized = _LEGACY_QUALITY_MAP.get(quality.lower(), quality)
     ffmpeg_dir = _resolve_ffmpeg_dir_proxy()
@@ -298,7 +298,7 @@ def _build_video_format(quality: str) -> str:
 def download_with_browser(url: str, output_path: str = "downloads",
                            download_type: str = "video", quality: str = "best") -> dict[str, Any]:
     """
-    Point d'entrée : extrait les streams via navigateur, valide, puis télécharge.
+    Entry point: extract browser streams, validate one, then download it.
     """
     import yt_dlp
 
@@ -307,17 +307,17 @@ def download_with_browser(url: str, output_path: str = "downloads",
 
     streams = extract_streams(url)
     if not streams:
-        raise ValueError(f"Aucun flux vidéo trouvé sur {url}. Le site est peut-être protégé par login ou DRM.")
+        raise ValueError(f"No video stream found at {url}. The site may require login or use DRM.")
 
     stream_url = _best_stream(streams)
     if not stream_url:
         domain = urlparse(url).netloc.lower()
         if "instagram.com" in domain or "tiktok.com" in domain:
             raise ValueError(
-                f"Accès restreint sur {domain}. Tu dois être connecté à ton compte dans Chrome "
-                "pour que DowFlow puisse récupérer ce contenu protégé."
+                f"Access to {domain} is restricted. Sign in to your account in Chrome "
+                "so DowFlow can retrieve this protected content."
             )
-        raise ValueError(f"Streams trouvés mais inaccessibles (blob) : {streams[:3]}")
+        raise ValueError(f"Streams were found but are inaccessible (blob): {streams[:3]}")
 
     parsed  = urlparse(url)
     referer = f"{parsed.scheme}://{parsed.netloc}/"
@@ -355,7 +355,7 @@ def download_with_browser(url: str, output_path: str = "downloads",
             ]
         return opts
 
-    # Snapshot des fichiers avant pour détecter le nouveau fichier créé
+    # Snapshot files before the download to detect new or modified files.
     before_mtime: dict[str, float] = {
         f: os.path.getmtime(os.path.join(output_path, f))
         for f in os.listdir(output_path)
@@ -372,12 +372,12 @@ def download_with_browser(url: str, output_path: str = "downloads",
             if not force_native and aria2c_path:
                 msg = str(e).lower()
                 if any(k in msg for k in ("403", "forbidden", "429", "inaccessible")):
-                    log.warning("[browser-fallback] Blocage Turbo -> passage en mode Natif discret")
+                    log.warning("[browser-fallback] Turbo blocked; switching to quiet native mode")
                     force_native = True
                     continue
             raise
 
-    # Sélection fiable : fichier nouveau OU modifié, trié par mtime décroissant
+    # Prefer new or modified files, sorted by descending modification time.
     candidates = []
     for f in os.listdir(output_path):
         fp = os.path.join(output_path, f)
@@ -392,8 +392,8 @@ def download_with_browser(url: str, output_path: str = "downloads",
 
     if not selected:
         raise FileNotFoundError(
-            f"Téléchargement terminé mais fichier introuvable dans {output_path}. "
-            "Vérifiez les droits d'écriture et l'antivirus."
+            f"Download finished but no file was found in {output_path}. "
+            "Check write permissions and antivirus settings."
         )
 
     return {

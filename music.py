@@ -1,12 +1,12 @@
 """
-DowFlow — Service Musique.
+DowFlow — Music service.
 
-Recherche de morceaux et titres populaires via YouTube (yt-dlp), téléchargement
-audio (MP3/FLAC…) et récupération automatique de la pochette d'album
-(API Deezer publique, repli sur la miniature YouTube).
+Search for tracks and popular songs via YouTube (yt-dlp), download audio
+(MP3/FLAC, etc.), and automatically fetch album artwork (public Deezer API,
+falling back to the YouTube thumbnail).
 
-L'intégration d'un dataset local est prévue via `music_dataset.get_dataset()` :
-s'il est disponible il est interrogé en premier, sinon tout passe par YouTube.
+Integration with a local dataset is planned via `music_dataset.get_dataset()`:
+it will be queried first when available; otherwise, all searches use YouTube.
 """
 from __future__ import annotations
 
@@ -38,10 +38,10 @@ _LIBRARY_PROMO_SUFFIX = re.compile(
     re.IGNORECASE,
 )
 
-# Requêtes servant à composer la liste « Musiques populaires » (sans dataset).
+# Queries used to build the "Popular music" list (without a dataset).
 _POPULAR_QUERIES = (
     "Top hits 2026",
-    "musique populaire 2026",
+    "popular music 2026",
     "Top 50 France 2026",
     "best songs 2026",
 )
@@ -54,12 +54,12 @@ _popular_cache: tuple[float, list[dict[str, Any]]] | None = None
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _thumb_for(video_id: str) -> str:
-    """Miniature YouTube standard pour un identifiant vidéo."""
+    """Return the standard YouTube thumbnail for a video ID."""
     return f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
 
 
 def _video_id_from_url(url: str) -> str | None:
-    """Extrait l'identifiant vidéo YouTube d'une URL (watch / youtu.be / shorts)."""
+    """Extract a YouTube video ID from a watch, youtu.be, or Shorts URL."""
     try:
         parsed = urlparse(url)
     except Exception:
@@ -80,7 +80,7 @@ def _video_id_from_url(url: str) -> str | None:
 
 
 def _library_track_metadata(stem: str) -> tuple[str, str, str]:
-    """Nettoie un nom YouTube et produit une clé stable artiste/titre."""
+    """Clean a YouTube filename and produce a stable artist/title key."""
     raw_artist = ""
     raw_title = stem.strip()
     if "---" in raw_title:
@@ -97,7 +97,7 @@ def _library_track_metadata(stem: str) -> tuple[str, str, str]:
 
 
 def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
-    """Convertit une entrée yt-dlp (flat) en piste exploitable par le frontend."""
+    """Convert a flat yt-dlp entry into a track for the frontend."""
     if not isinstance(entry, dict):
         return None
     video_id = entry.get("id")
@@ -111,7 +111,7 @@ def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
     duration = entry.get("duration")
     return {
         "id": str(video_id),
-        "title": entry.get("title") or "Sans titre",
+        "title": entry.get("title") or "Untitled",
         "artist": entry.get("uploader") or entry.get("channel") or "",
         "url": url,
         "duration": int(duration) if isinstance(duration, (int, float)) else None,
@@ -154,7 +154,7 @@ def _dedupe(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Recherche / titres populaires
+#  Search / popular tracks
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _search_youtube(query: str, limit: int) -> list[dict[str, Any]]:
@@ -179,7 +179,7 @@ def _search_youtube(query: str, limit: int) -> list[dict[str, Any]]:
 
 
 def search_music(query: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Recherche de morceaux : dataset local si présent, sinon YouTube."""
+    """Search for tracks locally when a dataset is available, otherwise on YouTube."""
     query = (query or "").strip()
     if not query:
         return []
@@ -192,18 +192,18 @@ def search_music(query: str, limit: int = 20) -> list[dict[str, Any]]:
                 return results[:limit]
         except NotImplementedError:
             pass
-        except Exception as exc:  # dataset défaillant → on retombe sur YouTube
-            log.warning("[music] Dataset indisponible, repli YouTube : %s", exc)
+        except Exception as exc:  # Fall back to YouTube if the dataset fails.
+            log.warning("[music] Dataset unavailable; falling back to YouTube: %s", exc)
 
     try:
         return _search_youtube(query, limit)
     except Exception as exc:
-        log.error("[music] Recherche échouée : %s", exc, exc_info=True)
+        log.error("[music] Search failed: %s", exc, exc_info=True)
         return []
 
 
 def popular_music(limit: int = 24) -> list[dict[str, Any]]:
-    """Liste de titres populaires (cache mémoire 30 min)."""
+    """Return popular tracks (30-minute in-memory cache)."""
     global _popular_cache
     now = time.time()
     if _popular_cache and now - _popular_cache[0] < _POPULAR_TTL_SECONDS:
@@ -219,12 +219,12 @@ def popular_music(limit: int = 24) -> list[dict[str, Any]]:
         except NotImplementedError:
             pass
         except Exception as exc:
-            log.warning("[music] Dataset populaire indisponible : %s", exc)
+            log.warning("[music] Popular dataset unavailable: %s", exc)
 
     per_query = max(6, (limit // len(_POPULAR_QUERIES)) + 4)
     tracks: list[dict[str, Any]] = []
-    # Les requêtes YouTube sont indépendantes : on les lance en parallèle pour réduire
-    # la latence à froid (l'opération la plus lente de l'endpoint /popular).
+    # YouTube queries are independent, so run them in parallel to reduce cold-start
+    # latency (the slowest operation in the /popular endpoint).
     with ThreadPoolExecutor(max_workers=len(_POPULAR_QUERIES)) as pool:
         futures = {
             pool.submit(_search_youtube, query, per_query): query
@@ -235,7 +235,7 @@ def popular_music(limit: int = 24) -> list[dict[str, Any]]:
             try:
                 tracks.extend(future.result())
             except Exception as exc:
-                log.warning("[music] Requête populaire « %s » échouée : %s", query, exc)
+                log.warning("[music] Popular query '%s' failed: %s", query, exc)
 
     tracks = _dedupe(tracks)[:limit]
     if tracks:
@@ -244,11 +244,11 @@ def popular_music(limit: int = 24) -> list[dict[str, Any]]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Pochettes d'album
+#  Album artwork
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_cover_url(artist: str | None, title: str | None) -> str | None:
-    """URL de pochette via l'API Deezer (aucune clé requise), sinon None."""
+    """Get the cover URL from the Deezer API (no key required), or return None."""
     dataset = get_dataset()
     if dataset is not None and dataset.available():
         try:
@@ -278,7 +278,7 @@ def fetch_cover_url(artist: str | None, title: str | None) -> str | None:
                 or album.get("cover_medium")
             )
     except Exception as exc:
-        log.debug("[music] Deezer indisponible pour « %s » : %s", title, exc)
+        log.debug("[music] Deezer unavailable for '%s': %s", title, exc)
     return None
 
 
@@ -287,7 +287,7 @@ _COVER_TTL_SECONDS = 600.0
 
 
 def fetch_cover_url_cached(artist: str | None, title: str | None) -> str | None:
-    """Comme fetch_cover_url, mais mémorise aussi les échecs pendant 10 min."""
+    """Like fetch_cover_url, but also cache failures for 10 minutes."""
     key = ((artist or "").strip().lower(), (title or "").strip().lower())
     hit = _COVER_CACHE.get(key)
     if hit and time.time() - hit[0] < _COVER_TTL_SECONDS:
@@ -298,7 +298,7 @@ def fetch_cover_url_cached(artist: str | None, title: str | None) -> str | None:
 
 
 def _save_cover_image(media_path: str, cover_url: str | None, video_id: str | None) -> str | None:
-    """Écrit la pochette à côté du fichier audio ; repli miniature YouTube."""
+    """Save the cover beside the audio file, falling back to a YouTube thumbnail."""
     candidates = [cover_url] if cover_url else []
     if video_id:
         candidates.append(f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg")
@@ -317,12 +317,12 @@ def _save_cover_image(media_path: str, cover_url: str | None, video_id: str | No
                 handle.write(response.content)
             return target
         except Exception as exc:
-            log.debug("[music] Pochette inaccessible (%s) : %s", url[:60], exc)
+            log.debug("[music] Cover art unavailable (%s): %s", url[:60], exc)
     return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Téléchargement
+#  Download
 # ─────────────────────────────────────────────────────────────────────────────
 
 def download_music_track(
@@ -334,7 +334,7 @@ def download_music_track(
     artist: str | None = None,
     progress_hook=None,
 ) -> dict[str, Any]:
-    """Télécharge un morceau en audio (+ pochette) dans `downloads/music`."""
+    """Download a track as audio (with optional cover) into `downloads/music`."""
     from playlist import download_media
 
     base_output = output_path or str(DOWNLOAD_FOLDER)
@@ -367,11 +367,11 @@ def download_music_track(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Bibliothèque locale (morceaux déjà téléchargés)
+#  Local library (previously downloaded tracks)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def list_library(limit: int = 200) -> list[dict[str, Any]]:
-    """Liste les morceaux présents dans `downloads/music` (+ pochette associée)."""
+    """List tracks in `downloads/music` with any associated cover art."""
     MUSIC_FOLDER.mkdir(parents=True, exist_ok=True)
     try:
         entries = [p for p in MUSIC_FOLDER.iterdir() if p.is_file()]
@@ -420,7 +420,7 @@ def list_library(limit: int = 200) -> list[dict[str, Any]]:
 
 
 def delete_track(filename: str) -> bool:
-    """Supprime un morceau et sa pochette associée."""
+    """Delete a track and its associated cover art."""
     from werkzeug.utils import secure_filename
     safe_name = secure_filename(filename)
     audio_path = MUSIC_FOLDER / safe_name
@@ -429,10 +429,10 @@ def delete_track(filename: str) -> bool:
         return False
         
     try:
-        # Supprimer l'audio
+        # Delete the audio file.
         audio_path.unlink()
         
-        # Supprimer la pochette si elle existe (même nom de base)
+        # Delete the cover art if it exists (same base filename).
         base_name = audio_path.stem
         for ext in COVER_EXTENSIONS:
             cover_path = MUSIC_FOLDER / f"{base_name}{ext}"
@@ -440,5 +440,5 @@ def delete_track(filename: str) -> bool:
                 cover_path.unlink()
         return True
     except Exception as exc:
-        log.error("[music] Erreur lors de la suppression de %s : %s", filename, exc)
+        log.error("[music] Failed to delete %s: %s", filename, exc)
         return False

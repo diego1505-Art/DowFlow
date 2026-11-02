@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DowFlow Debug Center — menu interactif lisible (ASCII).
+DowFlow Debug Center — readable interactive menu (ASCII).
 Run with debug.bat or: python tools/debug_center.py
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_LOG = LOG_DIR / f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 GITHUB_REPO = "https://github.com/diego1505-Art/DowFlow.git"
 
-# Forcer UTF-8 console Windows
+# Force UTF-8 in the Windows console.
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -34,7 +34,7 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
-# Activer VT100 couleurs si possible (Windows 10+)
+# Enable VT100 colors when available (Windows 10+).
 if sys.platform == "win32":
     try:
         import ctypes
@@ -48,7 +48,7 @@ if sys.platform == "win32":
 
 
 class C:
-    """Couleurs ANSI (fallback silencieux si non supporté)."""
+    """ANSI colors with a silent fallback when unsupported."""
     USE = sys.stdout.isatty()
     RESET = "\033[0m" if USE else ""
     BOLD = "\033[1m" if USE else ""
@@ -102,7 +102,7 @@ def section(title: str) -> None:
 
 
 def pause() -> None:
-    input(f"\n  {C.DIM}Entree pour revenir au menu...{C.RESET}")
+    input(f"\n  {C.DIM}Press Enter to return to the menu...{C.RESET}")
 
 
 def clear() -> None:
@@ -110,7 +110,7 @@ def clear() -> None:
 
 
 def ensure_path_tools() -> None:
-    """Ajoute FFmpeg / aria2 Winget au PATH de la session."""
+    """Add WinGet FFmpeg and aria2 directories to this session's PATH."""
     local = Path(os.environ.get("LOCALAPPDATA", ""))
     packages = local / "Microsoft" / "WinGet" / "Packages"
     ffmpeg_bins = sorted(packages.glob("Gyan.FFmpeg*/ffmpeg-*/bin"), reverse=True)
@@ -132,11 +132,11 @@ def ensure_path_tools() -> None:
 # ── Checks ───────────────────────────────────────────────────────────────────
 
 def check_python() -> None:
-    section("Python + environnement")
+    section("Python + environment")
     ok(f"Python {sys.version.split()[0]}  ({sys.executable})")
     venv = BASE / ".venv" / "Scripts" / "python.exe"
     if venv.is_file():
-        ok(f"Virtualenv present : {venv}")
+        ok(f"Virtual environment present: {venv}")
     else:
         warn("Virtualenv .venv missing - run start.bat to create it")
 
@@ -148,7 +148,7 @@ def check_python() -> None:
         else:
             path.mkdir(parents=True, exist_ok=True)
             ok(f"Folder {folder}/ created")
-    info(f"Session log : {SESSION_LOG}")
+    info(f"Session log: {SESSION_LOG}")
 
 
 def check_deps() -> None:
@@ -185,7 +185,7 @@ def check_deps() -> None:
 
 
 def check_git_update() -> None:
-    """Compare le commit local avec main sur GitHub sans modifier le depot."""
+    """Compare the local commit with GitHub main without modifying the repository."""
     section("Projet GitHub")
     try:
         local_result = subprocess.run(
@@ -196,7 +196,7 @@ def check_git_update() -> None:
             check=False,
         )
         if local_result.returncode != 0:
-            warn("Depot Git introuvable ou non initialise")
+            warn("Git repository not found or not initialized")
             return
 
         local_head = local_result.stdout.strip()
@@ -227,13 +227,13 @@ def check_git_update() -> None:
                 warn("Update available, but local changes are present")
             else:
                 warn(f"Update available: {remote_head[:12]}")
-        info(f"Depot : {GITHUB_REPO}")
+        info(f"Repository: {GITHUB_REPO}")
     except (OSError, subprocess.SubprocessError) as exc:
         warn(f"GitHub check failed - {exc}")
 
 
 def check_tools() -> None:
-    section("Outils externes")
+    section("External tools")
     ensure_path_tools()
     for tool in ("ffmpeg", "ffprobe", "aria2c"):
         path = shutil.which(tool)
@@ -242,7 +242,7 @@ def check_tools() -> None:
         elif tool == "aria2c":
             warn(f"{tool} missing (optional, speeds up downloads)")
         else:
-            fail(f"{tool} introuvable")
+            fail(f"{tool} not found")
 
     chrome_candidates = [
         Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Google/Chrome/Application/chrome.exe",
@@ -253,7 +253,7 @@ def check_tools() -> None:
     if chrome:
         ok(f"Chrome → {chrome}")
     else:
-        warn("Chrome non detecte (utile pour profil cookies Playwright)")
+        warn("Chrome not detected (useful for the Playwright cookie profile)")
 
 
 def check_playwright() -> None:
@@ -264,7 +264,7 @@ def check_playwright() -> None:
         fail(f"Playwright module missing - {e}")
         return
 
-    ok("Module playwright importe")
+    ok("Playwright module imported")
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -273,15 +273,15 @@ def check_playwright() -> None:
             browser.close()
         ok("Chromium launched + blank page OK")
     except Exception as e:
-        warn(f"Chromium KO — tentative d'install : {e}")
+        warn(f"Chromium failed to launch; attempting installation: {e}")
         try:
             subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
             with sync_playwright() as p:
                 b = p.chromium.launch(headless=True)
                 b.close()
-            ok("Chromium installe et fonctionnel")
+            ok("Chromium installed and working")
         except Exception as e2:
-            fail(f"Chromium toujours KO — {e2}")
+            fail(f"Chromium still cannot launch: {e2}")
 
     profile = BASE / "browser_profile"
     if not profile.is_dir():
@@ -292,9 +292,9 @@ def check_playwright() -> None:
 
 
 def test_ytdlp() -> None:
-    section("Test yt-dlp (metadata YouTube, sans telecharger)")
+    section("yt-dlp test (YouTube metadata, no download)")
     url = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
-    info(f"URL : {url}")
+    info(f"URL: {url}")
     try:
         import yt_dlp
 
@@ -308,8 +308,8 @@ def test_ytdlp() -> None:
         opts.update(yt_dlp_runtime_options())
         with yt_dlp.YoutubeDL(opts) as ydl:
             meta = ydl.extract_info(url, download=False)
-        ok(f"Titre   : {meta.get('title')}")
-        ok(f"Duree   : {meta.get('duration')} s")
+        ok(f"Title   : {meta.get('title')}")
+        ok(f"Duration: {meta.get('duration')} s")
         ok(f"Formats : {len(meta.get('formats') or [])}")
     except Exception as e:
         fail(f"yt-dlp error - {e}")
@@ -321,9 +321,9 @@ def test_network() -> None:
         try:
             sock = socket.create_connection((host, 53), timeout=2)
             sock.close()
-            ok(f"Connectivite {host}:53")
+            ok(f"Connectivity {host}:53")
         except OSError:
-            fail(f"Pas de reponse {host}")
+            fail(f"No response from {host}")
 
     section("Target sites")
     targets = (
@@ -399,16 +399,16 @@ def check_codebase() -> None:
         r_mus = requests.get("http://127.0.0.1:5099/api/music/popular?limit=1", timeout=5)
         mus_data = r_mus.json()
         if mus_data.get("success"):
-            ok(f"/api/music/popular OK ({len(mus_data.get('tracks', []))} titres)")
+            ok(f"/api/music/popular OK ({len(mus_data.get('tracks', []))} tracks)")
         else:
-            warn("/api/music/popular a echoue")
+            warn("/api/music/popular failed")
 
     except Exception as e:
-        fail(f"Healthcheck Flask — {e}")
+        fail(f"Flask health check failed: {e}")
 
 
 def check_database() -> None:
-    section("Base SQLite (historique)")
+    section("SQLite database (history)")
     try:
         from database import (
             DB_PATH,
@@ -428,7 +428,7 @@ def check_database() -> None:
         if not rows:
             info("No downloads recorded")
             return
-        log_line(f"  {C.DIM}Derniers telechargements :{C.RESET}")
+        log_line(f"  {C.DIM}Recent downloads:{C.RESET}")
         for row in rows:
             status = row.get("status")
             url = (row.get("url") or "")[:70]
@@ -441,7 +441,7 @@ def check_database() -> None:
                 "FROM site_strategy ORDER BY success_count DESC LIMIT 10"
             ).fetchall()
         if strategies:
-            section("Strategies par domaine")
+            section("Per-domain strategies")
             for s in strategies:
                 ok(
                     f"{s['domain']}: extractor={s['preferred_extractor']} "
@@ -461,8 +461,8 @@ def check_config_dump() -> None:
         info(f"VIDEO formats   = {list(config.VIDEO_OUTPUT_FORMATS)}")
         info(f"AUDIO formats   = {list(config.AUDIO_OUTPUT_FORMATS)}")
         info(f"Qualities       = {list(config.VIDEO_QUALITIES)}")
-        info(f"Langues         = {len(config.LANGUAGES)} codes")
-        info(f"DOWFLOW_DEBUG   = {os.environ.get('DOWFLOW_DEBUG', '(non defini)')}")
+        info(f"Languages       = {len(config.LANGUAGES)} codes")
+        info(f"DOWFLOW_DEBUG   = {os.environ.get('DOWFLOW_DEBUG', '(not set)')}")
     except Exception as e:
         fail(str(e))
 
@@ -505,7 +505,7 @@ def open_folders() -> None:
     print("  Option 3 - downloads/music/")
     print("  Option 4 - project root")
     print("  Option 0 - cancel")
-    choice = input(f"\n  {C.BOLD}Choix : {C.RESET}").strip()
+    choice = input(f"\n  {C.BOLD}Choice: {C.RESET}").strip()
     path = choices.get(choice)
     if not path:
         return
@@ -514,7 +514,7 @@ def open_folders() -> None:
         os.startfile(str(path))  # type: ignore[attr-defined]
     else:
         subprocess.run(["xdg-open", str(path)], check=False)
-    ok(f"Ouvert : {path}")
+    ok(f"Opened: {path}")
 
 
 def start_debug_server() -> None:
@@ -532,7 +532,7 @@ def start_debug_server() -> None:
     try:
         subprocess.run([sys.executable, str(BASE / "app.py")], cwd=str(BASE), env=env, check=False)
     except KeyboardInterrupt:
-        warn("Serveur arrete")
+        warn("Server stopped")
 
 
 def full_diagnostic() -> None:
@@ -578,7 +578,7 @@ def show_menu() -> None:
     print(f"  {C.DIM}       Diagnostic toolkit - readable ASCII{C.RESET}")
     print(f"  {C.BOLD}{'=' * 58}{C.RESET}")
     print(f"  {C.DIM}Log session : {SESSION_LOG.name}{C.RESET}")
-    print(f"  {C.DIM}Dossier     : {BASE}{C.RESET}")
+    print(f"  {C.DIM}Folder      : {BASE}{C.RESET}")
     print()
     print(f"  {C.BOLD}Options:{C.RESET}")
     print(f"  {'-' * 58}")
@@ -592,10 +592,10 @@ def show_menu() -> None:
 def main() -> int:
     os.chdir(BASE)
     ensure_path_tools()
-    # Preferer le venv si on est lance hors venv
+    # Prefer the virtual environment when not already running inside it.
     venv_py = BASE / ".venv" / "Scripts" / "python.exe"
     if venv_py.is_file() and Path(sys.executable).resolve() != venv_py.resolve():
-        # Relancer dans le venv pour les checks deps
+        # Re-run inside the virtual environment for dependency checks.
         if "--no-reexec" not in sys.argv:
             return subprocess.call([str(venv_py), str(BASE / "tools" / "debug_center.py"), "--no-reexec"])
 
@@ -617,7 +617,7 @@ def main() -> int:
         try:
             action()
         except KeyboardInterrupt:
-            warn("Interrompu")
+            warn("Interrupted")
         except Exception as e:
             fail(f"Error: {e}")
             import traceback

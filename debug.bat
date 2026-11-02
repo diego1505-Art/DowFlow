@@ -25,7 +25,7 @@ for %%A in (1 2 3) do (
 )
 echo.
 
-REM FFmpeg / aria2 au PATH (meme logique que start.bat)
+REM Add FFmpeg and aria2 to PATH (same logic as start.bat).
 for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*") do (
     for /d %%S in ("%%D\ffmpeg-*") do (
         if exist "%%S\bin\ffmpeg.exe" set "PATH=%%S\bin;%PATH%"

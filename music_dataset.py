@@ -1,14 +1,13 @@
 """
-DowFlow — Point d'intégration d'un dataset musical local (prévu, non requis).
+DowFlow — Integration point for an optional local music dataset.
 
-Un catalogue local (par exemple sous forme SQLite) pourra être importé ici
-pour alimenter la recherche et les pochettes même hors-ligne.
+Import a local catalog (for example, a SQLite database) here to provide
+search results and cover art offline.
 
-Tant qu'aucun dataset n'est présent, `get_dataset()` renvoie `None` et le
-service musique (`music.py`) fonctionne uniquement via YouTube + l'API Deezer.
-Pour brancher un dataset plus tard : exposer le chemin du fichier via la
-variable d'environnement `DOWFLOW_MUSIC_DATASET` (base SQLite) puis retourner
-une instance de `MusicDataset` depuis `get_dataset()`.
+Until a dataset is available, `get_dataset()` returns `None` and the music
+service (`music.py`) uses YouTube and the Deezer API only. To add a dataset,
+expose its path through the `DOWFLOW_MUSIC_DATASET` environment variable
+(SQLite database) and return a `MusicDataset` instance from `get_dataset()`.
 """
 from __future__ import annotations
 
@@ -19,34 +18,33 @@ DATASET_ENV_VAR = "DOWFLOW_MUSIC_DATASET"
 
 
 class MusicDataset:
-    """Interface d'un catalogue musical local (implémentation à fournir)."""
+    """Interface for a local music catalog (implementation to be provided)."""
 
     def available(self) -> bool:
-        """True si le catalogue est lisible."""
+        """Return True if the catalog is readable."""
         return False
 
     def search(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Recherche de morceaux : [{title, artist, album, cover_url, ...}]."""
+        """Search for tracks: [{title, artist, album, cover_url, ...}]."""
         raise NotImplementedError
 
     def popular(self, limit: int = 24) -> list[dict[str, Any]]:
-        """Sélection de morceaux populaires."""
+        """Return a selection of popular tracks."""
         raise NotImplementedError
 
     def cover_url(self, artist: str, title: str) -> str | None:
-        """URL de pochette d'album pour un morceau donné, ou None."""
+        """Return the album cover URL for a track, or None."""
         return None
 
 
 def get_dataset() -> MusicDataset | None:
-    """Retourne le dataset local s'il est disponible, sinon None.
+    """Return the local dataset if available, otherwise None.
 
-    Voir le docstring du module pour brancher une implémentation concrète.
+    See the module docstring for instructions on adding an implementation.
     """
     dataset_path = os.environ.get(DATASET_ENV_VAR, "").strip()
     if not dataset_path or not os.path.isfile(dataset_path):
         return None
-    # Aucune implémentation fournie pour l'instant : le fichier est détecté mais
-    # n'est pas encore interrogeable. Retourner None garde le comportement
-    # YouTube + Deezer intact.
+    # No implementation is available yet: the file is detected but cannot be
+    # queried. Returning None preserves the YouTube + Deezer behavior.
     return None

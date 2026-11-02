@@ -141,7 +141,7 @@ def _startup_version_text() -> str:
         version = aria2_version.removeprefix("aria2 version ")
         details.append(f"aria2c v{version}")
     else:
-        details.append("aria2c indisponible")
+        details.append("aria2c unavailable")
     details.append(f"Node {node_version}" if node_version else "Node.js absent")
     return "  |  ".join(details)
 
@@ -378,7 +378,7 @@ def main() -> int:
             output_reader = Thread(target=_capture_output, args=(process.stdout, output), daemon=True)
             output_reader.start()
         except OSError as error:
-            failure = f"Impossible de lancer Flask : {error}"
+            failure = f"Could not start Flask: {error}"
 
     deadline = time.monotonic() + 10
     frame_number = 0

@@ -1,22 +1,22 @@
 """
-DowFlow — Logging structuré cross-module.
+DowFlow — Structured cross-module logging.
 
-Usage dans n'importe quel fichier :
+Usage in any file:
 
     from logger import get_logger
     log = get_logger(__name__)     # ou get_logger("franime"), get_logger("yt-dlp")
-    log.info("Téléchargement démarré")
-    log.warning("FFmpeg non détecté, fallback conteneurs limités")
-    log.error("Échec extraction : %s", exc)
-    log.success("OK ! Fichier %s", path)           # niveau custom SUCCESS
+    log.info("Download started")
+    log.warning("FFmpeg not found; falling back to limited containers")
+    log.error("Extraction failed: %s", exc)
+    log.success("OK! File %s", path)                # custom SUCCESS level
 
-Caractéristiques :
-    • 2 sorties simultanées : console COULEUR + fichier logs/dowflow.log
-  • Niveau fichier = DEBUG (tout), niveau console = INFO (lisible)
-  • Rotation automatique par jour, rétention 30 jours
-  • Thread-safe, idempotent (appeler get_logger() 10x = même logger)
-    • Niveau custom SUCCESS = vert console, tag [SUCCESS]
-  • Format machine : timestamp | NIVEAU | logger | message  → parseable par outils
+Features:
+        • 2 simultaneous outputs: COLOR console + logs/dowflow.log file
+    • File level = DEBUG (all messages), console level = INFO (readable)
+    • Daily rotation, 30-day retention
+    • Thread-safe and idempotent (calling get_logger() 10 times returns the same logger)
+        • Custom SUCCESS level = green console output, [SUCCESS] tag
+    • Machine-readable format: timestamp | LEVEL | logger | message
 """
 from __future__ import annotations
 
@@ -33,13 +33,13 @@ from config import BASE_DIR
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-SUCCESS_LEVELNO = 25  # entre INFO (20) et WARNING (30)
+SUCCESS_LEVELNO = 25  # Between INFO (20) and WARNING (30).
 _LOGGERS: dict[str, logging.Logger] = {}
 _LOCK = threading.Lock()
 _CONFIGURED = False
 
 
-# ── Ajout niveau custom SUCCESS ──────────────────────────────────────────────
+# ── Add custom SUCCESS level ─────────────────────────────────────────────────
 
 def _success(self, msg, *args, **kwargs):
     if self.isEnabledFor(SUCCESS_LEVELNO):
@@ -50,20 +50,20 @@ logging.addLevelName(SUCCESS_LEVELNO, "SUCCESS")
 logging.Logger.success = _success  # type: ignore[attr-defined]
 
 
-# ── Formatteur ──────────────────────────────────────────────────────────────
+# ── Formatters ───────────────────────────────────────────────────────────────
 
 class _ColorFormatter(logging.Formatter):
-    """Formateur console ANSI + tag [module]."""
+    """ANSI console formatter with a [module] tag."""
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
     COLORS = {
         logging.DEBUG: "\033[36m",       # cyan
-        logging.INFO: "\033[37m",        # blanc
-        SUCCESS_LEVELNO: "\033[92m",       # vert clair
-        logging.WARNING: "\033[93m",        # jaune
-        logging.ERROR: "\033[91m",          # rouge
-        logging.CRITICAL: "\033[95m",        # magenta
+        logging.INFO: "\033[37m",        # White.
+        SUCCESS_LEVELNO: "\033[92m",       # Light green.
+        logging.WARNING: "\033[93m",        # Yellow.
+        logging.ERROR: "\033[91m",          # Red.
+        logging.CRITICAL: "\033[95m",        # Magenta.
     }
 
     def __init__(self, use_color: bool = True):
@@ -78,7 +78,7 @@ class _ColorFormatter(logging.Formatter):
         if not self.use_color:
             return line
         color = self.COLORS.get(record.levelno, self.RESET)
-        # Colorie la portion NIVEAU
+        # Color the level name.
         level_name = record.levelname
         start = line.find(level_name)
         if start >= 0:
@@ -94,7 +94,7 @@ class _ColorFormatter(logging.Formatter):
 
 
 class _FileFormatter(logging.Formatter):
-    """Format fichier : timestamp ISO, machine-readable, SANS couleurs."""
+    """File format with an ISO timestamp, machine-readable and without colors."""
 
     def __init__(self):
         super().__init__(
@@ -114,15 +114,15 @@ class _ConsoleAccessFilter(logging.Filter):
         return True
 
 
-# ── Configuration globale ──────────────────────────────────────────────────────
+# ── Global configuration ─────────────────────────────────────────────────────
 
 def _configure() -> None:
-    """Initialise la racine + handlers console + fichier rotatif."""
+    """Initialize the root logger, console handler, and rotating file handler."""
     global _CONFIGURED
     with _LOCK:
         if _CONFIGURED:
             return
-        # ── Force UTF-8 sur stdout/stderr Windows (évite cp1252 charmap errors) ─
+        # Force UTF-8 on Windows stdout/stderr (avoids cp1252 encoding errors).
         try:
             import sys as _sys
             if hasattr(_sys.stdout, "reconfigure"):
@@ -136,7 +136,7 @@ def _configure() -> None:
         root.setLevel(logging.DEBUG)
         root.handlers.clear()
 
-        # ── Handler Console ─────────────────────────────────────────────
+        # Console handler.
         import io as _io
         import sys as _sys
         debug_env = os.environ.get("DOWFLOW_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -155,7 +155,7 @@ def _configure() -> None:
             logging.getLogger("yt_dlp").setLevel(logging.DEBUG)
             logging.getLogger("werkzeug").setLevel(logging.DEBUG)
 
-        # ── Handler Fichier (rotation quotidienne, 30 j) ────────────────
+        # File handler (daily rotation, 30 days).
         log_file = LOG_DIR / "dowflow.log"
         file_handler = logging.handlers.TimedRotatingFileHandler(
             filename=str(log_file),
@@ -169,7 +169,7 @@ def _configure() -> None:
         file_handler.suffix = "%Y%m%d"  # → dowflow.log.20260908
         root.addHandler(file_handler)
 
-        # ── Réduire le bruit de bibliothèques tierces ─────────────────
+        # Reduce noise from third-party libraries.
         for noisy in ("urllib3", "requests", "playwright", "flask"):
             logging.getLogger(noisy).setLevel(logging.WARNING)
         logging.getLogger("werkzeug").setLevel(logging.INFO)
@@ -178,10 +178,10 @@ def _configure() -> None:
         _CONFIGURED = True
 
 
-# ── API publique ──────────────────────────────────────────────────────────
+# ── Public API ───────────────────────────────────────────────────────────────
 
 def get_logger(name: str = "dowflow") -> logging.Logger:
-    """Retourne un logger configuré. Même nom = même instance (cache)."""
+    """Return a configured logger. The same name returns the same cached instance."""
     _configure()
     with _LOCK:
         if name in _LOGGERS:
@@ -195,7 +195,7 @@ def get_logger(name: str = "dowflow") -> logging.Logger:
     return lg
 
 
-# ── Helper pratique pour taguer une section dans les batchs ──────────────────────────
+# ── Helper for tagging a section in batch jobs ───────────────────────────────
 
 def banner(log: logging.Logger, title: str) -> None:
     bar = "═" * max(40, len(title) + 4)

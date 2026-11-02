@@ -1,4 +1,4 @@
-"""Expansion d'URLs Franime → liste d'épisodes."""
+"""Expand Franime URLs into episode lists."""
 from __future__ import annotations
 
 import json
@@ -58,7 +58,7 @@ def profile_for(url: str, host: str) -> SiteProfile | None:
     )
     extras = f" Preserved parameters: {', '.join(extra_keys)}." if extra_keys else ""
 
-    # ── Langues : VF + VO en premier, puis toutes les ISO triées par label ──
+    # Put French dub/subtitle options first, then sort all ISO languages by label.
     top_langs = [("vf", "VF"), ("vo", "VO / VOSTFR")]
     all_langs: list[Any] = [*top_langs]
     seen = {"vf", "vo"}
@@ -131,7 +131,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
     if options.get("current_only"):
         scope = "season"
 
-    # Priorité : option UI > paramètre URL > vf
+    # Priority: UI option > URL parameter > French dub.
     raw_lang = options.get("lang")
     if raw_lang in (None, ""):
         raw_lang = query.get("lang", ["vf"])[0]
@@ -162,7 +162,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
     if api_result.success:
         return api_result
 
-    # 2) Jikan / MAL (approximation du nombre d'épisodes)
+    # 2) Jikan / MAL (approximate episode count).
     mal_result = _from_jikan(
         anime_slug, anime_id, url, base_params, lang, requested_season, scope, max_episodes
     )
@@ -196,7 +196,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
     return ExpandResult(
         success=False,
         site_id="franime",
-        error=f"Impossible de trouver les épisodes Franime. {detail}".strip(),
+        error=f"Could not find Franime episodes. {detail}".strip(),
     )
 
 
@@ -207,7 +207,7 @@ def _limit(urls: list[str], max_episodes: int) -> list[str]:
 
 
 def _build_episode_url(source_url: str, base_params: dict[str, str], season: int, ep: int, lang: str) -> str:
-    """Conserve tous les paramètres d'origine (anime_id, etc.) et met à jour s/ep/lang."""
+    """Keep all original parameters (anime_id, etc.) and update s/ep/lang."""
     parsed = urlparse(source_url)
     params = dict(base_params)
     params["s"] = str(season)
@@ -222,7 +222,7 @@ def _episode_has_lang(episode: Any, lang: str) -> bool:
     lang_block = episode.get("lang") or episode.get("languages") or {}
     if not isinstance(lang_block, dict):
         return True
-    # Franime : vo = VOSTFR ; parfois clés vf/vo seulement
+    # On Franime, vo means French subtitles; sometimes only vf/vo keys are present.
     candidates = [lang]
     if lang == "vo":
         candidates.extend(["vostfr", "vost"])
@@ -231,10 +231,10 @@ def _episode_has_lang(episode: Any, lang: str) -> bool:
         if entry is None:
             continue
         if isinstance(entry, dict):
-            lecteurs = entry.get("lecteurs") or entry.get("players") or []
-            return bool(lecteurs)
+            player_entries = entry.get("lecteurs") or entry.get("players") or []
+            return bool(player_entries)
         return bool(entry)
-    # Si la langue demandée est absente mais d'autres existent → indispo
+    # If the requested language is absent but others exist, it is unavailable.
     if lang_block:
         return False
     return True
@@ -259,7 +259,7 @@ def _load_catalog() -> list[dict[str, Any]]:
         raise RuntimeError(f"API HTTP {res.status_code}")
     payload = res.json()
     if not isinstance(payload, list):
-        raise RuntimeError("API: catalogue invalide.")
+        raise RuntimeError("API: invalid catalog.")
     _CATALOG_CACHE = (now, payload)
     return payload
 
@@ -323,7 +323,7 @@ def _urls_from_seasons(
             all_urls.append(_build_episode_url(source_url, base_params, s_num, ep_num, lang))
             kept += 1
         summary.append(f"S{s_num} ({kept} eps {_display_lang(lang)})")
-    return all_urls, " + ".join(summary) if summary else "aucun"
+    return all_urls, " + ".join(summary) if summary else "none"
 
 
 def _from_catalog(
@@ -344,13 +344,13 @@ def _from_catalog(
 
     anime = _find_anime(catalog, anime_id, anime_slug)
     if anime is None:
-        return ExpandResult(success=False, error="API catalogue: anime introuvable.")
+        return ExpandResult(success=False, error="Catalog API: anime not found.")
 
     seasons = anime.get("saisons") or anime.get("seasons") or []
     if not seasons:
-        return ExpandResult(success=False, error="API catalogue: pas de saisons.")
+        return ExpandResult(success=False, error="Catalog API: no seasons found.")
 
-    # Assure anime_id dans les params générés
+    # Ensure anime_id is included in generated parameters.
     if anime.get("id") is not None:
         base_params = dict(base_params)
         base_params["anime_id"] = str(anime["id"])
@@ -362,7 +362,7 @@ def _from_catalog(
     if not urls:
         return ExpandResult(
             success=False,
-            error=f"API catalogue: aucun épisode pour {_display_lang(lang)}.",
+            error=f"Catalog API: no episodes found for {_display_lang(lang)}.",
         )
 
     title = anime.get("title") or anime.get("titleO") or anime_slug
@@ -402,7 +402,7 @@ def _from_jikan(
         ] or results[:3]
 
         if not main_results:
-            return ExpandResult(success=False, error="MAL: aucun résultat.")
+            return ExpandResult(success=False, error="MAL: no results.")
 
         seasons_to_generate = list(enumerate(main_results, start=1))
         if scope == "season":
@@ -469,14 +469,14 @@ def _from_next_data(
             re.DOTALL,
         )
         if not match:
-            return ExpandResult(success=False, error="HTML: pas de __NEXT_DATA__ (Cloudflare ?)")
+            return ExpandResult(success=False, error="HTML: __NEXT_DATA__ not found (Cloudflare?)")
 
         next_data = json.loads(match.group(1))
         props = next_data.get("props", {}).get("pageProps", {})
         anime_data = props.get("anime") or props.get("data") or {}
         seasons = anime_data.get("saisons") or []
         if not seasons:
-            return ExpandResult(success=False, error="HTML: pas de saisons.")
+            return ExpandResult(success=False, error="HTML: no seasons found.")
 
         params = dict(base_params)
         if anime_id:
@@ -511,7 +511,7 @@ def _from_playwright(
         from playwright.sync_api import sync_playwright
         from config import BROWSER_HEADLESS, BROWSER_PROFILE_DIR
     except Exception as exc:
-        return ExpandResult(success=False, error=f"Playwright indisponible: {exc}")
+        return ExpandResult(success=False, error=f"Playwright unavailable: {exc}")
 
     BROWSER_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     try:
@@ -537,14 +537,14 @@ def _from_playwright(
             )
             ctx.close()
             if not match:
-                return ExpandResult(success=False, error="Playwright: __NEXT_DATA__ introuvable.")
+                return ExpandResult(success=False, error="Playwright: __NEXT_DATA__ not found.")
 
             next_data = json.loads(match.group(1))
             props = next_data.get("props", {}).get("pageProps", {})
             anime_data = props.get("anime") or props.get("data") or {}
             seasons = anime_data.get("saisons") or []
             if not seasons:
-                return ExpandResult(success=False, error="Playwright: pas de saisons dans la page.")
+                return ExpandResult(success=False, error="Playwright: no seasons found on the page.")
 
             params = dict(base_params)
             if anime_id:

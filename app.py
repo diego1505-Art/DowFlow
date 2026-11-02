@@ -51,11 +51,11 @@ COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
 }
 
 LOCAL_MEDIA_REGISTRY: dict[str, tuple[Path, float]] = {}
-# Verrou (reentrant) : le registre est partage entre les threads Flask.
+# Reentrant lock: the registry is shared across Flask threads.
 _LOCAL_MEDIA_LOCK = threading.RLock()
 DEBUG_MODE = os.environ.get("DOWFLOW_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
 if DEBUG_MODE:
-    log.info("Mode DOWFLOW_DEBUG actif (logs console DEBUG)")
+    log.info("DOWFLOW_DEBUG mode active (DEBUG console logging)")
 
 
 def is_allowed_local_file(path: Path) -> bool:
@@ -63,7 +63,7 @@ def is_allowed_local_file(path: Path) -> bool:
 
 
 def cleanup_local_media_registry() -> None:
-    # Appelable seul ou depuis register/serve (deja verrouilles) : RLock autorise la reentrance.
+    # Safe to call directly or from register/serve while already locked.
     with _LOCAL_MEDIA_LOCK:
         now = time.time()
         expired_tokens = [
@@ -100,7 +100,7 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 
 @app.route("/")
 def index():
-    """Grand menu : choix du type de telechargement."""
+    """Main menu for selecting a download type."""
     return render_template("menu.html", has_ffmpeg=has_ffmpeg())
 
 
@@ -111,7 +111,7 @@ def service_worker():
 
 @app.get("/api/status")
 def application_status():
-    """Healthcheck léger pour les clients qui attendent le démarrage du serveur."""
+    """Health check for clients waiting for the server to start."""
     return jsonify({
         "ready": True,
         "service": "DowFlow",
@@ -121,25 +121,25 @@ def application_status():
 
 @app.route("/video")
 def video_page():
-    """Telechargeur video / audio generique (template historique)."""
+    """Generic video and audio downloader (legacy template)."""
     return render_template("download.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/music")
 def music_page():
-    """Espace musique — Accueil (lecteur, themes, recents)."""
+    """Music home page (player, themes, and recent tracks)."""
     return render_template("music.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/music/explore")
 def music_explore_page():
-    """Espace musique — Explorer (biblio locale + telechargement en ligne)."""
+    """Music explorer (local library and online downloads)."""
     return render_template("music_explore.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/music/liked")
 def music_liked_page():
-    """Espace musique — Favoris."""
+    """Music favorites page."""
     return render_template("music_liked.html", has_ffmpeg=has_ffmpeg())
 
 
@@ -147,7 +147,7 @@ def music_liked_page():
 @app.route("/anime")
 @app.route("/image")
 def coming_soon_page():
-    """Categories du menu pas encore disponibles."""
+    """Menu categories that are not available yet."""
     category = request.path.strip("/")
     label, description = COMING_SOON_CATEGORIES.get(
         category, ("Coming soon", "This category will be available in a future update.")
@@ -161,14 +161,14 @@ def coming_soon_page():
     )
 
 
-# ─────────────────────────────  API Musique  ─────────────────────────────────
+# ─────────────────────────────  Music API  ────────────────────────────────────
 
 @app.route("/api/music/search", methods=["POST"])
 def music_search():
     data = request.get_json(silent=True) or {}
     query = str(data.get("query") or "").strip()
     if not query:
-        return jsonify({"success": False, "error": "Requete vide."}), 400
+        return jsonify({"success": False, "error": "Empty query."}), 400
     try:
         limit = int(data.get("limit") or 20)
     except (TypeError, ValueError):
@@ -261,7 +261,7 @@ def check_ffmpeg():
 
 @app.route("/history")
 def history():
-    """Historique SQLite des telechargements (+ stats)."""
+    """SQLite download history and statistics."""
     try:
         limit = request.args.get("limit", default=50, type=int)
         limit = max(1, min(limit or 50, 200))
@@ -288,20 +288,20 @@ def jobs_list():
 def jobs_status(job_id: str):
     job = get_job(job_id)
     if job is None:
-        return jsonify({"success": False, "error": "Job introuvable."}), 404
+        return jsonify({"success": False, "error": "Job not found."}), 404
     return jsonify({"success": True, "job": job})
 
 
 @app.route("/download-async", methods=["POST"])
 def download_async():
-    """Lance un telechargement en arriere-plan ; retourne un job_id."""
+    """Start a download in the background and return its job ID."""
     try:
         data = request.get_json() or {}
         source_value = (data.get("url") or "").strip().replace("\n", "").replace("\r", "")
         if not source_value:
             return jsonify({"success": False, "error": "URL is required."}), 400
 
-        # Chemins locaux : reponse immediate (pas de job)
+        # Local paths are returned immediately without creating a job.
         local_path = Path(source_value).expanduser()
         if not is_http_url(source_value) and is_allowed_local_file(local_path):
             registered = register_local_media(local_path)
@@ -352,7 +352,7 @@ def download_async():
 
 @app.route("/config")
 def frontend_config():
-    """Retourne la liste statique des formats, qualités et langues au frontend."""
+    """Return the static list of formats, qualities, and languages for the frontend."""
     payload = get_frontend_config()
     payload["has_ffmpeg"] = has_ffmpeg()
     return jsonify(payload)
@@ -420,7 +420,7 @@ def upload_local():
 
 @app.route("/url-options", methods=["POST"])
 def url_options():
-    """Retourne le profil d'options pour la premiere URL (multi-sites)."""
+    """Return the options profile for the first URL (multi-site support)."""
     try:
         data = request.get_json() or {}
         url = (data.get("url") or "").strip()
@@ -437,20 +437,20 @@ def url_options():
         )
         return jsonify(payload)
     except Exception as e:
-        log.error("[url-options] ERREUR: %s", e, exc_info=True)
-        return jsonify({"success": False, "error": f"Erreur système: {e}"}), 500
+        log.error("[url-options] ERROR: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": f"System error: {e}"}), 500
 
 
 @app.route("/expand-url", methods=["POST"])
 def expand_url_route():
-    """Expand une URL source en liste d'URLs selon les options du site."""
+    """Expand a source URL into a list of URLs using the site's options."""
     try:
         data = request.get_json() or {}
         url = (data.get("url") or "").strip()
         if not url:
             return jsonify({"success": False, "error": "URL is required."}), 400
         options = data.get("options") or {}
-        # Compat ancien client
+        # Backward compatibility with older clients.
         if "current_only" in data and "scope" not in options:
             options["scope"] = "season" if data.get("current_only") else "all"
             options["current_only"] = bool(data.get("current_only"))
@@ -468,13 +468,13 @@ def expand_url_route():
         )
         return jsonify(result.to_dict()), status
     except Exception as e:
-        log.error("[expand-url] ERREUR: %s", e, exc_info=True)
-        return jsonify({"success": False, "error": f"Erreur système: {e}"}), 500
+        log.error("[expand-url] ERROR: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": f"System error: {e}"}), 500
 
 
 @app.route("/fetch-episodes", methods=["POST"])
 def fetch_episodes():
-    """Alias historique → /expand-url (Franime)."""
+    """Legacy alias for /expand-url (Franime)."""
     try:
         data = request.get_json() or {}
         url = (data.get("url") or "").strip()
@@ -496,15 +496,15 @@ def fetch_episodes():
         )
         return jsonify(result.to_dict()), status
     except Exception as e:
-        log.error("[fetch-episodes] ERREUR: %s", e, exc_info=True)
-        return jsonify({"success": False, "error": f"Erreur système: {e}"}), 500
+        log.error("[fetch-episodes] ERROR: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": f"System error: {e}"}), 500
 
 
 @app.route("/download", methods=["POST"])
 def download():
     try:
         data = request.get_json() or {}
-        # Nettoyage agressif de l'URL pour supprimer les retours a la ligne accidentels
+        # Remove accidental newlines from the URL.
         source_value = data.get("url", "").strip().replace("\n", "").replace("\r", "")
         download_type = data.get("type", "video")
         quality = data.get("quality", "best")
@@ -518,7 +518,7 @@ def download():
         log.info(
             "[download] type=%s quality=%s vfmt=%s afmt=%s lang=%s adaptive=%s url=%s",
             download_type, quality, video_format, audio_format,
-            language or "(auto)", adaptive_quality, source_value[:150] if source_value else "(vide)",
+            language or "(auto)", adaptive_quality, source_value[:150] if source_value else "(empty)",
         )
 
         if not source_value:
@@ -601,7 +601,7 @@ def download():
 
     except Exception as e:
         error_msg = str(e).strip() or type(e).__name__
-        log.error("[download] Échec : %s", error_msg, exc_info=True)
+        log.error("[download] Failed: %s", error_msg, exc_info=True)
         if "ffmpeg" in error_msg.lower() or "ffprobe" in error_msg.lower():
             return jsonify(
                 {
@@ -610,11 +610,11 @@ def download():
                     "is_ffmpeg_error": True,
                 }
             ), 500
-        return jsonify({"success": False, "error": f"Echec du telechargement: {error_msg}"}), 500
+        return jsonify({"success": False, "error": f"Download failed: {error_msg}"}), 500
 
 
 def _start_network_detection() -> None:
-    """Mesure le reseau sans bloquer le lancement du serveur Flask."""
+    """Measure network speed without blocking Flask startup."""
     def worker() -> None:
         try:
             from playlist import _measure_network_speed_mbps, detect_connection_tier

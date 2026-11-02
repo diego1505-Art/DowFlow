@@ -31,7 +31,7 @@ IGNORED_EXTENSIONS = {".part", ".ytdl", ".jpg", ".jpeg", ".png", ".webp", ".desc
 VALID_DOWNLOAD_TYPES = {"audio", "video"}
 CONTAINER_SEGMENTS = {"anime", "watch", "video", "videos", "embed", "episode", "show"}
 
-# ── Backward-compat : map anciennes clés de qualité vers VIDEO_QUALITIES ─────
+# ── Backward compatibility: map legacy quality keys to VIDEO_QUALITIES ───────
 _LEGACY_QUALITY_MAP = {
     "best": "best",
     "ultra": "2160p",
@@ -55,16 +55,15 @@ _ADAPTIVE_TIME_THRESHOLDS = {
     "240p": 2100,  # 35 min
 }
 
-# Surveillance temps réel : délai d'observation avant de décider d'un downgrade.
+# Real-time monitoring: observation period before deciding to lower quality.
 _ADAPTIVE_GRACE_SECONDS = 10.0
 
 
 class _AdaptiveDowngrade(BaseException):
-    """Interrompt le téléchargement pour le relancer à une qualité inférieure.
+    """Interrupt a download so it can restart at a lower quality.
 
-    Dérive de BaseException (et non Exception) pour ne pas être avalée par les
-    `except Exception` internes de yt-dlp : seule la boucle de `_ydlp_download`
-    doit l'intercepter.
+    Inherit from BaseException instead of Exception so yt-dlp's internal
+    `except Exception` handlers do not catch it; only `_ydlp_download` should.
     """
 
     def __init__(self, quality: str, note: str) -> None:
@@ -135,7 +134,7 @@ def _resolve_cookie_file(url: str | None = None) -> str | None:
 
 
 def _needs_session(error: Exception) -> bool:
-    """Détecte si le site exige une session connectée ou si l'accès est bloqué."""
+    """Check whether the site requires a signed-in session or blocks access."""
     message = str(error).lower()
     return any(
         token in message
@@ -155,7 +154,7 @@ def _needs_session(error: Exception) -> bool:
 
 
 def _cookie_retry_options(ydl_opts: dict[str, Any], cookie_file: str | None) -> dict[str, Any]:
-    """Options de repli avec session YouTube : fichier Netscape, sinon profil Chrome."""
+    """Build retry options using a Netscape cookie file or the Chrome profile."""
     retry_opts = dict(ydl_opts)
     retry_opts.pop("cookiesfrombrowser", None)
     if cookie_file:
@@ -176,15 +175,15 @@ def _derive_series_slug(parsed_url) -> str:
 
 
 def _build_output_folder(url: str, base_output_path: str) -> str:
-    """Crée un dossier de sortie basé sur le domaine (youtube, instagram, twitter, etc.)."""
+    """Create an output folder based on the domain (YouTube, Instagram, Twitter, etc.)."""
     parsed = urlparse(url)
     domain = parsed.netloc.lower().replace("www.", "") or "remote"
 
-    # Nettoyage du nom de domaine pour le dossier (ex: youtube.com -> youtube)
+    # Clean the domain name for the folder (e.g. youtube.com -> youtube).
     folder_name = domain.split(".")[0] if "." in domain else domain
     target_dir = os.path.join(base_output_path, folder_name)
 
-    # Pour les sites complexes (anime, etc.), on peut garder une structure plus profonde
+    # Keep a deeper folder structure for complex sites such as anime catalogs.
     query = parse_qs(parsed.query)
     stable_id = None
     for key in ("anime_id", "series_id", "show_id", "id"):
@@ -277,17 +276,17 @@ def _resolve_downloaded_file(info: dict[str, Any], created_files: list[str], out
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# NOUVEAU : Construction du format yt-dlp à partir des nouvelles options
+# NEW: Build the yt-dlp format from the new options.
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _resolve_quality_key(raw_quality: str) -> str:
-    """Convertit une clé de qualité (legacy ou nouvelle) vers la clé canonique VIDEO_QUALITIES."""
+    """Convert a legacy or current quality key to its canonical VIDEO_QUALITIES key."""
     q = (raw_quality or "best").strip().lower()
     if q in VIDEO_QUALITIES:
         return q
     if q in _LEGACY_QUALITY_MAP:
         return _LEGACY_QUALITY_MAP[q]
-    # ex: "1080" -> "1080p"
+    # Example: "1080" -> "1080p".
     if q.rstrip("p") in {str(k.rstrip("p")) for k in VIDEO_QUALITIES}:
         for k in VIDEO_QUALITIES:
             if k.rstrip("p") == q.rstrip("p"):
@@ -295,8 +294,8 @@ def _resolve_quality_key(raw_quality: str) -> str:
     return "best"
 
 
-# Endpoints de test de débit, essayés dans l'ordre : certains réseaux/FAI bloquent
-# Cloudflare (403) ou d'autres hôtes, on prend la première mesure exploitable.
+# Speed-test endpoints, tried in order. Some networks/ISPs block Cloudflare (403)
+# or other hosts, so use the first usable measurement.
 _SPEED_TEST_URLS = (
     "https://speed.cloudflare.com/__down?bytes=5000000",
     "https://proof.ovh.net/files/1Mb.dat",
@@ -306,7 +305,7 @@ _SPEED_TEST_URLS = (
 
 
 def _measure_network_speed_mbps(url: str | None = None, timeout_seconds: float = 8.0) -> float:
-    """Mesure un débit réseau réel (échantillon ~5 Mo) pour choisir la qualité admissible."""
+    """Measure real network speed (about 5 MB) to select an appropriate quality."""
     candidates = (url,) if url else _SPEED_TEST_URLS
     deadline = time.monotonic() + 10.0
     for candidate in candidates:
@@ -316,8 +315,8 @@ def _measure_network_speed_mbps(url: str | None = None, timeout_seconds: float =
                 break
             start = time.time()
             with urlopen(candidate, timeout=min(timeout_seconds, remaining)) as resp:
-                # On lit un échantillon significatif (5 Mo) pour éviter les mesures faussées
-                # par les petits fichiers (ex. favicon) dont le débit ne reflète pas la bande passante.
+                # Read a representative sample (5 MB) to avoid misleading results
+                # from small files such as favicons that do not reflect bandwidth.
                 chunk = resp.read(5 * 1024 * 1024)
                 elapsed = max(time.time() - start, 0.001)
             if chunk:
@@ -327,24 +326,24 @@ def _measure_network_speed_mbps(url: str | None = None, timeout_seconds: float =
     return 0.0
 
 
-# ── Palier de connexions parallèles (affiné une fois au démarrage) ───────────
-# Valeur par défaut prudente : elle reste active tant que la détection de
-# capacité n'a pas tourné (tests, usage programmatique).
+# ── Parallel connection tier (refined at startup) ────────────────────────────
+# Conservative default, used until capacity detection has run (tests or
+# programmatic use).
 _CONNECTION_TIER = 16
 _CONNECTION_TIER_DETECTED = False
 
 
 def get_connection_tier() -> int:
-    """Palier de connexions en cours (8/16/32/64/128)."""
+    """Return the current connection tier (8/16/32/64/128)."""
     return _CONNECTION_TIER
 
 
 def detect_connection_tier(speed_mbps: float | None = None, force: bool = False) -> int:
-    """Détecte la capacité de la machine et fixe le palier de connexions.
+    """Detect machine capacity and set the connection tier.
 
-    Croise la puissance du PC (cœurs logiques) et le débit réseau pour choisir
-    un palier 8/16/32/64/128, sans jamais saturer la machine. Surchargeable via
-    la variable d'environnement DOWFLOW_CONNECTIONS.
+    Combine CPU capacity (logical cores) and network speed to choose a tier of
+    8/16/32/64/128 without overwhelming the machine. Override with the
+    DOWFLOW_CONNECTIONS environment variable.
     """
     global _CONNECTION_TIER, _CONNECTION_TIER_DETECTED
     if _CONNECTION_TIER_DETECTED and not force:
@@ -355,7 +354,7 @@ def detect_connection_tier(speed_mbps: float | None = None, force: bool = False)
         try:
             override = int(CONNECTIONS_OVERRIDE)
         except ValueError:
-            log.warning("[perf] DOWFLOW_CONNECTIONS invalide (%r), ignoré.", CONNECTIONS_OVERRIDE)
+            log.warning("[perf] Invalid DOWFLOW_CONNECTIONS value (%r); ignored.", CONNECTIONS_OVERRIDE)
 
     if override > 0:
         _CONNECTION_TIER = max(1, override)
@@ -368,7 +367,7 @@ def detect_connection_tier(speed_mbps: float | None = None, force: bool = False)
             "[perf] Connection tier: x%d (%d cores, speed %s)",
             _CONNECTION_TIER,
             cores,
-            f"{measured:.1f} Mbps" if measured > 0 else "non détecté",
+            f"{measured:.1f} Mbps" if measured > 0 else "not detected",
         )
 
     _CONNECTION_TIER_DETECTED = True
@@ -376,10 +375,10 @@ def detect_connection_tier(speed_mbps: float | None = None, force: bool = False)
 
 
 def _tier_for_resolution(resolution: int) -> str | None:
-    """Palier de qualité (240p → 8K) correspondant à une résolution vidéo réelle."""
+    """Return the quality tier (240p to 8K) for an actual video resolution."""
     if not resolution or resolution <= 0:
         return None
-    for key in reversed(_ADAPTIVE_QUALITY_ORDER):  # du plus bas au plus haut
+    for key in reversed(_ADAPTIVE_QUALITY_ORDER):  # From lowest to highest.
         max_height = VIDEO_QUALITIES.get(key, {}).get("max_height")
         if max_height and resolution <= max_height:
             return key
@@ -387,7 +386,7 @@ def _tier_for_resolution(resolution: int) -> str | None:
 
 
 def _next_lower_quality(quality_key: str) -> str | None:
-    """Palier immédiatement inférieur, ou None si on est déjà au plus bas."""
+    """Return the next lower tier, or None if already at the lowest tier."""
     try:
         index = _ADAPTIVE_QUALITY_ORDER.index(quality_key)
     except ValueError:
@@ -398,7 +397,7 @@ def _next_lower_quality(quality_key: str) -> str | None:
 
 
 def _progress_resolution(progress: dict[str, Any]) -> int:
-    """Résolution (min(largeur, hauteur)) du flux en cours de téléchargement."""
+    """Return the resolution (min(width, height)) of the stream being downloaded."""
     info = progress.get("info_dict") or {}
     values = [
         value
@@ -414,11 +413,11 @@ def _progress_resolution(progress: dict[str, Any]) -> int:
 
 
 def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None = None) -> Callable[[dict[str, Any]], None]:
-    """Hook de progression qui mesure le débit réel et coupe si l'ETA est trop longue.
+    """Measure real throughput and stop if the estimated time is too long.
 
-    Pendant les `_ADAPTIVE_GRACE_SECONDS` premières secondes, on observe le débit
-    réel du flux vidéo. Au-delà, si l'ETA projetée dépasse le seuil du palier en
-    cours, on lève `_AdaptiveDowngrade` pour relancer à la qualité inférieure.
+    Observe the video stream's real throughput during the first
+    `_ADAPTIVE_GRACE_SECONDS` seconds. If the projected ETA then exceeds the
+    current tier's threshold, raise `_AdaptiveDowngrade` to retry at lower quality.
     """
     state: dict[str, Any] = {
         "filename": None,
@@ -435,12 +434,12 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
 
         tier = _tier_for_resolution(_progress_resolution(progress))
         if tier is None:
-            return  # flux audio ou résolution inconnue : aucune décision à prendre
+            return  # Audio stream or unknown resolution; no decision to make.
 
         now = time.time()
         filename = progress.get("filename")
         if state["filename"] != filename:
-            # Nouveau flux : on (re)lance la fenêtre d'observation.
+            # Start a new observation window for this stream.
             state["filename"] = filename
             state["started_at"] = now
             state["start_bytes"] = progress.get("downloaded_bytes") or 0
@@ -452,7 +451,7 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
 
         next_quality = _next_lower_quality(tier)
         if next_quality is None:
-            state["decided"] = True  # déjà au palier le plus bas
+            state["decided"] = True  # Already at the lowest tier.
             return
 
         elapsed = now - (state["started_at"] or now)
@@ -469,8 +468,8 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
         eta = max(total - done, 0) / speed
         threshold = _ADAPTIVE_TIME_THRESHOLDS.get(tier)
 
-        # Le but est que le téléchargement ne dépasse jamais le temps du seuil.
-        # Si l'ETA est trop long, on downgrade immédiatement, peu importe le débit réel.
+        # Keep the download within the tier's time threshold.
+        # If the ETA is too long, lower quality immediately regardless of throughput.
         if threshold and eta > threshold:
             state["decided"] = True
             note = (
@@ -497,7 +496,7 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
 
 
 def _cleanup_partial_files(output_path: str, before_files: set[str]) -> None:
-    """Supprime les fichiers partiels d'une tentative abandonnée (downgrade)."""
+    """Remove partial files from an abandoned attempt (quality downgrade)."""
     try:
         names = os.listdir(output_path)
     except OSError:
@@ -518,11 +517,11 @@ def _build_video_format_string(
     has_ffmpeg: bool,
     prefer_http: bool = False,
 ) -> str:
-    """Construit le `format` yt-dlp pour la vidéo en fonction de la qualité + conteneur.
+    """Build the yt-dlp video format from the requested quality and container.
 
-    La résolution cible n'est pas filtrée ici (un filtre `height<=` échoue sur les
-    vidéos verticales : 256/426/1024 au lieu de 144/240/480) ; elle est appliquée via
-    `_build_video_format_sort` (`res:240` = min(largeur, hauteur)).
+    Do not filter the target resolution here: `height<=` fails for portrait videos
+    (256/426/1024 instead of 144/240/480). Apply it through
+    `_build_video_format_sort` (`res:240` = min(width, height)).
     """
     f_meta = VIDEO_OUTPUT_FORMATS.get(video_format_key, VIDEO_OUTPUT_FORMATS["best"])
     v_ext = f_meta.get("vext") or f_meta.get("vcodec")
@@ -531,7 +530,7 @@ def _build_video_format_string(
     protocol_filter = "[protocol^=http]" if prefer_http else ""
 
     if not has_ffmpeg:
-        # Pas de merge possible → format single-file avec conteneur MP4 de préférence
+        # Without merging, prefer a single-file format with an MP4 container.
         ext_filter = f"[ext={container}]" if container else ""
         return (
             f"best{ext_filter}{protocol_filter}[acodec!=none]/"
@@ -539,31 +538,31 @@ def _build_video_format_string(
             f"best[acodec!=none]/best"
         )
 
-    # Avec ffmpeg : bestvideo + bestaudio
+    # With FFmpeg: bestvideo + bestaudio.
     v_ext_f = (f"[ext={v_ext}]" if v_ext else "") + protocol_filter
     a_ext_f = (f"[ext={a_ext}]" if a_ext else "") + protocol_filter
 
     best_split = f"bestvideo{v_ext_f}+bestaudio{a_ext_f}"
-    # Fallback moins restrictif si l'extension/codec n'existe pas
+    # Use a less restrictive fallback if the extension or codec is unavailable.
     fallback_split = f"bestvideo{protocol_filter}+bestaudio{protocol_filter}"
-    # Dernier recours : fichier single
+    # Last resort: a single file.
     ext_fallback = f"[ext={container}]" if container else ""
     fallback_single = (
         f"best{ext_fallback}{protocol_filter}[acodec!=none]/"
         f"best{protocol_filter}[acodec!=none]/best[acodec!=none]/best"
     )
-    # Recours universel (défaut yt-dlp) : couvre les vidéos sans format muxué
-    # ni flux séparés exploitables (ex. certains Shorts).
+    # Universal yt-dlp fallback for videos without a muxed format or usable
+    # separate streams (for example, some Shorts).
     universal_fallback = "bestvideo*+bestaudio/best"
 
     return f"{best_split}/{fallback_split}/{fallback_single}/{universal_fallback}"
 
 
 def _build_video_format_sort(quality_key: str) -> list[str] | None:
-    """Tri de résolution ciblé pour la qualité demandée.
+    """Sort resolutions for the requested quality.
 
-    `res` vaut min(largeur, hauteur) : le tri reste correct pour les vidéos
-    verticales (Shorts), là où un filtre sur `height` ne trouve aucun flux.
+    `res` is min(width, height), so sorting works for portrait videos (Shorts),
+    where a `height` filter would not find any streams.
     """
     q_key = _resolve_quality_key(quality_key)
     max_height = VIDEO_QUALITIES.get(q_key, VIDEO_QUALITIES["best"])["max_height"]
@@ -571,17 +570,17 @@ def _build_video_format_sort(quality_key: str) -> list[str] | None:
 
 
 def _build_audio_format_string(audio_format_key: str) -> str:
-    """Format yt-dlp pour l'extraction audio."""
+    """Return the yt-dlp format string for audio extraction."""
     f_meta = AUDIO_OUTPUT_FORMATS.get(audio_format_key, AUDIO_OUTPUT_FORMATS["best"])
     codec = f_meta["codec"]
     if codec is None:
         return "bestaudio/best"
-    # On préfère un format source compatible puis conversion via postprocessor FFmpeg
+    # Prefer a compatible source format, then convert it with the FFmpeg postprocessor.
     return f"bestaudio[ext={codec}]/bestaudio/best"
 
 
 def _build_audio_postprocessor(audio_format_key: str, has_ffmpeg: bool) -> dict[str, Any] | None:
-    """Post-processeur FFmpegExtractAudio (retourne None si pas de ffmpeg ou format 'best')."""
+    """Build an FFmpegExtractAudio postprocessor, or return None if unavailable or set to 'best'."""
     if not has_ffmpeg:
         return None
     f_meta = AUDIO_OUTPUT_FORMATS.get(audio_format_key, AUDIO_OUTPUT_FORMATS["best"])
@@ -599,7 +598,7 @@ def _build_audio_postprocessor(audio_format_key: str, has_ffmpeg: bool) -> dict[
 
 
 def _build_subtitle_lang_options(lang_code: str | None) -> dict[str, Any]:
-    """Options yt-dlp pour sous-titres / audio en fonction de la langue choisie."""
+    """Build yt-dlp subtitle/audio options for the selected language."""
     opts: dict[str, Any] = {
         "writesubtitles": True,
         "writeautomaticsub": True,
@@ -614,7 +613,7 @@ def _build_subtitle_lang_options(lang_code: str | None) -> dict[str, Any]:
         return opts
 
     codes = {lang_code, *LANGUAGES.get(lang_code, {}).get("aliases", set())}
-    # YouTube : codes courts + variantes regionales (zh-Hans, pt-BR…)
+    # YouTube uses short codes and regional variants (zh-Hans, pt-BR, etc.).
     ytdlp_codes = sorted(
         {
             c
@@ -637,7 +636,7 @@ def _collect_subtitle_sidecars(
     created_files: list[str],
     output_path: str,
 ) -> list[str]:
-    """Trouve les .srt/.vtt/.ass telecharges a cote de la video et les aligne sur son nom."""
+    """Find downloaded .srt/.vtt/.ass sidecars and align their names with the video."""
     if not media_filepath or not os.path.isfile(media_filepath):
         return []
 
@@ -651,7 +650,7 @@ def _collect_subtitle_sidecars(
         if ext in sub_exts and os.path.isfile(path):
             candidates.append(path)
 
-    # Aussi scanner le dossier (yt-dlp peut ecrire apres le snapshot)
+    # Also scan the folder; yt-dlp may write files after the snapshot.
     try:
         for name in os.listdir(media_dir):
             full = os.path.join(media_dir, name)
@@ -659,7 +658,7 @@ def _collect_subtitle_sidecars(
                 continue
             ext = os.path.splitext(name)[1].lower()
             if ext in sub_exts and full not in candidates:
-                # Garder ceux qui partagent une racine proche du media (avant/apres slugify)
+                # Keep files whose base name resembles the media name, before or after slugifying.
                 base = os.path.splitext(name)[0]
                 if media_stem[:20] in base or base[:20] in media_stem or _slugify_filename(base).startswith(media_stem[:16]):
                     candidates.append(full)
@@ -670,7 +669,7 @@ def _collect_subtitle_sidecars(
     seen: set[str] = set()
     for path in candidates:
         ext = os.path.splitext(path)[1].lower()
-        # Ex: video.zh-Hans.srt → garder le code langue dans le nom final
+        # Example: video.zh-Hans.srt keeps its language code in the final name.
         raw_stem = os.path.splitext(os.path.basename(path))[0]
         lang_suffix = ""
         parts = raw_stem.rsplit(".", 1)
@@ -680,7 +679,7 @@ def _collect_subtitle_sidecars(
         try:
             if os.path.normpath(path) != os.path.normpath(target):
                 if os.path.exists(target):
-                    # collision : garder un suffixe unique
+                    # Preserve existing files by adding a unique suffix on collision.
                     n = 2
                     while os.path.exists(os.path.join(media_dir, f"{media_stem}{lang_suffix}-{n}{ext}")):
                         n += 1
@@ -697,7 +696,7 @@ def _collect_subtitle_sidecars(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Point d'entrée principal (signature étendue, rétro-compat)
+# Main entry point (extended signature, backward compatible).
 # ──────────────────────────────────────────────────────────────────────────────
 
 def download_media(
@@ -714,18 +713,18 @@ def download_media(
     force_folder: str | None = None,
 ) -> dict[str, Any]:
     """
-    Point d'entrée unique :
-      1. franime.fr  → extracteur dédié
-      2. Sites yt-dlp → yt-dlp direct
-      3. Autres       → extracteur navigateur générique
+        Single entry point:
+            1. franime.fr sites → dedicated extractor
+            2. yt-dlp sites     → direct yt-dlp download
+            3. Other sites      → generic browser extractor
 
-    Paramètres nouveaux (compatibilité ascendante conservée) :
-      video_format   : clé dans VIDEO_OUTPUT_FORMATS (best/mp4/mkv/webm/mov/avi)
-      audio_format   : clé dans AUDIO_OUTPUT_FORMATS (best/mp3/mp3_320/flac/wav/…)
-      language       : code langue ISO (vf/vo/fr/en/es/…) ou None → auto
-      write_subtitles: bool — active le téléchargement de sous-titres si disponible
-      force_folder   : sous-dossier de sortie imposé (ex: "music") au lieu du
-                       classement automatique par domaine
+        New parameters (backward compatibility is preserved):
+            video_format   : key in VIDEO_OUTPUT_FORMATS (best/mp4/mkv/webm/mov/avi)
+            audio_format   : key in AUDIO_OUTPUT_FORMATS (best/mp3/mp3_320/flac/wav/...)
+            language       : ISO language code (vf/vo/fr/en/es/...) or None for automatic detection
+            write_subtitles: bool; download subtitles when available
+            force_folder   : required output subfolder (e.g. "music") instead of
+                                             automatic organization by domain
     """
     import re as _re
 
@@ -735,7 +734,7 @@ def download_media(
     if download_type not in VALID_DOWNLOAD_TYPES:
         download_type = "video"
 
-    # Fallback auto langue : détection via URL si non fournie
+    # Detect the language from the URL if none was provided.
     resolved_lang = normalize_language(language) if language else detect_language_from_url(url)
 
     base_output_path = output_path
@@ -745,13 +744,13 @@ def download_media(
         target_output_path = _build_output_folder(url, base_output_path)
     os.makedirs(target_output_path, exist_ok=True)
 
-    # ── Début tracking BDD ────────────────────────────────────────────────────
+    # ── Start database tracking ───────────────────────────────────────────────
     parsed_global = urlparse(url)
     domain_global = parsed_global.netloc.lower().replace("www.", "") or "remote"
     dl_id = download_start(url, domain=domain_global, download_type=download_type, quality=quality)
     log.info("New download #%d — %s", dl_id, url[:100])
 
-    # ── Check existance ──────────────────────────────────────────────────────
+    # ── Check for an existing download ────────────────────────────────────────
     if _re.match(r"https?://(?:www\.)?franime\.fr/", url, _re.I):
         parsed = urlparse(url)
         params = parse_qs(parsed.query)
@@ -764,7 +763,7 @@ def download_media(
         for ext in VIDEO_EXTENSIONS | {".mp4", ".mkv", ".webm"}:
             potential_file = os.path.join(target_output_path, f"{filename_base}{ext}")
             if os.path.isfile(potential_file):
-                log.warning("[skip] Déjà téléchargé : %s", os.path.basename(potential_file))
+                log.warning("[skip] Already downloaded: %s", os.path.basename(potential_file))
                 fsize = os.path.getsize(potential_file)
                 download_finish(
                     dl_id, "skipped",
@@ -800,8 +799,8 @@ def download_media(
             )
             player_used = result.get("player_name") or result.get("lecteur") or None
         except ImportError as e:
-            log.error("franime_extractor.py introuvable : %s", e)
-            error = RuntimeError("franime_extractor.py introuvable.")
+            log.error("franime_extractor.py not found: %s", e)
+            error = RuntimeError("franime_extractor.py not found.")
             download_finish(dl_id, "failed", extractor_type=extractor_used, error_message=str(error))
             raise error from e
         except Exception as e:
@@ -842,7 +841,7 @@ def download_media(
                 is_unsupported = any(k in msg for k in ("unsupported url", "no video formats", "unable to extract"))
 
             if is_unsupported:
-                log.warning("[yt-dlp] Non supporté → fallback navigateur générique")
+                log.warning("[yt-dlp] Unsupported URL; falling back to the generic browser extractor.")
                 try:
                     from browser_extractor import download_with_browser
                     extractor_used = "browser"
@@ -854,8 +853,8 @@ def download_media(
                     )
                     player_used = result.get("stream_url") and "browser_stream" or None
                 except ImportError as e2:
-                    log.error("browser_extractor.py introuvable : %s", e2)
-                    error = RuntimeError("browser_extractor.py introuvable.")
+                    log.error("browser_extractor.py not found: %s", e2)
+                    error = RuntimeError("browser_extractor.py not found.")
                     download_finish(dl_id, "failed", extractor_type=extractor_used, error_message=str(error))
                     raise error from e2
                 except Exception as e2:
@@ -883,7 +882,7 @@ def download_media(
     if filepath:
         result["relative_path"] = _relative_download_path(filepath, base_output_path)
         result["filename"] = os.path.basename(filepath)
-    # Sous-titres sidecar → chemins relatifs servables via /media/
+    # Convert subtitle sidecar paths to relative paths served through /media/.
     raw_subs = result.get("subtitle_files") or []
     relative_subs: list[str] = []
     for sub_path in raw_subs:
@@ -891,12 +890,12 @@ def download_media(
             relative_subs.append(_relative_download_path(sub_path, base_output_path))
     if relative_subs:
         result["subtitle_files"] = relative_subs
-        log.info("Sous-titres attaches : %s", ", ".join(os.path.basename(s) for s in relative_subs))
+        log.info("Subtitle files attached: %s", ", ".join(os.path.basename(s) for s in relative_subs))
     result["folder"] = os.path.relpath(target_output_path, start=base_output_path).replace("\\", "/")
     if resolved_lang:
         result["language"] = resolved_lang
 
-    # ── Fin tracking BDD ────────────────────────────────────────────────────
+    # ── Finish database tracking ─────────────────────────────────────────────
     final_status = "success" if filepath else ("skipped" if result.get("skipped") else "failed")
     fsize = None
     dur_ms = None
@@ -923,11 +922,11 @@ def download_media(
         metadata=metadata,
     )
     if final_status == "success":
-        log.success("Téléchargement #%d OK — %s", dl_id, result.get("filename") or filepath or "")
+        log.success("Download #%d succeeded — %s", dl_id, result.get("filename") or filepath or "")
     elif final_status == "skipped":
-        log.warning("Téléchargement #%d sauté : %s", dl_id, result.get("reason"))
+        log.warning("Download #%d skipped: %s", dl_id, result.get("reason"))
     else:
-        log.error("Téléchargement #%d échoué : %s", dl_id, result.get("error"))
+        log.error("Download #%d failed: %s", dl_id, result.get("error"))
     return result
 
 
@@ -940,7 +939,7 @@ def _slugify_filename(value: str) -> str:
 
 
 def _extract_info_with_cookie_retry(url: str, ydl_opts: dict[str, Any]) -> dict[str, Any]:
-    """extract_info avec repli sur les cookies (fichier ou Chrome) si l'accès est bloqué."""
+    """Call extract_info and retry with cookies (file or Chrome) if access is blocked."""
     ydl_class = yt_dlp.YoutubeDL
     if ydl_opts.get("writesubtitles") or ydl_opts.get("writeautomaticsub"):
         class OptionalSubtitleErrorsYoutubeDL(yt_dlp.YoutubeDL):
@@ -949,7 +948,7 @@ def _extract_info_with_cookie_retry(url: str, ydl_opts: dict[str, Any]) -> dict[
                     return super()._write_subtitles(info_dict, filename)
                 except yt_dlp.utils.DownloadError as exc:
                     log.warning(
-                        "[subtitles] Sous-titres indisponibles (%s); la vidéo sera conservée.",
+                        "[subtitles] Subtitles unavailable (%s); keeping the video.",
                         exc,
                     )
                     return []
@@ -986,7 +985,7 @@ def _ydlp_download(
     adaptive_quality: bool = True,
     download_id: int | None = None,
 ) -> dict[str, Any]:
-    """Téléchargement yt-dlp interne (version étendue)."""
+    """Internal yt-dlp download implementation (extended version)."""
     os.makedirs(output_path, exist_ok=True)
 
     ffmpeg_dir = _resolve_ffmpeg_dir()
@@ -994,7 +993,7 @@ def _ydlp_download(
     host = (urlparse(url).hostname or "").lower()
     is_youtube = host in {"youtube.com", "youtu.be"} or host.endswith(".youtube.com")
 
-    # ── Construction des options yt-dlp (passe unique : vidéo + sous-titres) ──
+    # ── Build yt-dlp options (single pass: video + subtitles) ─────────────────
     subtitle_lang_opts = _build_subtitle_lang_options(language) if write_subtitles else {}
     runtime_options = yt_dlp_runtime_options()
     aria2c_path = shutil.which("aria2c")
@@ -1002,18 +1001,17 @@ def _ydlp_download(
     if proxy_url:
         log.info("[proxy] Trafic via %s", proxy_url.split("@")[-1])
 
-    # Palier de connexions retenu pour ce téléchargement. aria2c plafonne à 16
-    # connexions par serveur : au-delà (gros PC / grosse ligne), on s'appuie sur
-    # le téléchargeur natif de yt-dlp qui parallélise les fragments sans limite.
+    # aria2c supports at most 16 connections per server. For higher tiers,
+    # yt-dlp's native downloader can parallelize fragments without that limit.
     connection_tier = get_connection_tier()
     monitor_adaptive = bool(adaptive_quality and download_type == "video" and quality == "best")
-    # yt-dlp ne relaie les hooks aria2c qu'à la fin du fichier : pas de mesure
-    # exploitable pour décider d'un downgrade pendant un téléchargement Turbo.
+    # yt-dlp forwards aria2c hooks only after a file finishes, so they cannot
+    # provide useful measurements for downgrading during a Turbo download.
     aria2_connections = min(connection_tier, 16)
     use_turbo = bool(aria2c_path) and not monitor_adaptive
 
     def build_ydl_opts(quality_key: str, force_native: bool = False) -> dict[str, Any]:
-        """Options yt-dlp pour une qualité donnée (reconstruites à chaque tentative)."""
+        """Build yt-dlp options for a quality level, rebuilding them on each retry."""
         if download_type == "audio":
             format_str = _build_audio_format_string(audio_format)
             format_sort = None
@@ -1021,7 +1019,7 @@ def _ydlp_download(
             postprocessors: list[dict[str, Any]] = [audio_pp] if audio_pp else []
             merge_output_format = None
         else:  # video
-            # On préfère toujours les protocoles HTTP (plus stables avec aria2c)
+            # Prefer HTTP protocols, which are more stable with aria2c.
             format_str = _build_video_format_string(
                 quality_key, video_format, has_ffmpeg, prefer_http=True
             )
@@ -1036,16 +1034,16 @@ def _ydlp_download(
         opts: dict[str, Any] = {
             "format": format_str,
             "outtmpl": os.path.join(output_path, "%(title).200s.%(ext)s").replace("\\", "/"),
-            "quiet": True, # On reste discret pour tous les sites
+            "quiet": True, # Keep output quiet for all sites.
             "no_warnings": False,
             "postprocessors": postprocessors,
             "prefer_ffmpeg": has_ffmpeg,
             "merge_output_format": merge_output_format,
             "noplaylist": True,
-            # Téléchargeur natif : le nombre de fragments est parallélisé selon la
-            # capacité de la machine (8→128). En repli « discret » on reste à 1.
+            # The native downloader parallelizes fragments according to machine
+            # capacity (8 to 128). Quiet fallback mode uses one fragment.
             "concurrent_fragment_downloads": 1 if force_native else get_connection_tier(),
-            "retries": 10, # 10 tentatives pour tout le monde
+            "retries": 10, # Use 10 retries for all sites.
             "fragment_retries": 10,
             "file_access_retries": 5,
             "socket_timeout": 30,
@@ -1056,7 +1054,7 @@ def _ydlp_download(
             opts["proxy"] = proxy_url
         if format_sort:
             opts["format_sort"] = format_sort
-        # Sous-titres récupérés dans la même passe que la vidéo
+        # Fetch subtitles in the same pass as the video.
         if subtitle_lang_opts:
             opts.update(subtitle_lang_opts)
             if has_ffmpeg:
@@ -1067,7 +1065,7 @@ def _ydlp_download(
         if ffmpeg_dir:
             opts["ffmpeg_location"] = ffmpeg_dir
 
-        # Stratégie Turbo (aria2c) vs Native
+        # Turbo (aria2c) versus native downloader strategy.
         if use_turbo and not force_native:
             opts["external_downloader"] = "aria2c"
             args = [
@@ -1084,15 +1082,15 @@ def _ydlp_download(
                 "--file-allocation=none",
                 "--disk-cache=64M",
                 "--continue=true",
-                # Agents bloqués/ralentis : on récupère beaucoup plus vite que le
-                # défaut (60 s) au lieu de laisser une connexion morte occuper un slot.
+                # For blocked or slow agents, retry faster than the 60-second default
+                # instead of letting a dead connection occupy a slot.
                 "--connect-timeout=10",
                 "--timeout=30",
                 "--max-tries=10",
                 "--retry-wait=2",
-                # On ignore tout aria2.conf global qui pourrait parasiter (proxy, splits…).
+                # Ignore global aria2.conf settings that could interfere (proxy, splits, etc.).
                 "--no-conf=true",
-                # La vidéo est déjà compressée : on supprime la négociation gzip inutile.
+                # Videos are already compressed, so skip unnecessary gzip negotiation.
                 "--http-accept-gzip=false",
                 "--enable-http-keep-alive=true",
             ]
@@ -1122,18 +1120,17 @@ def _ydlp_download(
         extra_bits.append(f"Format: {video_format if download_type == 'video' else audio_format}")
         if download_type == "video":
             extra_bits.append(
-                f"Quality: {current_quality.upper()}" + (" (adaptatif 10s)" if monitor_adaptive else "")
+                f"Quality: {current_quality.upper()}" + (" (adaptive 10s)" if monitor_adaptive else "")
             )
         if language:
             extra_bits.append(f"Lang: {language}")
         if write_subtitles:
-            extra_bits.append("Sous-titres: oui")
+            extra_bits.append("Subtitles: yes")
         log.info("yt-dlp — %s", " | ".join(extra_bits))
 
-        # Lancement en qualité max. En mode adaptatif, un watcher mesure le débit
-        # réel pendant 10 s et relance à une qualité inférieure si l'ETA est trop
-        # longue. En cas de blocage (403/Forbidden), on bascule du mode Turbo
-        # (aria2c) vers le mode Natif (discret).
+        # Start at the highest quality. Adaptive mode monitors throughput for
+        # 10 seconds and retries at a lower quality if the ETA is too long. If
+        # blocked (403/Forbidden), switch from Turbo (aria2c) to quiet native mode.
         force_native = False
         while True:
             ydl_opts = build_ydl_opts(current_quality, force_native=force_native)
@@ -1155,12 +1152,12 @@ def _ydlp_download(
                 _cleanup_partial_files(output_path, before_files)
                 current_quality = downgrade.quality
             except Exception as e:
-                # Si on était en mode Turbo et qu'on détecte un blocage/erreur protocole,
-                # on tente une dernière chance en mode Natif (discret).
+                # If Turbo mode encounters a block or protocol error, try once
+                # more with the quiet native downloader.
                 if not force_native and use_turbo:
                     msg = str(e).lower()
-                    # "aria2c exited with code 22" ne contient pas "403" alors que la cause réelle
-                    # côté aria2c EST un 403 : on bascule aussi en Natif sur tout échec aria2c.
+                    # "aria2c exited with code 22" does not contain "403", even when
+                    # the actual cause is a 403; fall back on any aria2c failure.
                     is_blocking = any(
                         k in msg
                         for k in ("403", "forbidden", "inaccessible", "429", "denied", "aria2c exited with code")
@@ -1173,7 +1170,7 @@ def _ydlp_download(
                 raise
 
         raw_title = info.get('title') or "download"
-        log.success("yt-dlp — Téléchargé : %s", raw_title)
+        log.success("yt-dlp — Downloaded: %s", raw_title)
 
         created_files = _collect_created_files(output_path, before_files)
 
@@ -1188,13 +1185,13 @@ def _ydlp_download(
 
             if original_file != new_file:
                 if os.path.exists(new_file):
-                    # Collision : au lieu d'écraser silencieusement, ajouter suffixe -numéro
+                    # Avoid silently overwriting a file by adding a numeric suffix.
                     collision_counter = 2
                     while True:
                         alt = os.path.join(dir_name, f"{clean_name}-{collision_counter}{extension}")
                         if not os.path.exists(alt):
                             log.warning(
-                                "[playlist] Collision détectée avec %s, renommage en %s",
+                                "[playlist] Collision detected with %s; renaming to %s",
                                 os.path.basename(new_file), os.path.basename(alt),
                             )
                             new_file = alt
@@ -1218,7 +1215,7 @@ def _ydlp_download(
             "quality_used": current_quality,
             "quality_changed": quality_changed,
             "adaptive_note": adaptive_note,
-            # Ne PAS renvoyer info yt-dlp (objets non JSON-serialisables)
+            # Do not return yt-dlp info objects, which are not JSON serializable.
         }
     except Exception as e:
         cookie_error = _friendly_cookie_error(e)
@@ -1226,18 +1223,18 @@ def _ydlp_download(
             log.error("[cookies] %s", cookie_error)
             raise RuntimeError(cookie_error) from None
         if "ffmpeg" in str(e).lower() or "ffprobe" in str(e).lower():
-            log.critical("FFmpeg introuvable ou en erreur — %s", e)
-            log.error("FFmpeg est requis pour conversion audio / fusion conteneurs.")
+            log.critical("FFmpeg not found or failed — %s", e)
+            log.error("FFmpeg is required for audio conversion and container merging.")
             log.error("Install : winget install Gyan.FFmpeg  OU  https://ffmpeg.org/download.html")
         else:
-            log.error("Échec yt-dlp : %s", e, exc_info=True)
+            log.error("yt-dlp failed: %s", e, exc_info=True)
         raise
 
 
-# ─── Route /config expose au frontend les listes de formats / langues ────────
+# ─── The /config route exposes format and language lists to the frontend ─────
 
 def get_frontend_config() -> dict[str, Any]:
-    """Payload statique pour initialiser les sélecteurs frontend."""
+    """Return static data for initializing frontend selectors."""
     return {
         "video_formats": [
             {"key": k, "label": v["label"], "ext": v["ext"]}
@@ -1266,43 +1263,43 @@ if __name__ == "__main__":
     video_url = input("Enter URL: ").strip()
 
     print("\nDownload Options:")
-    print("1. Audio (choisir format)")
-    print("2. Video (choisir format + qualite)")
+    print("1. Audio (choose format)")
+    print("2. Video (choose format + quality)")
 
     choice = input("\nSelect option (1-2): ").strip()
 
     if choice == "1":
-        print("\nFormats audio disponibles :")
+        print("\nAvailable audio formats:")
         for i, (k, v) in enumerate(AUDIO_OUTPUT_FORMATS.items(), 1):
             print(f"{i}. {v['label']}")
         try:
-            af_choice = int(input("\nChoix format audio : ").strip())
+            af_choice = int(input("\nChoose audio format: ").strip())
             keys = list(AUDIO_OUTPUT_FORMATS.keys())
             audio_format = keys[af_choice - 1] if 1 <= af_choice <= len(keys) else "mp3"
         except ValueError:
             audio_format = "mp3"
-        lang = input("Langue (code ISO ou vide=auto) : ").strip() or None
+        lang = input("Language (ISO code or blank for auto): ").strip() or None
         download_media(video_url, download_type="audio", audio_format=audio_format, language=lang)
     else:
-        print("\nFormats video disponibles :")
+        print("\nAvailable video formats:")
         for i, (k, v) in enumerate(VIDEO_OUTPUT_FORMATS.items(), 1):
             print(f"{i}. {v['label']}")
         try:
-            vf_choice = int(input("\nChoix format video : ").strip())
+            vf_choice = int(input("\nChoose video format: ").strip())
             vkeys = list(VIDEO_OUTPUT_FORMATS.keys())
             video_format = vkeys[vf_choice - 1] if 1 <= vf_choice <= len(vkeys) else "mp4"
         except ValueError:
             video_format = "mp4"
 
-        print("\nQualites disponibles :")
+        print("\nAvailable qualities:")
         qkeys = list(VIDEO_QUALITIES.keys())
         for i, k in enumerate(qkeys, 1):
             print(f"{i}. {VIDEO_QUALITIES[k]['label']}")
         try:
-            q_choice = int(input("\nChoix qualite : ").strip())
+            q_choice = int(input("\nChoose quality: ").strip())
             quality = qkeys[q_choice - 1] if 1 <= q_choice <= len(qkeys) else "best"
         except ValueError:
             quality = "best"
-        lang = input("Langue (code ISO ou vide=auto) : ").strip() or None
+        lang = input("Language (ISO code or blank for auto): ").strip() or None
         download_media(video_url, download_type="video", quality=quality,
                        video_format=video_format, language=lang)

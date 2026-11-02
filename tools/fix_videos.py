@@ -10,7 +10,7 @@ def fix_videos(directory):
                 
                 print(f"Fixing {file}...")
                 try:
-                    # On tente de remuxer proprement
+                    # Try to remux the file cleanly.
                     cmd = [
                         'ffmpeg', '-y', '-i', input_path, 
                         '-c', 'copy', '-map', '0:v', '-map', '0:a?',
@@ -20,11 +20,11 @@ def fix_videos(directory):
                     
                     if result.returncode == 0:
                         os.replace(output_path, input_path)
-                        print(f"✓ {file} réparé.")
+                        print(f"✓ Repaired {file}.")
                     else:
                         if os.path.exists(output_path):
                             os.remove(output_path)
-                        print(f"✗ Impossible de réparer {file} (fichier peut-être corrompu).")
+                        print(f"✗ Could not repair {file} (the file may be corrupted).")
                 except Exception as e:
                     print(f"Error fixing {file}: {e}")
 
@@ -32,6 +32,6 @@ if __name__ == "__main__":
     target_dir = "downloads"
     if os.path.exists(target_dir):
         fix_videos(target_dir)
-        print("\nRéparation terminée !")
+        print("\nRepair complete!")
     else:
-        print("Dossier downloads introuvable.")
+        print("Downloads folder not found.")

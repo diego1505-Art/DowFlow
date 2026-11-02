@@ -11,7 +11,7 @@ const storageKeys = {
 // LOCKING AUDIO OPTIMIZATION FOR MOBILE
 const audio = document.getElementById("audio-player");
 if (audio) {
-  audio.preload = "none"; // Évite de saturer la bande passante mobile
+  audio.preload = "none"; // Avoid saturating mobile bandwidth.
 }
 const preloadAudio = new Audio();
 preloadAudio.preload = "none";
@@ -43,7 +43,7 @@ const refreshHeroRefs = () => {
   heroCover = document.getElementById("hero-cover");
 };
 
-// VARIABLES POUR LA LECTURE EN BOUCLE DES FAVORIS
+// State for looping through favorites.
 let isLoopingFavorites = false;
 let favoriteTracks = [];
 let originalPlaylist = [];
@@ -60,7 +60,7 @@ let libraryPage = 1;
 let explorePage = 1;
 let likedPage = 1;
 let requestedAutoplay = false;
-const pageSize = 1000; // AUGMENTÉ POUR AFFICHER PLUS DE MUSIQUES
+const pageSize = 1000; // Increased to display more tracks.
 let nextPreloadedFile = "";
 let favoritesReady = false;
 const viewState = {
@@ -69,7 +69,7 @@ const viewState = {
   likedTerm: "",
 };
 
-// Fonctions utilitaires
+// Utility functions.
 const getLiked = () => {
   try {
     return JSON.parse(localStorage.getItem(storageKeys.liked) ?? "[]");
@@ -329,7 +329,7 @@ const syncPlayerLabels = () => {
 };
 
 const updatePlaybackUi = () => {
-  // Message différent selon le mode
+  // Show a different message depending on the playback mode.
   if (isLoopingFavorites) {
     playToggle.textContent = isPlaying ? "Pause" : "Play";
     playerStatus.textContent = isPlaying ? "Playing favorites on loop" : "Paused (favorites)";
@@ -347,7 +347,7 @@ const updatePlaybackUi = () => {
     timelineRange.value = `${audio.currentTime || 0}`;
   }
 
-  // Mise à jour de la couleur de la barre de progression (style Spotify)
+  // Update the progress bar color (Spotify style).
   const progressPercent = audio.duration > 0
     ? (audio.currentTime / audio.duration) * 100
     : 0;
@@ -355,7 +355,7 @@ const updatePlaybackUi = () => {
   if (heroProgress) {
     heroProgress.style.width = `${progressPercent}%`;
   }
-  // Le hero utilise un code style Spotify à la place de la barre de progression.
+  // The hero uses a Spotify-style progress indicator.
 };
 
 const seekTo = (value) => {
@@ -583,7 +583,7 @@ const playTrackByFile = (file, autoplay = true) => {
   if (index !== -1) {
     loadTrack(index, autoplay);
   } else {
-    // Si pas trouvé dans tracks, peut-être dans filtered?
+    // If it is not in tracks, it may be in the filtered list.
     const fIndex = filteredTracks.findIndex((t) => t.file === file);
     if (fIndex !== -1) {
       loadTrack(tracks.indexOf(filteredTracks[fIndex]), autoplay);
@@ -609,7 +609,7 @@ const createLikeButton = (track) => {
   return button;
 };
 
-// RERENDER PAGE BLOCKS
+// Re-render page sections.
 const renderEmpty = (container, message) => {
   container.innerHTML = `<div class="empty-state"><p>${message}</p></div>`;
 };
@@ -726,11 +726,11 @@ const renderTrackRows = (container, items, mode = "list") => {
 };
 
 const themes = [
-  { id: "classique", name: "Classique", color: "#f39c12", icon: "🎻", keywords: ["mozart", "beethoven", "bach", "chopin", "classic", "piano", "orchestra", "vienna", "symphony", "concerto", "sonata"] },
+  { id: "classical", name: "Classical", color: "#f39c12", icon: "🎻", keywords: ["mozart", "beethoven", "bach", "chopin", "classic", "piano", "orchestra", "vienna", "symphony", "concerto", "sonata"] },
   { id: "rap", name: "Rap", color: "#e74c3c", icon: "🎤", keywords: ["rap", "trap", "flow", "beat", "street", "booba", "iam", "ntm", "eminem", "dr dre", "snoop", "tupac", "biggie", "jay-z", "kendrick", "drake", "113", "magic system", "rohff", "kery james", "jul", "ninho", "damso", "nekfeu"] },
   { id: "hiphop", name: "Hip-Hop", color: "#c0392b", icon: "🎧", keywords: ["hiphop", "r&b", "soul", "groove", "urban", "funk", "motown", "usher", "beyonce", "rihanna", "chris brown", "ne-yo"] },
   { id: "jazz", name: "Jazz", color: "#8e44ad", icon: "🎷", keywords: ["jazz", "blues", "swing", "miles", "davis", "coltrane", "armstrong", "fitzgerald", "holiday", "sinatra"] },
-  { id: "electro", name: "Électronique", color: "#3498db", icon: "🎹", keywords: ["electro", "techno", "house", "dj", "remix", "mix", "dance", "synth", "daft", "guetta", "tiesto", "avicii", "eddm", "dubstep", "martin garrix"] },
+  { id: "electro", name: "Electronic", color: "#3498db", icon: "🎹", keywords: ["electro", "techno", "house", "dj", "remix", "mix", "dance", "synth", "daft", "guetta", "tiesto", "avicii", "eddm", "dubstep", "martin garrix"] },
   { id: "pop", name: "Pop", color: "#e84393", icon: "🌟", keywords: ["pop", "hits", "radio", "star", "singer", "love", "jackson", "madonna", "taylor", "bieber", "perry", "gaga", "adele", "ed sheeran", "dua lipa"] },
 ];
 
@@ -746,7 +746,7 @@ const renderHome = () => {
   const heroStatFavoriteCount = document.getElementById("hero-stat-favorite-count");
   const heroStatThemeFocus = document.getElementById("hero-stat-theme-focus");
 
-  // Historique de lecture
+  // Playback history.
   const recentHistory = getRecentHistory();
   const recentHistoryTracks = recentHistory
     .map((file) => tracks.find((track) => track.file === file))
@@ -760,7 +760,7 @@ const renderHome = () => {
     }
   }
 
-  // Favoris rapides
+  // Quick favorites.
   const likedItems = tracks.filter((track) => getLiked().includes(track.file)).slice(0, 8);
   if (likedPreview) {
     renderTrackRows(likedPreview, likedItems, "list");
@@ -825,10 +825,11 @@ const renderExplore = () => {
   const sidebarText = document.getElementById("explore-sidebar-text");
   const exploreMenuItem = document.querySelector('[data-nav="explore"]');
 
-  // Récupérer le thème depuis l'URL
+  // Get the theme from the URL.
   const urlParams = new URLSearchParams(window.location.search);
   const themeFromUrl = urlParams.get("theme");
-  const themeId = themeFromUrl ?? getStoredTheme();
+  const storedThemeId = themeFromUrl ?? getStoredTheme();
+  const themeId = storedThemeId === "classique" ? "classical" : storedThemeId;
   const activeTheme = themes.find(t => t.id === themeId);
 
   if (themeFromUrl) {
@@ -850,7 +851,7 @@ const renderExplore = () => {
   }
 
   const alphabeticalTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title, "fr", { sensitivity: "base" }));
-  const explorePageSize = 50; // Plus petit pour fluidité
+  const explorePageSize = 50; // Smaller page size for smoother browsing.
 
   const updateExploreResults = (term = viewState.exploreTerm, options = {}) => {
     const normalized = normalizeSearch(term);
@@ -858,12 +859,12 @@ const renderExplore = () => {
     viewState.exploreTerm = term;
 
     if (activeTheme && !normalized) {
-      // Filtrage par thème si pas de recherche
-      // On cherche les mots-clés dans le nom du fichier, le titre et l'artiste
+      // Filter by theme when there is no search query.
+      // Search keywords in the filename, title, and artist.
       results = alphabeticalTracks.filter(track => {
         const matchesTheme = activeTheme.keywords.some(kw => track.searchText.includes(kw));
         
-        // Si c'est le thème "Pop", on y met aussi tout ce qui n'a pas été catégorisé
+        // Include uncategorized tracks in the Pop theme.
         if (activeTheme.id === "pop" && !matchesTheme) {
           const isCategorized = themes.some(t => t.id !== "pop" && t.keywords.some(kw => track.searchText.includes(kw)));
           return !isCategorized;
@@ -878,7 +879,7 @@ const renderExplore = () => {
       }
       results = alphabeticalTracks;
     } else {
-      // Recherche locale uniquement (biblio DowFlow déjà chargée)
+      // Search locally only; the DowFlow library is already loaded.
       results = alphabeticalTracks.filter((track) =>
         track.titleSearch.includes(normalized) ||
         track.artistSearch.includes(normalized) ||
@@ -890,7 +891,7 @@ const renderExplore = () => {
       }
     }
 
-    // Mise à jour de filteredTracks pour que playTrackByFile fonctionne
+    // Update filteredTracks so playTrackByFile can find each track.
     filteredTracks = results;
 
     const totalPages = Math.max(1, Math.ceil(results.length / explorePageSize));
@@ -1026,7 +1027,7 @@ const renderLiked = () => {
       });
     }
     
-    // Stocker les favoris pour la lecture en boucle
+    // Store favorites for looping playback.
     favoriteTracks = visible;
   };
 
@@ -1417,7 +1418,7 @@ const downloadOnlineTrack = async (track, button) => {
       throw new Error(job.error || job.message || "Download failed");
     }
   } catch (err) {
-    setOnlineStatus(err.message || "Erreur", "error");
+    setOnlineStatus(err.message || "Error", "error");
   } finally {
     button.disabled = false;
     button.textContent = original;

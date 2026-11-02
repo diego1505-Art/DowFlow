@@ -6,7 +6,7 @@ from typing import Any
 
 @dataclass
 class OptionDef:
-    """Une option affichée dans le panneau « Options de la premiere URL »."""
+    """An option displayed in the "First URL options" panel."""
 
     key: str
     label: str

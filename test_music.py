@@ -8,7 +8,7 @@ import playlist
 
 
 class FakeSearchYoutubeDL:
-    """Simule une recherche yt-dlp (extract_flat) sans accès réseau."""
+    """Simulate a yt-dlp (extract_flat) search without network access."""
 
     def __init__(self, options):
         self.options = options
@@ -22,10 +22,10 @@ class FakeSearchYoutubeDL:
     def extract_info(self, url, download=False):
         return {
             "entries": [
-                {"id": "abc123", "title": "Titre A", "duration": 215, "uploader": "Artiste A"},
+                {"id": "abc123", "title": "Track A", "duration": 215, "uploader": "Artist A"},
                 None,
                 {"id": "abc123", "title": "Doublon", "duration": 215},
-                {"id": "def456", "title": "Titre B", "duration": 180, "uploader": "Artiste B"},
+                {"id": "def456", "title": "Track B", "duration": 180, "uploader": "Artist B"},
             ]
         }
 
@@ -76,7 +76,7 @@ class MusicSearchTests(unittest.TestCase):
         with patch("yt_dlp.YoutubeDL", FakeSearchYoutubeDL):
             tracks = music.search_music("test", limit=10)
         self.assertEqual([t["id"] for t in tracks], ["abc123", "def456"])
-        self.assertEqual(tracks[0]["artist"], "Artiste A")
+        self.assertEqual(tracks[0]["artist"], "Artist A")
 
     def test_empty_query_returns_nothing(self):
         self.assertEqual(music.search_music("   "), [])
@@ -86,23 +86,23 @@ class MusicCoverTests(unittest.TestCase):
     def test_fetch_cover_uses_deezer(self):
         payload = {"data": [{"album": {"cover_xl": "https://cdn/cover.jpg"}}]}
         with patch.object(music.requests, "get", return_value=FakeResponse(payload)):
-            self.assertEqual(music.fetch_cover_url("Artiste", "Titre"), "https://cdn/cover.jpg")
+            self.assertEqual(music.fetch_cover_url("Artist", "Track"), "https://cdn/cover.jpg")
 
     def test_fetch_cover_returns_none_without_title(self):
-        self.assertIsNone(music.fetch_cover_url("Artiste", ""))
+        self.assertIsNone(music.fetch_cover_url("Artist", ""))
 
 
 class MusicDownloadTests(unittest.TestCase):
     def test_download_uses_music_folder_and_saves_cover(self):
         with tempfile.TemporaryDirectory() as output:
-            media_path = Path(output) / "music" / "Titre.mp3"
+            media_path = Path(output) / "music" / "Track.mp3"
             media_path.parent.mkdir(parents=True)
             media_path.write_bytes(b"audio")
 
             def fake_download_media(url, **kwargs):
                 self.assertEqual(kwargs["force_folder"], music.MUSIC_SUBFOLDER)
                 self.assertEqual(kwargs["download_type"], "audio")
-                return {"filepath": str(media_path), "filename": "Titre.mp3"}
+                return {"filepath": str(media_path), "filename": "Track.mp3"}
 
             cover_payload = {"data": [{"album": {"cover_xl": "https://cdn/cover.jpg"}}]}
 
@@ -118,28 +118,28 @@ class MusicDownloadTests(unittest.TestCase):
                         output_path=output,
                         audio_format="mp3",
                         with_cover=True,
-                        title="Titre",
-                        artist="Artiste",
+                        title="Track",
+                        artist="Artist",
                     )
 
             self.assertTrue(Path(result["cover_path"]).is_file())
-            self.assertEqual(result["cover_url"], "/media/music/Titre.jpg")
+            self.assertEqual(result["cover_url"], "/media/music/Track.jpg")
 
 
 class MusicLibraryTests(unittest.TestCase):
     def test_list_library_pairs_audio_with_cover(self):
         with tempfile.TemporaryDirectory() as folder:
             music_dir = Path(folder)
-            (music_dir / "Morceau.mp3").write_bytes(b"audio")
-            (music_dir / "Morceau.jpg").write_bytes(b"image")
+            (music_dir / "Track.mp3").write_bytes(b"audio")
+            (music_dir / "Track.jpg").write_bytes(b"image")
             (music_dir / "ignore.txt").write_text("x", encoding="utf-8")
 
             with patch.object(music, "MUSIC_FOLDER", music_dir):
                 items = music.list_library()
 
             self.assertEqual(len(items), 1)
-            self.assertEqual(items[0]["title"], "Morceau")
-            self.assertIn("Morceau.mp3", items[0]["audio_url"])
+            self.assertEqual(items[0]["title"], "Track")
+            self.assertIn("Track.mp3", items[0]["audio_url"])
             self.assertIsNotNone(items[0]["cover_url"])
 
     def test_list_library_deduplicates_lyric_and_official_video_versions(self):

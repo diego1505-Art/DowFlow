@@ -17,33 +17,33 @@ VIDEO_EXTENSIONS = {".mp4", ".webm", ".mkv", ".m4v", ".mov", ".avi", ".flv", ".w
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aac", ".opus", ".ogg", ".flac", ".wma", ".alac", ".aiff", ".oga"}
 ALLOWED_LOCAL_EXTENSIONS = VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
 PREVIEWABLE_EXTENSIONS = {
-    ".mp4", ".webm", ".ogv",         # Vidéo HTML5 native
-    ".mp3", ".m4a", ".aac",         # Audio universel
-    ".ogg", ".opus", ".wav", ".flac", # Audio Firefox/Chrome
+    ".mp4", ".webm", ".ogv",         # Native HTML5 video
+    ".mp3", ".m4a", ".aac",         # Universal audio
+    ".ogg", ".opus", ".wav", ".flac", # Firefox/Chrome audio
 }
 
-# ── Formats de sortie Vidéo ──────────────────────────────────────────────────
+# ── Video output formats ─────────────────────────────────────────────────────
 #   key → {"label", "ext", "container", "merge": bool,
-#          "aext":  extention audio pour yt-dlp [ext=...]  (ex: "m4a", "opus", None=auto)
-#          "vext":  extention vidéo pour yt-dlp [ext=...]  (ex: "mp4", "webm", None=auto)
-#          Anciens noms "vcodec"/"acodec" conservés 1 release pour rétro-compatibilité.
+#          "aext":  yt-dlp audio extension [ext=...] (e.g. "m4a", "opus", None=auto)
+#          "vext":  yt-dlp video extension [ext=...] (e.g. "mp4", "webm", None=auto)
+#          Legacy "vcodec"/"acodec" names are kept for one release for compatibility.
 VIDEO_OUTPUT_FORMATS: dict = {
-    "best":   {"label": "Auto (meilleur possible)", "ext": None,  "container": None,   "merge": True,  "aext": None, "vext": None, "acodec": None, "vcodec": None},
-    "mp4":    {"label": "MP4 (universel)",          "ext": ".mp4", "container": "mp4",  "merge": True,  "aext": "m4a","vext": "mp4","acodec": "m4a","vcodec": "mp4"},
+    "best":   {"label": "Auto (best available)",    "ext": None,  "container": None,   "merge": True,  "aext": None, "vext": None, "acodec": None, "vcodec": None},
+    "mp4":    {"label": "MP4 (universal)",          "ext": ".mp4", "container": "mp4",  "merge": True,  "aext": "m4a","vext": "mp4","acodec": "m4a","vcodec": "mp4"},
     "mkv":    {"label": "MKV (matroska)",           "ext": ".mkv", "container": "mkv",  "merge": True,  "aext": None, "vext": None, "acodec": None, "vcodec": None},
-    "webm":   {"label": "WebM (libre)",             "ext": ".webm","container": "webm", "merge": True,  "aext": "opus","vext":"webm","acodec": "opus","vcodec": "webm"},
+    "webm":   {"label": "WebM (open format)",       "ext": ".webm","container": "webm", "merge": True,  "aext": "opus","vext":"webm","acodec": "opus","vcodec": "webm"},
     "mov":    {"label": "MOV (QuickTime)",          "ext": ".mov", "container": "mov",  "merge": True,  "aext": None, "vext": None, "acodec": None, "vcodec": None},
     "avi":    {"label": "AVI (legacy)",             "ext": ".avi", "container": "avi",  "merge": False, "aext": None, "vext": None, "acodec": None, "vcodec": None},
 }
 
-# ── Formats de sortie Audio ──────────────────────────────────────────────────
+# ── Audio output formats ─────────────────────────────────────────────────────
 #   key → {"label", "ext", "codec", "quality": str|int (bitrate kbps ou 0=best)}
 AUDIO_OUTPUT_FORMATS: dict = {
-    "best":  {"label": "Auto (meilleur possible)", "ext": None,   "codec": None,  "quality": 0},
+    "best":  {"label": "Auto (best available)",    "ext": None,   "codec": None,  "quality": 0},
     "mp3":   {"label": "MP3 (192 kbps)",           "ext": ".mp3", "codec": "mp3", "quality": 192},
     "mp3_320":{"label": "MP3 (320 kbps HQ)",       "ext": ".mp3", "codec": "mp3", "quality": 320},
     "flac":  {"label": "FLAC (lossless)",          "ext": ".flac","codec": "flac","quality": 0},
-    "wav":   {"label": "WAV (non compressé)",      "ext": ".wav", "codec": "wav", "quality": 0},
+    "wav":   {"label": "WAV (uncompressed)",       "ext": ".wav", "codec": "wav", "quality": 0},
     "aac":   {"label": "AAC (256 kbps)",           "ext": ".m4a", "codec": "aac", "quality": 256},
     "m4a":   {"label": "M4A (iTunes)",             "ext": ".m4a", "codec": "m4a", "quality": 192},
     "opus":  {"label": "Opus (160 kbps)",          "ext": ".opus","codec": "opus","quality": 160},
@@ -51,7 +51,7 @@ AUDIO_OUTPUT_FORMATS: dict = {
     "alac":  {"label": "ALAC (lossless Apple)",    "ext": ".m4a", "codec": "alac","quality": 0},
 }
 
-# ── Qualités vidéo ───────────────────────────────────────────────────────────
+# ── Video qualities ──────────────────────────────────────────────────────────
 #   key → {"label", "max_height": int|None, "alias": str}
 VIDEO_QUALITIES: dict = {
     "best":   {"label": "Auto max",        "max_height": None, "alias": "best"},
@@ -65,57 +65,57 @@ VIDEO_QUALITIES: dict = {
     "240p":   {"label": "240p",            "max_height": 240,  "alias": "240"},
 }
 
-# ── Langues supportées ───────────────────────────────────────────────────────
+# ── Supported languages ──────────────────────────────────────────────────────
 #   {code_iso_639_1: {"label": str, "aliases": set[str]}}
 LANGUAGES: dict = {
-    # ── Franime / Francophone ────────────────────────────────────────────
-    "vf":     {"label": "VF (Français doublé)",      "aliases": {"vf", "fr-dub", "french-dub"}},
-    "vo":     {"label": "VOSTFR (VOST Français)",    "aliases": {"vo", "vostfr", "vost", "sub", "subs", "fr-sub", "vof"}},
-    "fr":     {"label": "Français",                  "aliases": {"fr", "fra", "fre", "french"}},
-    # ── Mondiales ────────────────────────────────────────────────────────
+    # ── Franime / French language options ────────────────────────────────
+    "vf":     {"label": "French dub",               "aliases": {"vf", "fr-dub", "french-dub"}},
+    "vo":     {"label": "French subtitles",         "aliases": {"vo", "vostfr", "vost", "sub", "subs", "fr-sub", "vof"}},
+    "fr":     {"label": "French",                  "aliases": {"fr", "fra", "fre", "french"}},
+    # ── Other languages ──────────────────────────────────────────────────
     "en":     {"label": "English",                   "aliases": {"en", "eng", "english"}},
-    "es":     {"label": "Español / Spanish",         "aliases": {"es", "spa", "spanish", "castellano"}},
-    "de":     {"label": "Deutsch",                   "aliases": {"de", "deu", "ger", "german"}},
-    "it":     {"label": "Italiano",                  "aliases": {"it", "ita", "italian"}},
-    "pt":     {"label": "Português",                 "aliases": {"pt", "por", "portuguese"}},
-    "pt-br":  {"label": "Português (BR)",            "aliases": {"pt-br", "pob", "brazilian"}},
-    "ru":     {"label": "Русский / Russian",         "aliases": {"ru", "rus", "russian"}},
-    "ja":     {"label": "日本語 / Japanese",         "aliases": {"ja", "jpn", "japanese", "jp"}},
-    "ko":     {"label": "한국어 / Korean",           "aliases": {"ko", "kor", "korean"}},
-    "zh":     {"label": "中文 / Chinese",            "aliases": {"zh", "chi", "chinese", "cmn", "zh-cn", "zh-tw", "zh-hans", "zh-hant", "zh_cn", "zh_tw"}},
-    "ar":     {"label": "العربية / Arabic",          "aliases": {"ar", "ara", "arabic"}},
-    "hi":     {"label": "हिन्दी / Hindi",            "aliases": {"hi", "hin", "hindi"}},
-    "tr":     {"label": "Türkçe / Turkish",          "aliases": {"tr", "tur", "turkish"}},
-    "pl":     {"label": "Polski / Polish",           "aliases": {"pl", "pol", "polish"}},
-    "nl":     {"label": "Nederlands / Dutch",        "aliases": {"nl", "nld", "dut", "dutch"}},
-    "sv":     {"label": "Svenska / Swedish",         "aliases": {"sv", "swe", "swedish"}},
-    "no":     {"label": "Norsk / Norwegian",         "aliases": {"no", "nor", "norwegian"}},
-    "da":     {"label": "Dansk / Danish",            "aliases": {"da", "dan", "danish"}},
-    "fi":     {"label": "Suomi / Finnish",           "aliases": {"fi", "fin", "finnish"}},
-    "cs":     {"label": "Čeština / Czech",           "aliases": {"cs", "ces", "cze", "czech"}},
-    "hu":     {"label": "Magyar / Hungarian",        "aliases": {"hu", "hun", "hungarian"}},
-    "ro":     {"label": "Română / Romanian",         "aliases": {"ro", "ron", "rum", "romanian"}},
-    "bg":     {"label": "Български / Bulgarian",     "aliases": {"bg", "bul", "bulgarian"}},
-    "el":     {"label": "Ελληνικά / Greek",          "aliases": {"el", "ell", "gre", "greek"}},
-    "he":     {"label": "עברית / Hebrew",            "aliases": {"he", "heb", "hebrew"}},
-    "th":     {"label": "ไทย / Thai",                "aliases": {"th", "tha", "thai"}},
-    "vi":     {"label": "Tiếng Việt / Vietnamese",   "aliases": {"vi", "vie", "vietnamese"}},
-    "id":     {"label": "Indonesia / Indonesian",    "aliases": {"id", "ind", "indonesian"}},
-    "ms":     {"label": "Melayu / Malay",            "aliases": {"ms", "msa", "may", "malay"}},
-    "uk":     {"label": "Українська / Ukrainian",    "aliases": {"uk", "ukr", "ukrainian"}},
-    "ca":     {"label": "Català / Catalan",          "aliases": {"ca", "cat", "catalan"}},
-    "eu":     {"label": "Euskara / Basque",          "aliases": {"eu", "eus", "basque"}},
-    "fa":     {"label": "فارسی / Persian",           "aliases": {"fa", "fas", "per", "persian"}},
-    "ta":     {"label": "தமிழ் / Tamil",             "aliases": {"ta", "tam", "tamil"}},
-    "te":     {"label": "తెలుగు / Telugu",           "aliases": {"te", "tel", "telugu"}},
-    "bn":     {"label": "বাংলা / Bengali",           "aliases": {"bn", "ben", "bengali"}},
-    "ur":     {"label": "اردو / Urdu",               "aliases": {"ur", "urd", "urdu"}},
-    "multi":  {"label": "Multi-langues / toutes",    "aliases": {"multi", "all", "multilingual"}},
+    "es":     {"label": "Spanish",                  "aliases": {"es", "spa", "spanish", "castellano"}},
+    "de":     {"label": "German",                   "aliases": {"de", "deu", "ger", "german"}},
+    "it":     {"label": "Italian",                  "aliases": {"it", "ita", "italian"}},
+    "pt":     {"label": "Portuguese",               "aliases": {"pt", "por", "portuguese"}},
+    "pt-br":  {"label": "Portuguese (Brazil)",      "aliases": {"pt-br", "pob", "brazilian"}},
+    "ru":     {"label": "Russian",                  "aliases": {"ru", "rus", "russian"}},
+    "ja":     {"label": "Japanese",                 "aliases": {"ja", "jpn", "japanese", "jp"}},
+    "ko":     {"label": "Korean",                   "aliases": {"ko", "kor", "korean"}},
+    "zh":     {"label": "Chinese",                  "aliases": {"zh", "chi", "chinese", "cmn", "zh-cn", "zh-tw", "zh-hans", "zh-hant", "zh_cn", "zh_tw"}},
+    "ar":     {"label": "Arabic",                   "aliases": {"ar", "ara", "arabic"}},
+    "hi":     {"label": "Hindi",                    "aliases": {"hi", "hin", "hindi"}},
+    "tr":     {"label": "Turkish",                  "aliases": {"tr", "tur", "turkish"}},
+    "pl":     {"label": "Polish",                   "aliases": {"pl", "pol", "polish"}},
+    "nl":     {"label": "Dutch",                    "aliases": {"nl", "nld", "dut", "dutch"}},
+    "sv":     {"label": "Swedish",                  "aliases": {"sv", "swe", "swedish"}},
+    "no":     {"label": "Norwegian",                "aliases": {"no", "nor", "norwegian"}},
+    "da":     {"label": "Danish",                   "aliases": {"da", "dan", "danish"}},
+    "fi":     {"label": "Finnish",                  "aliases": {"fi", "fin", "finnish"}},
+    "cs":     {"label": "Czech",                    "aliases": {"cs", "ces", "cze", "czech"}},
+    "hu":     {"label": "Hungarian",                "aliases": {"hu", "hun", "hungarian"}},
+    "ro":     {"label": "Romanian",                 "aliases": {"ro", "ron", "rum", "romanian"}},
+    "bg":     {"label": "Bulgarian",                "aliases": {"bg", "bul", "bulgarian"}},
+    "el":     {"label": "Greek",                    "aliases": {"el", "ell", "gre", "greek"}},
+    "he":     {"label": "Hebrew",                   "aliases": {"he", "heb", "hebrew"}},
+    "th":     {"label": "Thai",                     "aliases": {"th", "tha", "thai"}},
+    "vi":     {"label": "Vietnamese",               "aliases": {"vi", "vie", "vietnamese"}},
+    "id":     {"label": "Indonesian",               "aliases": {"id", "ind", "indonesian"}},
+    "ms":     {"label": "Malay",                    "aliases": {"ms", "msa", "may", "malay"}},
+    "uk":     {"label": "Ukrainian",                "aliases": {"uk", "ukr", "ukrainian"}},
+    "ca":     {"label": "Catalan",                  "aliases": {"ca", "cat", "catalan"}},
+    "eu":     {"label": "Basque",                   "aliases": {"eu", "eus", "basque"}},
+    "fa":     {"label": "Persian",                  "aliases": {"fa", "fas", "per", "persian"}},
+    "ta":     {"label": "Tamil",                    "aliases": {"ta", "tam", "tamil"}},
+    "te":     {"label": "Telugu",                   "aliases": {"te", "tel", "telugu"}},
+    "bn":     {"label": "Bengali",                  "aliases": {"bn", "ben", "bengali"}},
+    "ur":     {"label": "Urdu",                     "aliases": {"ur", "urd", "urdu"}},
+    "multi":  {"label": "All languages",            "aliases": {"multi", "all", "multilingual"}},
 }
 
 
 def normalize_language(lang_value: str | None) -> str:
-    """Normalise toute entrée de langue vers son code ISO canonique."""
+    """Normalize any language input to its canonical ISO code."""
     raw = (lang_value or "").strip().lower()
     if not raw:
         return ""
@@ -128,7 +128,7 @@ def normalize_language(lang_value: str | None) -> str:
 
 
 def detect_language_from_url(url: str) -> str:
-    """Tente de détecter une langue à partir d'une URL (paramètres, chemin, domaine)."""
+    """Detect a language from a URL parameter, path, or domain."""
     from urllib.parse import parse_qs, urlparse
     _AMBIGUOUS_TOKENS = {"id", "no", "it", "is", "all", "sub", "subs", "multi"}
     try:
@@ -136,7 +136,7 @@ def detect_language_from_url(url: str) -> str:
     except Exception:
         return ""
 
-    # 1) Paramètre query : ?lang= ?hl= ?language= ?sub_lang= ?audio_language=
+    # 1) Query parameters: ?lang= ?hl= ?language= ?sub_lang= ?audio_language=
     for param in ("lang", "hl", "language", "sub_lang", "sub_language", "audio_language", "alang", "slang"):
         values = parse_qs(parsed.query).get(param)
         if values and values[0]:
@@ -144,7 +144,7 @@ def detect_language_from_url(url: str) -> str:
             if detected:
                 return detected
 
-    # 2) Chemin : /fr/ /en/ /vostfr/ /vf/ …
+    # 2) Path: /fr/ /en/ /vostfr/ /vf/ …
     path_lower = parsed.path.lower()
     for key, meta in LANGUAGES.items():
         candidates = {key, *meta["aliases"]}
@@ -156,7 +156,7 @@ def detect_language_from_url(url: str) -> str:
             if f"/{token}/" in path_lower or path_lower.endswith(f"/{token}"):
                 return key
 
-    # 3) Sous-domaine / TLD : fr.youtube.com, example.es…
+    # 3) Subdomain / TLD: fr.youtube.com, example.es…
     host = (parsed.netloc or "").lower()
     for key, meta in LANGUAGES.items():
         candidates = {key, *meta["aliases"]}
@@ -179,11 +179,11 @@ BROWSER_HEADLESS = os.environ.get("DOWFLOW_BROWSER_VISIBLE", "").strip().lower()
 BROWSER_PROFILE_DIR = BASE_DIR / "browser_profile"
 YOUTUBE_COOKIES_FILE = BASE_DIR / "youtube_cookies.txt"
 
-# ── Performance : nombre de connexions parallèles ────────────────────────────
-# Palier choisi au démarrage selon la puissance du PC (cœurs CPU) et le débit
-# réseau mesuré : 8 / 16 / 32 / 64 / 128. Plus de connexions = plus de débit
-# utile sur les gros fichiers, sans saturer une machine modeste.
-# Forcer une valeur précise :  set DOWFLOW_CONNECTIONS=64
+# ── Performance: number of parallel connections ──────────────────────────────
+# Tier selected at startup based on CPU cores and measured network speed:
+# 8 / 16 / 32 / 64 / 128. More connections improve throughput for large files
+# without overwhelming a modest machine.
+# Force a specific value: set DOWFLOW_CONNECTIONS=64
 CONNECTIONS_OVERRIDE = os.environ.get("DOWFLOW_CONNECTIONS", "").strip()
 
 # Proxy settings (Optional)
@@ -192,10 +192,9 @@ CONNECTIONS_OVERRIDE = os.environ.get("DOWFLOW_CONNECTIONS", "").strip()
 # Note: free public proxies often time out; Direct is tried first.
 PROXIES = []
 
-# Récupération + validation automatiques de proxys publics gratuits (appliqués à
-# tous les agents : aria2c + yt-dlp). Désactivé par défaut car ces proxys sont
-# très instables et peuvent ralentir voire casser un téléchargement.
-# Activer explicitement :  set DOWFLOW_PROXY_AUTO=1
+# Automatically fetch and validate free public proxies (used by aria2c and
+# yt-dlp). Disabled by default because proxies are unstable and may slow down or
+# break downloads. Enable explicitly: set DOWFLOW_PROXY_AUTO=1
 PROXY_AUTO = os.environ.get("DOWFLOW_PROXY_AUTO", "").strip().lower() in {"1", "true", "yes", "on"}
 PROXY_SOURCES = (
     "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",

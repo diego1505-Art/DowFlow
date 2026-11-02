@@ -34,11 +34,12 @@ From the project root:
 On startup, the script:
 
 1. Checks the latest `main` commit on [GitHub](https://github.com/diego1505-Art/DowFlow).
-2. Temporarily stashes tracked changes with Git if needed.
-3. Applies a fast-forward update, then restores your local changes.
-4. Creates `.venv` if needed.
-5. Checks `requirements.txt` and updates `yt-dlp`.
-6. Checks Playwright, `aria2c` and FFmpeg.
+2. Shows a colored terminal animation while downloading the GitHub update; its color changes every 10 seconds and it stops when the download finishes.
+3. If a newer commit is available, shows its author and summary, then asks whether to install the project update.
+4. If accepted, temporarily stashes tracked local changes, applies a fast-forward update, and restores the changes.
+5. If declined, skips only the project-code update and continues startup.
+6. Creates `.venv` if needed and checks dependencies automatically; dependency updates do not require confirmation.
+7. Checks Playwright, `aria2c` and FFmpeg.
 
 The application is then available at <http://127.0.0.1:5001>.
 
@@ -70,18 +71,24 @@ python -m unittest discover -v
 
 ## Cookies and local data
 
-Some sites, including YouTube, may require a signed-in session. DowFlow can use a Netscape-format cookie export instead of reading Chrome's locked cookie database.
+Some sites may require a signed-in session. DowFlow can use Netscape-format cookie exports instead of reading Chrome's locked cookie database. Each download uses the cookie file matching its site, so sessions are not mixed.
 
-### Export YouTube cookies
+### Export site cookies
 
-1. Sign in to YouTube in Chrome.
-2. Open YouTube, then use a trusted cookie-export extension such as **Cookie Exporter** to export cookies for `youtube.com` in **Netscape** format. Do not copy cookie values manually from Chrome DevTools.
-3. Save the exported file in the project root, next to `app.py`. DowFlow accepts either `youtube_cookies.txt` or the extension's common filename, `youtube.com_cookies.txt`.
-4. Start a new download. After YouTube requests a session, the log should say `retrying with youtube_cookies.txt` or `retrying with youtube.com_cookies.txt`, then continue with the download.
+1. Sign in to the site in Chrome.
+2. Open the site and use a trusted cookie-export extension such as **Cookie Exporter** to export its cookies in **Netscape** format. Do not copy cookie values manually from Chrome DevTools.
+3. Save the export in the project root, next to `app.py`, using the matching name:
+	- YouTube: `youtube_cookies.txt` or `youtube.com_cookies.txt`.
+	- Instagram: `instagram_cookies.txt` or `instagram.com_cookies.txt`.
+	- TikTok: `tiktok_cookies.txt` or `tiktok.com_cookies.txt`.
+	- Other sites: `{domain}_cookies.txt`, for example `vimeo.com_cookies.txt`.
+4. Start a new download. The log should say `retrying with <cookie filename>` when DowFlow uses the export.
 
-The cookie file contains credentials for your account. Do not share it or commit it to Git; both supported filenames are excluded by `.gitignore`. If you exposed the file or its contents, revoke the affected sessions and export a fresh file.
+For a single export containing cookies for several sites, name it `cookies.txt`. A site-specific file takes priority over the generic export. You can also set `DOWFLOW_YOUTUBE_COOKIES`, `DOWFLOW_INSTAGRAM_COOKIES`, `DOWFLOW_TIKTOK_COOKIES`, or `DOWFLOW_COOKIES` to a custom file path.
 
-If the log says `retrying with Chrome browser cookies` instead, DowFlow did not find an export at the project root. Set `DOWFLOW_YOUTUBE_COOKIES` to the full path of the file if you want to store it elsewhere.
+Cookie files contain account credentials. Do not share them or commit them to Git; `*_cookies.txt` and `cookies.txt` are excluded by `.gitignore`. If you expose a cookie file or its contents, revoke the affected sessions and export a fresh file.
+
+If the log says `retrying with Chrome browser cookies` instead, DowFlow did not find a matching export. Check the filename and project-root location, or set the corresponding environment variable to the full path.
 
 On Windows, Chrome may lock its cookie database while running. This is the yt-dlp issue [#7271](https://github.com/yt-dlp/yt-dlp/issues/7271), not the `browser_profile/` folder used by DowFlow's Playwright extractors. The cookie export avoids that database lock.
 

@@ -250,21 +250,62 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertEqual(retry_options["cookiefile"], str(cookie_file))
         self.assertNotIn("cookiesfrombrowser", retry_options)
 
-    def test_resolve_cookie_file_accepts_youtube_com_export_name(self):
+    def test_resolve_cookie_file_selects_site_specific_exports(self):
         with tempfile.TemporaryDirectory() as output:
-            default_file = Path(output) / "youtube_cookies.txt"
-            exported_file = Path(output) / "youtube.com_cookies.txt"
-            exported_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
-            with patch.object(playlist, "YOUTUBE_COOKIES_FILE", default_file):
-                with patch.dict(os.environ, {"DOWFLOW_YOUTUBE_COOKIES": ""}):
-                    self.assertEqual(playlist._resolve_cookie_file(), str(exported_file))
+            root = Path(output)
+            exports = {
+                "youtube.com_cookies.txt": "https://www.youtube.com/watch?v=abc",
+                "instagram.com_cookies.txt": "https://www.instagram.com/reel/123/",
+                "tiktok.com_cookies.txt": "https://www.tiktok.com/@user/video/123",
+                "example.org_cookies.txt": "https://example.org/video/123",
+            }
+            for filename in exports:
+                (root / filename).write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+
+            with patch.object(playlist, "YOUTUBE_COOKIES_FILE", root / "youtube_cookies.txt"):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "DOWFLOW_YOUTUBE_COOKIES": "",
+                        "DOWFLOW_INSTAGRAM_COOKIES": "",
+                        "DOWFLOW_TIKTOK_COOKIES": "",
+                        "DOWFLOW_COOKIES": "",
+                    },
+                ):
+                    for filename, url in exports.items():
+                        self.assertEqual(playlist._resolve_cookie_file(url), str(root / filename))
+
+                    (root / "instagram.com_cookies.txt").unlink()
+                    self.assertIsNone(
+                        playlist._resolve_cookie_file("https://www.instagram.com/")
+                    )
+
+    def test_resolve_cookie_file_falls_back_to_generic_export(self):
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            generic_file = root / "cookies.txt"
+            generic_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+            with patch.object(playlist, "YOUTUBE_COOKIES_FILE", root / "youtube_cookies.txt"):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "DOWFLOW_YOUTUBE_COOKIES": "",
+                        "DOWFLOW_INSTAGRAM_COOKIES": "",
+                        "DOWFLOW_TIKTOK_COOKIES": "",
+                        "DOWFLOW_COOKIES": "",
+                    },
+                ):
+                    self.assertEqual(
+                        playlist._resolve_cookie_file("https://www.instagram.com/"),
+                        str(generic_file),
+                    )
 
     def test_youtube_bot_check_without_cookie_file_reports_actionable_error(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", BotCheckLockedChromeYoutubeDL):
             with tempfile.TemporaryDirectory() as output:
                 with patch.dict(os.environ, {"DOWFLOW_YOUTUBE_COOKIES": ""}):
                     with patch.object(playlist, "YOUTUBE_COOKIES_FILE", Path(output) / "missing.txt"):
-                        with self.assertRaisesRegex(RuntimeError, "youtube_cookies.txt"):
+                        with self.assertRaisesRegex(RuntimeError, "matching site cookie file"):
                             playlist._ydlp_download(
                                 "https://www.youtube.com/shorts/12345678901",
                                 output_path=output,
@@ -323,7 +364,7 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertIn("Close all Chrome processes", message)
         self.assertIn("--disable-features=LockProfileCookieDatabase", message)
         self.assertIn("Netscape format", message)
-        self.assertIn("youtube_cookies.txt", message)
+        self.assertIn("cookies.txt", message)
         self.assertIn("do not share or publish it", message)
 
     def test_other_sites_use_aria2_when_available(self):

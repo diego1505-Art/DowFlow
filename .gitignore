@@ -32,8 +32,8 @@ downloads/*
 # Browser profiles
 browser_profile/
 youtube_profile/
-youtube_cookies.txt
-youtube.com_cookies.txt
+*_cookies.txt
+cookies.txt
 
 # Logs
 *.log

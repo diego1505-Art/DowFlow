@@ -85,30 +85,52 @@ def _friendly_cookie_error(error: Exception) -> str | None:
             "yt-dlp cannot read Chrome's cookie database because Chrome or Windows has locked it "
             "(yt-dlp issue #7271). Close all Chrome processes and retry, or launch Chrome with "
             "--disable-features=LockProfileCookieDatabase. Alternatively, export cookies in "
-            "Netscape format to youtube_cookies.txt in the project root. This file grants access "
-            "to your account; do not share or publish it."
+            "Netscape format to the matching site cookie file or cookies.txt in the project root. "
+            "This file grants access to your account; do not share or publish it."
         )
     if any(t in message for t in ("sign in to confirm", "not a bot", "login", "log in", "inaccessible")):
         return (
             "The site requires a signed-in session or is blocking access. Sign in to the site in "
-            "Chrome, or provide a valid youtube_cookies.txt file."
+            "Chrome, or provide a valid site-specific Netscape cookie file."
         )
     return None
 
 
-def _resolve_cookie_file() -> str | None:
-    """Find a Netscape cookie export, including the common youtube.com filename."""
-    configured_path = os.environ.get("DOWFLOW_YOUTUBE_COOKIES")
+def _resolve_cookie_file(url: str | None = None) -> str | None:
+    """Find a Netscape cookie export for the requested site, without mixing sessions."""
+    host = (urlparse(url).hostname or "").lower() if url else "youtube.com"
+    if host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com"):
+        site_names = ("youtube_cookies.txt", "youtube.com_cookies.txt")
+        env_name = "DOWFLOW_YOUTUBE_COOKIES"
+    elif host == "instagram.com" or host.endswith(".instagram.com"):
+        site_names = ("instagram_cookies.txt", "instagram.com_cookies.txt")
+        env_name = "DOWFLOW_INSTAGRAM_COOKIES"
+    elif host == "tiktok.com" or host.endswith(".tiktok.com"):
+        site_names = ("tiktok_cookies.txt", "tiktok.com_cookies.txt")
+        env_name = "DOWFLOW_TIKTOK_COOKIES"
+    else:
+        domain = host.removeprefix("www.")
+        site_names = (f"{domain}_cookies.txt",) if domain else ()
+        env_name = None
+
+    configured_path = os.environ.get(env_name) if env_name else None
     if configured_path:
         cookie_path = Path(configured_path).expanduser()
         return str(cookie_path) if cookie_path.is_file() else None
 
-    for cookie_path in (
-        YOUTUBE_COOKIES_FILE,
-        YOUTUBE_COOKIES_FILE.with_name("youtube.com_cookies.txt"),
-    ):
+    candidates = [YOUTUBE_COOKIES_FILE.with_name(name) for name in site_names]
+    for cookie_path in candidates:
         if cookie_path.is_file():
             return str(cookie_path)
+
+    configured_path = os.environ.get("DOWFLOW_COOKIES")
+    if configured_path:
+        cookie_path = Path(configured_path).expanduser()
+        return str(cookie_path) if cookie_path.is_file() else None
+
+    generic_cookie_path = YOUTUBE_COOKIES_FILE.with_name("cookies.txt")
+    if generic_cookie_path.is_file():
+        return str(generic_cookie_path)
     return None
 
 
@@ -940,7 +962,7 @@ def _extract_info_with_cookie_retry(url: str, ydl_opts: dict[str, Any]) -> dict[
     except Exception as e:
         if not _needs_session(e):
             raise
-        cookie_file = _resolve_cookie_file()
+        cookie_file = _resolve_cookie_file(url)
         cookie_source = Path(cookie_file).name if cookie_file else "Chrome browser cookies"
         log.warning(
             "[cookies] Access restricted or session required; retrying with %s",

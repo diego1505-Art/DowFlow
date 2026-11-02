@@ -15,11 +15,36 @@ if errorlevel 1 (
 ) else (
     echo Checking GitHub updates...
     for /f %%H in ('git rev-parse HEAD') do set "DOWFLOW_OLD_HEAD=%%H"
-    git fetch "%DOWFLOW_GITHUB_REPO%" main --quiet
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\git_fetch_animation.ps1" -Repository "%DOWFLOW_GITHUB_REPO%" -Branch main -ProjectRoot "%CD%"
     if errorlevel 1 (
         echo [WARNING] Unable to contact GitHub: project update skipped.
         goto :after_update
     ) else (
+        set "DOWFLOW_REMOTE_HEAD="
+        for /f %%H in ('git rev-parse FETCH_HEAD') do set "DOWFLOW_REMOTE_HEAD=%%H"
+        if /i "!DOWFLOW_OLD_HEAD!"=="!DOWFLOW_REMOTE_HEAD!" (
+            echo Project is up to date.
+            goto :after_update
+        )
+
+        set "DOWFLOW_UPDATE_AUTHOR=Unknown"
+        set "DOWFLOW_UPDATE_SUBJECT=New project update"
+        for /f "tokens=1,*" %%A in ('git show -s --format^=fuller FETCH_HEAD') do (
+            if "%%A"=="Author:" set "DOWFLOW_UPDATE_AUTHOR=%%B"
+            if "%%A"=="Subject:" set "DOWFLOW_UPDATE_SUBJECT=%%B"
+        )
+        echo.
+        echo A new project update is available on GitHub:
+        echo Repository: %DOWFLOW_GITHUB_REPO%
+        echo Commit: !DOWFLOW_REMOTE_HEAD:~0,7!
+        echo Published by: !DOWFLOW_UPDATE_AUTHOR!
+        echo Changes: !DOWFLOW_UPDATE_SUBJECT!
+        choice /c YN /n /m "Would you like to download and install this update? [Y/N] "
+        if errorlevel 2 (
+            echo Project update skipped. Dependencies will still be checked.
+            goto :after_update
+        )
+
         set "DOWFLOW_STASHED=0"
         git diff --quiet HEAD
         if errorlevel 1 (
@@ -47,7 +72,7 @@ if errorlevel 1 (
                 echo [WARNING] The stash is still available with: git stash list
             )
         )
-        echo Project is up to date.
+        echo Project update applied.
     )
 )
 

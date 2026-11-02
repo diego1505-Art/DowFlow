@@ -4,11 +4,16 @@ import tempfile
 import unittest
 from collections import deque
 from pathlib import Path
+from queue import Queue
 from unittest.mock import patch
 
 import playlist
 from rich.console import Console
-from startup import _logs_panel, _print_output_line, _should_show_output_line
+from startup import (
+    _drain_startup_output,
+    _logs_panel,
+    _print_output_line,
+)
 
 
 class FakeYoutubeDL:
@@ -68,23 +73,50 @@ class DownloadStabilityTests(unittest.TestCase):
     def setUp(self):
         FakeYoutubeDL.instances.clear()
 
-    def test_terminal_filter_hides_impersonation_warning_and_unknown_speed(self):
-        self.assertFalse(
-            _should_show_output_line(
-                "WARNING: The extractor specified to use impersonation for this download, "
-                "but no impersonate target is available."
-            )
+    def test_startup_panel_keeps_all_logs_through_network_detection(self):
+        output = Queue()
+        startup_logs = [
+            "21:24:41 | INFO | app | ═════════════════════════════════════════",
+            "21:24:41 | INFO | app | DowFlow — Multi-Site Media Downloader",
+            "21:24:41 | INFO | app | ═════════════════════════════════════════",
+            "21:24:41 | INFO | app | Measuring network speed in background...",
+            "21:24:41 | SUCCESS | app | Server started at http://127.0.0.1:5001",
+            "21:24:41 | INFO | app | Press Ctrl+C to stop",
+            " * Serving Flask app 'app'",
+            " * Debug mode: off",
+            "21:24:41 | INFO | werkzeug | WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.",
+            " * Running on http://127.0.0.1:5001",
+            "21:24:41 | INFO | werkzeug | Press CTRL+C to quit",
+            "Server started at http://127.0.0.1:5001",
+            "Interface opened in the browser.",
+            "21:24:42 | SUCCESS | app | Network speed detected: 9.23 Mbps",
+            "21:24:42 | INFO | playlist | [perf] Connection tier: x8 (18 cores, speed 9.2 Mbps)",
+        ]
+        for line in startup_logs:
+            output.put(line)
+        output.put(None)
+        network_log_kinds = set()
+        log_lines = deque(maxlen=500)
+
+        output_finished = _drain_startup_output(
+            output,
+            log_lines,
+            network_log_kinds,
         )
-        self.assertFalse(
-            _should_show_output_line(
-                "[download] 1.5% of 1.89GiB at  Unknown B/s ETA Unknown"
-            )
-        )
-        self.assertTrue(
-            _should_show_output_line(
-                "[download] 2.0% of 1.89GiB at 3.1MiB/s ETA 00:10"
-            )
-        )
+
+        self.assertTrue(output_finished)
+        self.assertEqual(network_log_kinds, {"network_speed", "connection_tier"})
+        self.assertEqual(list(log_lines), startup_logs)
+
+        panel_console = Console(record=True, width=120)
+        panel_console.print(_logs_panel(log_lines, max_lines=30))
+        panel_rendered = panel_console.export_text()
+        self.assertIn("DowFlow — Multi-Site Media Downloader", panel_rendered)
+        self.assertIn("Serving Flask app", panel_rendered)
+        self.assertIn("Press Ctrl+C to stop", panel_rendered)
+        self.assertIn("Interface opened in the browser.", panel_rendered)
+        self.assertIn("Network speed detected: 9.23 Mbps", panel_rendered)
+        self.assertIn("Connection tier: x8 (18 cores, speed 9.2 Mbps)", panel_rendered)
 
     def test_adaptive_change_line_gets_separated_from_progress(self):
         adaptive_line = (

@@ -24,7 +24,7 @@ from rich.table import Table
 from rich.text import Text
 
 STARTUP_PANEL_HEIGHT = 18
-POST_READY_CAPTURE_SECONDS = 2.0
+NETWORK_LOG_CAPTURE_TIMEOUT_SECONDS = 20.0
 APP_VERSION = "V13"
 _LOG_ENTRY_RE = re.compile(
     r"^(?P<time>\d{2}:\d{2}:\d{2})\s*\|\s*(?P<level>[A-Z]+)\s*\|\s*"
@@ -273,40 +273,24 @@ def _print_output_line(console: Console, line: str) -> None:
     console.print(_format_output_line(line), soft_wrap=True)
 
 
-def _should_show_output_line(line: str) -> bool:
-    plain = Text.from_ansi(line).plain.strip()
-    if plain.startswith(
-        "WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available."
-    ):
-        return False
-    if plain.startswith("[download]") and ("Unknown B/s" in plain or "ETA Unknown" in plain):
-        return False
-
-    log_match = _LOG_ENTRY_RE.match(plain)
-    if not log_match or log_match["logger"].strip() != "werkzeug":
-        return True
-    if log_match["level"] != "INFO":
-        return True
-
-    access_match = _HTTP_ACCESS_RE.match(log_match["message"])
-    if not access_match:
-        return True
-
-    method = access_match["method"]
-    path = access_match["path"].split("?", 1)[0]
-    if method == "GET":
-        return path in {"/", "/video", "/music", "/film", "/anime", "/image"}
-    if method == "POST":
-        return path in {
-            "/api/music/download",
-            "/api/music/search",
-            "/download",
-            "/download-async",
-        }
-    return False
+def _network_detection_log_kind(line: str) -> str | None:
+    match = _LOG_ENTRY_RE.match(Text.from_ansi(line).plain.strip())
+    if not match:
+        return None
+    logger = match["logger"].strip()
+    message = match["message"]
+    if logger == "app" and message.startswith(("Network speed detected:", "Network speed unavailable")):
+        return "network_speed"
+    if logger == "playlist" and message.startswith("[perf] Connection tier:"):
+        return "connection_tier"
+    return None
 
 
-def _drain_output(output: Queue[str | None], lines: deque[str]) -> bool:
+def _drain_startup_output(
+    output: Queue[str | None],
+    log_lines: deque[str],
+    network_log_kinds: set[str],
+) -> bool:
     finished = False
     while True:
         try:
@@ -315,14 +299,17 @@ def _drain_output(output: Queue[str | None], lines: deque[str]) -> bool:
             return finished
         if item is None:
             finished = True
-        elif _should_show_output_line(item):
-            lines.append(item)
+            continue
+        log_kind = _network_detection_log_kind(item)
+        if log_kind:
+            network_log_kinds.add(log_kind)
+        log_lines.append(item)
 
 
 def _logs_panel(lines: deque[str], max_lines: int) -> Panel:
     visible_lines = list(lines)[-max_lines:]
     if not visible_lines:
-        visible_lines = ["Waiting for server logs..."]
+        visible_lines = ["Waiting for startup logs..."]
     content_lines: list[Text] = []
     for line in visible_lines:
         if _is_adaptive_change_line(line):
@@ -386,7 +373,8 @@ def main() -> int:
     output_finished = False
     exit_code = 1
     version_text = ""
-    ready_since: float | None = None
+    network_log_kinds: set[str] = set()
+    network_log_deadline: float | None = None
     log_lines: deque[str] = deque(["Starting DowFlow server..."], maxlen=500)
     layout = Layout()
     layout.split_column(
@@ -397,12 +385,16 @@ def main() -> int:
     try:
         with Live(layout, console=console, refresh_per_second=8, transient=False):
             while True:
-                output_finished = _drain_output(output, log_lines) or output_finished
+                output_finished = _drain_startup_output(
+                    output,
+                    log_lines,
+                    network_log_kinds,
+                ) or output_finished
 
                 if not ready and failure is None:
                     if process is not None and _port_is_open(probe_host, port):
                         ready = True
-                        ready_since = time.monotonic()
+                        network_log_deadline = time.monotonic() + NETWORK_LOG_CAPTURE_TIMEOUT_SECONDS
                         version_text = _startup_version_text()
                         log_lines.append(f"Server started at {url}")
                         try:
@@ -428,10 +420,35 @@ def main() -> int:
                             process.wait()
                     if output_reader is not None:
                         output_reader.join(timeout=2)
-                    output_finished = _drain_output(output, log_lines) or output_finished
+                    output_finished = _drain_startup_output(
+                        output,
+                        log_lines,
+                        network_log_kinds,
+                    ) or output_finished
                     log_lines.append(failure)
                     log_lines.append("See the logs folder for details.")
                     _update_dashboard(layout, console, frame_number, log_lines, failed=True)
+                    break
+
+                if ready and process is not None and process.poll() is not None:
+                    if output_reader is not None:
+                        output_reader.join(timeout=2)
+                    output_finished = _drain_startup_output(
+                        output,
+                        log_lines,
+                        network_log_kinds,
+                    ) or output_finished
+                    exit_code = process.returncode or 0
+                    log_lines.append(f"Server process exited with code {exit_code}.")
+                    _update_dashboard(
+                        layout,
+                        console,
+                        frame_number,
+                        log_lines,
+                        complete=exit_code == 0,
+                        failed=exit_code != 0,
+                        version_text=version_text,
+                    )
                     break
 
                 _update_dashboard(
@@ -442,9 +459,10 @@ def main() -> int:
                     complete=ready,
                     version_text=version_text,
                 )
-                if ready and ready_since is not None and time.monotonic() - ready_since >= POST_READY_CAPTURE_SECONDS:
+                if ready and network_log_kinds == {"network_speed", "connection_tier"}:
                     break
-
+                if ready and network_log_deadline is not None and time.monotonic() >= network_log_deadline:
+                    break
                 frame_number += 1
                 time.sleep(0.125)
 
@@ -456,7 +474,7 @@ def main() -> int:
                     continue
                 if line is None:
                     output_finished = True
-                elif _should_show_output_line(line):
+                else:
                     _print_output_line(console, line)
             exit_code = process.wait()
     except KeyboardInterrupt:

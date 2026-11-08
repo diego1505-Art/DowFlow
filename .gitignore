@@ -11,6 +11,7 @@ env/
 # Environment and secrets
 .env
 .env.*
+config.json
 
 # IDE settings
 .vscode/
@@ -34,6 +35,11 @@ browser_profile/
 youtube_profile/
 *_cookies.txt
 cookies.txt
+bin/
+portable_data/
+!portable_data/
+portable_data/*
+!portable_data/config.json
 
 # Logs
 *.log
@@ -44,5 +50,6 @@ dowflow.db
 *.db-wal
 *.db-shm
 dist/
+build/
 build-output/
 build-work/

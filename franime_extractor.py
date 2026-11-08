@@ -7,7 +7,7 @@ import re, os, shutil, tempfile, time, random
 from pathlib import Path
 from typing import Any
 
-from config import BROWSER_HEADLESS, BROWSER_PROFILE_DIR, PROXIES
+from config import BROWSER_HEADLESS, BROWSER_PROFILE_DIR, PROXIES, SUBPROCESS_CREATION_FLAGS
 from logger import get_logger
 from utils import _resolve_ffmpeg_dir, find_chrome_binary, has_ffmpeg, yt_dlp_runtime_options
 
@@ -698,7 +698,12 @@ def _download_stream(stream_url: str, player_name: str, page_url: str,
                 
                 # 1. Check whether this is a readable video.
                 probe_cmd = [ffprobe_exe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filepath]
-                probe_res = subprocess.run(probe_cmd, capture_output=True, text=True)
+                probe_res = subprocess.run(
+                    probe_cmd,
+                    capture_output=True,
+                    text=True,
+                    creationflags=SUBPROCESS_CREATION_FLAGS,
+                )
                 
                 is_valid = False
                 try:
@@ -716,7 +721,11 @@ def _download_stream(stream_url: str, player_name: str, page_url: str,
                     fixed_path = filepath.replace(".mp4", "_fixed.mp4")
                     # Remux the file to repair its container.
                     fix_cmd = [ffmpeg_exe, "-y", "-i", filepath, "-c", "copy", "-map", "0:v", "-map", "0:a?", fixed_path]
-                    fix_res = subprocess.run(fix_cmd, capture_output=True)
+                    fix_res = subprocess.run(
+                        fix_cmd,
+                        capture_output=True,
+                        creationflags=SUBPROCESS_CREATION_FLAGS,
+                    )
                     
                     if fix_res.returncode == 0 and os.path.exists(fixed_path) and os.path.getsize(fixed_path) > 1000000:
                         os.remove(filepath)

@@ -104,13 +104,18 @@ class _FileFormatter(logging.Formatter):
 
 
 class _ConsoleAccessFilter(logging.Filter):
-    _ACCESS_LINE = re.compile(
-        r'^.+ - - \[[^\]]+\] "[A-Z]+ .+ HTTP/[\d.]+" \d{3} -$'
+    """Hide noisy HTTP access lines (GET/POST/…) from the console."""
+
+    _ANSI = re.compile(r"\033\[[0-9;]*m")
+    _ACCESS = re.compile(
+        r'^.+ - - \[[^\]]+\] "[A-Z]+ .+ HTTP/[\d.]+" \d{3} \S+\s*$'
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.name == "werkzeug" and record.levelno == logging.INFO:
-            return self._ACCESS_LINE.match(record.getMessage()) is None
+            message = self._ANSI.sub("", record.getMessage())
+            if self._ACCESS.match(message):
+                return False
         return True
 
 
@@ -145,7 +150,7 @@ def _configure() -> None:
                 _sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
             )
         except Exception:
-            console_stream = _sys.stdout
+            console_stream = _sys.stdout or _sys.stderr or _io.StringIO()
         console = logging.StreamHandler(console_stream)
         console.setLevel(logging.DEBUG if debug_env else logging.INFO)
         console.setFormatter(_ColorFormatter(use_color=True))

@@ -6,6 +6,7 @@
     <title>DowFlow Music - Explore</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='music.css') }}?v=20261101a" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}" />
   </head>
   <body data-page="explore" oncontextmenu="return false">
     <div class="app-shell">
@@ -25,6 +26,7 @@
         <nav class="menu sidebar-menu-extra">
           <a class="menu-item" href="{{ url_for('index') }}">← DowFlow menu</a>
         </nav>
+        {% include "export_controls.html" %}
         <section class="sidebar-card sidebar-card-photo">
           <p class="eyebrow" id="explore-sidebar-eyebrow">Search</p>
           <h2 id="explore-sidebar-title">Explore your library</h2>
@@ -155,5 +157,6 @@
 
     <audio id="audio-player" preload="metadata" crossorigin="anonymous"></audio>
     <script src="{{ url_for('static', filename='music.js') }}?v=20261101a"></script>
+    <script src="{{ url_for('static', filename='export.js') }}"></script>
   </body>
 </html>

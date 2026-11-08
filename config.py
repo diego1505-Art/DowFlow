@@ -1,8 +1,164 @@
+import json
+import hashlib
 import os
+import shutil
+import sys
+import subprocess
+import threading
 from pathlib import Path
+from typing import Literal, overload
 
-BASE_DIR = Path(__file__).resolve().parent
+IS_FROZEN = bool(getattr(sys, "frozen", False))
+SOURCE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(sys.executable).resolve().parent if IS_FROZEN else SOURCE_DIR
+BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", SOURCE_DIR))
 DOWNLOAD_FOLDER = BASE_DIR / "downloads"
+CONFIG_FILE = BASE_DIR / "config.json"
+APP_SCOPE_FILE = BASE_DIR / "app_scope.json"
+BIN_FOLDER = BASE_DIR / "bin"
+SUBPROCESS_CREATION_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+_CONFIG_LOCK = threading.RLock()
+
+
+def get_runtime_build_id() -> str:
+    """Fingerprint the files that determine the running source server."""
+    if IS_FROZEN:
+        build_files = (Path(sys.executable).resolve(),)
+    else:
+        build_files = tuple(
+            SOURCE_DIR / name for name in ("app.py", "startup.py", "playlist.py", "config.py")
+        )
+    stamps = []
+    for path in build_files:
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        stamps.append(f"{path.name}:{stat.st_mtime_ns}:{stat.st_size}")
+    return hashlib.sha256("|".join(stamps).encode("utf-8")).hexdigest()[:16]
+
+
+class DownloadPathNotConfigured(RuntimeError):
+    """Raised when a frozen app has no user-selected download folder."""
+
+
+def _copy_missing(source: Path, destination: Path) -> None:
+    if source.is_dir():
+        destination.mkdir(parents=True, exist_ok=True)
+        for child in source.iterdir():
+            _copy_missing(child, destination / child.name)
+    elif source.is_file() and not destination.exists():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def initialize_portable_data() -> None:
+    """Extract bundled mutable data beside a one-file executable, once."""
+    if not IS_FROZEN:
+        return
+
+    bundled_data = BUNDLE_DIR / "portable_data"
+    if bundled_data.is_dir():
+        for item in bundled_data.iterdir():
+            _copy_missing(item, BASE_DIR / item.name)
+
+    saved_path = _saved_download_path()
+    if saved_path is not None and saved_path.is_dir():
+        configure_runtime_paths(saved_path)
+
+
+def _saved_download_path() -> Path | None:
+    try:
+        with CONFIG_FILE.open("r", encoding="utf-8") as handle:
+            value = json.load(handle).get("download_path")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return Path(value).expanduser()
+
+
+@overload
+def get_download_path(*, required: Literal[True] = True) -> Path: ...
+
+
+@overload
+def get_download_path(*, required: Literal[False]) -> Path | None: ...
+
+
+def get_download_path(*, required: bool = True) -> Path | None:
+    """Return the configured download folder, or the development default."""
+    with _CONFIG_LOCK:
+        saved_path = _saved_download_path()
+        if saved_path is not None:
+            return saved_path
+        if IS_FROZEN:
+            if required:
+                raise DownloadPathNotConfigured(
+                    "Choose a download folder before using DowFlow."
+                )
+            return None
+        return DOWNLOAD_FOLDER
+
+
+def get_bin_folder() -> Path:
+    """Return the tools folder inside the portable media root when frozen."""
+    if IS_FROZEN:
+        return (_saved_download_path() or DOWNLOAD_FOLDER) / "bin"
+    return BIN_FOLDER
+
+
+def configure_runtime_paths(download_path: str | Path | None = None) -> Path:
+    """Point native tools and Playwright at the selected media root."""
+    if download_path is None:
+        download_path = get_download_path(required=False)
+    bin_folder = (Path(download_path) if download_path else BASE_DIR) / "bin"
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bin_folder / "ms-playwright")
+    current_entries = os.environ.get("PATH", "").split(os.pathsep)
+    if str(bin_folder) not in current_entries:
+        os.environ["PATH"] = str(bin_folder) + os.pathsep + os.environ.get("PATH", "")
+    return bin_folder
+
+
+def set_download_path(path: str | Path) -> Path:
+    """Persist and create the selected download folder."""
+    selected_path = Path(path).expanduser().resolve()
+    if not selected_path.is_dir():
+        raise ValueError("The selected download folder does not exist.")
+
+    with _CONFIG_LOCK:
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        temporary_file = CONFIG_FILE.with_suffix(".json.tmp")
+        temporary_file.write_text(
+            json.dumps({"download_path": str(selected_path)}, indent=2),
+            encoding="utf-8",
+        )
+        temporary_file.replace(CONFIG_FILE)
+        if IS_FROZEN:
+            configure_runtime_paths(selected_path)
+
+    return selected_path
+
+
+def has_configured_download_path() -> bool:
+    saved_path = _saved_download_path()
+    return (saved_path is not None and saved_path.is_dir()) or not IS_FROZEN
+
+
+initialize_portable_data()
+
+
+def get_app_scope() -> str:
+    if not IS_FROZEN:
+        return "all"
+    try:
+        scope = json.loads(APP_SCOPE_FILE.read_text(encoding="utf-8")).get("scope")
+    except (OSError, ValueError, AttributeError):
+        return "all"
+    return scope if scope in {"all", "video", "music", "film", "anime", "image"} else "all"
+
+
+APP_SCOPE = get_app_scope()
 
 # FFmpeg configuration
 def _winget_ffmpeg_bins() -> list[Path]:
@@ -10,7 +166,11 @@ def _winget_ffmpeg_bins() -> list[Path]:
     return sorted(root.glob("Gyan.FFmpeg*/ffmpeg-*/bin"), reverse=True)
 
 
-FFMPEG_FALLBACK_DIRS = _winget_ffmpeg_bins()
+def get_ffmpeg_fallback_dirs() -> list[Path]:
+    return [get_bin_folder(), *_winget_ffmpeg_bins()]
+
+
+FFMPEG_FALLBACK_DIRS = get_ffmpeg_fallback_dirs()
 
 # Media settings
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mkv", ".m4v", ".mov", ".avi", ".flv", ".wmv", ".ts", ".m2ts", ".3gp", ".ogv"}

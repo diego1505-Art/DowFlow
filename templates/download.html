@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DowFlow - Multi-Site Downloader</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
     <style>
         :root {
             --bg: #f6efe5;
@@ -137,6 +138,8 @@
         .topbar-right {
             display: flex;
             align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
             gap: 12px;
         }
 
@@ -1035,9 +1038,60 @@
 
         .local-picker {
             display: flex;
+            align-items: flex-start;
             flex-wrap: wrap;
             gap: 10px;
             margin-top: 12px;
+        }
+
+        .folder-menu {
+            position: relative;
+        }
+
+        .folder-menu-toggle {
+            width: 48px;
+            min-height: 48px;
+            padding: 0;
+            font-size: 1.35rem;
+        }
+
+        .folder-menu-popover {
+            position: absolute;
+            z-index: 20;
+            top: calc(100% + 6px);
+            right: 0;
+            display: none;
+            min-width: 230px;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 12px;
+            background: rgba(18, 18, 18, 0.96);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38);
+        }
+
+        .folder-menu:hover .folder-menu-popover,
+        .folder-menu:focus-within .folder-menu-popover {
+            display: block;
+        }
+
+        .folder-menu-popover button {
+            width: 100%;
+            justify-content: flex-start;
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        .download-folder-path {
+            display: block;
+            margin-top: 8px;
+            color: rgba(255, 255, 255, 0.62);
+            font-size: 0.78rem;
+            overflow-wrap: anywhere;
+        }
+
+        .downloaded-video-select {
+            width: 100%;
+            margin-top: 8px;
         }
 
         .local-file-name {
@@ -1169,6 +1223,7 @@
 
                 <div class="topbar-right">
                     <a href="/" style="padding:9px 16px;border-radius:999px;text-decoration:none;font-size:0.86rem;font-weight:600;color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12)">← Menu</a>
+                    {% include "export_controls.html" %}
                     <div class="ffmpeg-status">
                         <span class="dot{% if has_ffmpeg %} online{% endif %}" id="ffmpegDot"></span>
                         <span id="ffmpegText">FFmpeg: {% if has_ffmpeg %}OK{% else %}not installed{% endif %}</span>
@@ -1221,8 +1276,19 @@
                         <div class="local-picker">
                             <button class="btn btn-secondary" type="button" id="pickLocalFile">Choose a local video</button>
                             <input id="localVideoFile" type="file" accept="video/*,audio/*,.mkv,.m4v,.avi,.mov,.webm" hidden>
+                            <button class="btn btn-secondary" type="button" id="chooseDownloadedVideo">Choose from downloads</button>
+                            <div class="folder-menu">
+                                <button class="btn btn-secondary folder-menu-toggle" type="button" id="folderMenuToggle" aria-label="Download folder settings" aria-haspopup="true" title="Download folder settings">+</button>
+                                <div class="folder-menu-popover" role="menu">
+                                    <button class="btn btn-secondary" type="button" id="chooseDownloadFolder" role="menuitem">Choose download folder</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="local-file-name" id="localFileName">No local file selected.</div>
+                        <span class="download-folder-path" id="downloadFolderPath">Loading download folder...</span>
+                        <select class="format-select downloaded-video-select" id="downloadedVideoSelect" aria-label="Downloaded videos" hidden>
+                            <option value="">Choose a downloaded video</option>
+                        </select>
 
                         <label class="field-label">Download type</label>
                         <div class="download-type-selector">
@@ -1478,6 +1544,10 @@ https://example.com/video..."
         const pickLocalFile = document.getElementById("pickLocalFile");
         const localVideoFile = document.getElementById("localVideoFile");
         const localFileName = document.getElementById("localFileName");
+        const chooseDownloadFolder = document.getElementById("chooseDownloadFolder");
+        const downloadFolderPath = document.getElementById("downloadFolderPath");
+        const chooseDownloadedVideo = document.getElementById("chooseDownloadedVideo");
+        const downloadedVideoSelect = document.getElementById("downloadedVideoSelect");
         const openBatchBtn = document.getElementById("openBatchBtn");
         const batchModal = document.getElementById("batchModal");
         const batchDialog = document.getElementById("batchDialog");
@@ -1513,6 +1583,7 @@ https://example.com/video..."
         let currentAudioFormat = "mp3";
         let currentLanguage = "";
         let currentLocalObjectUrl = null;
+        let downloadedVideos = [];
         let currentUrlOptionsProfile = null;
         let urlOptionsLoadedFor = "";
         let subtitleTrackState = { tracks: [], activeIndex: -1 };
@@ -1539,6 +1610,61 @@ https://example.com/video..."
                     ffmpegDot.classList.remove("online");
                     ffmpegText.textContent = "Server: offline";
                 });
+        }
+
+        async function refreshDownloadFolder() {
+            try {
+                const response = await fetch("/api/download-folder");
+                const data = await response.json();
+                downloadFolderPath.textContent = data.path
+                    ? "Download folder: " + data.path
+                    : "Choose a download folder to continue.";
+            } catch {
+                downloadFolderPath.textContent = "Download folder unavailable.";
+            }
+        }
+
+        async function selectDownloadFolder() {
+            chooseDownloadFolder.disabled = true;
+            try {
+                const response = await fetch("/api/download-folder/select", { method: "POST" });
+                const data = await response.json();
+                if (data.success) {
+                    downloadFolderPath.textContent = "Download folder: " + data.path;
+                    downloadedVideoSelect.hidden = true;
+                    downloadedVideos = [];
+                    downloadedVideoSelect.replaceChildren(new Option("Choose a downloaded video", ""));
+                } else if (data.error) {
+                    updateStatus("Unable to select folder: " + data.error, "error");
+                }
+            } catch {
+                updateStatus("Unable to open the folder picker.", "error");
+            } finally {
+                chooseDownloadFolder.disabled = false;
+            }
+        }
+
+        async function showDownloadedVideos() {
+            try {
+                const response = await fetch("/api/local-videos");
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    updateStatus(data.error || "Unable to read downloaded videos.", "error");
+                    return;
+                }
+
+                downloadedVideos = data.items || [];
+                downloadedVideoSelect.replaceChildren(new Option("Choose a downloaded video", ""));
+                downloadedVideos.forEach((video, index) => {
+                    downloadedVideoSelect.add(new Option(video.relative_path, String(index)));
+                });
+                downloadedVideoSelect.hidden = false;
+                if (!downloadedVideos.length) {
+                    updateStatus("No downloaded videos in this folder yet.", "info");
+                }
+            } catch {
+                updateStatus("Unable to read downloaded videos.", "error");
+            }
         }
 
         function formatSpeed(bytesPerSec) {
@@ -2313,6 +2439,15 @@ https://example.com/video..."
         }
 
         pickLocalFile.addEventListener("click", () => localVideoFile.click());
+        chooseDownloadFolder.addEventListener("click", selectDownloadFolder);
+        chooseDownloadedVideo.addEventListener("click", showDownloadedVideos);
+        downloadedVideoSelect.addEventListener("change", () => {
+            const video = downloadedVideos[Number(downloadedVideoSelect.value)];
+            if (video) {
+                loadVideo(video.file_url, video.filename, "LOCAL", video.relative_path);
+            }
+        });
+        void refreshDownloadFolder();
         openBatchBtn.addEventListener("click", () => setBatchModalVisible(true));
         closeBatchBtn.addEventListener("click", () => setBatchModalVisible(false));
         importBatchFileBtn.addEventListener("click", () => batchFileInput.click());
@@ -2464,5 +2599,6 @@ https://example.com/video..."
         buildSpeedBoard();
         checkFFmpeg();
     </script>
+    <script src="{{ url_for('static', filename='export.js') }}"></script>
 </body>
 </html>

@@ -9,10 +9,20 @@ from unittest.mock import patch
 
 import playlist
 from rich.console import Console
+from rich.layout import Layout
 from startup import (
     _drain_startup_output,
+    _format_file_log_line,
+    _is_dowflow_server,
+    _is_redundant_server_line,
     _logs_panel,
+    _next_available_port,
     _print_output_line,
+    _read_appended_server_logs,
+    _read_appended_runtime_logs,
+    _read_existing_server_logs,
+    _startup_capture_complete,
+    _stream_output,
 )
 
 
@@ -73,6 +83,192 @@ class DownloadStabilityTests(unittest.TestCase):
     def setUp(self):
         FakeYoutubeDL.instances.clear()
 
+    def test_local_console_stream_prints_server_output(self):
+        output = Queue()
+        output.put("21:24:41 | INFO | app | Server started")
+        output.put(None)
+        console = Console(record=True, width=120)
+
+        _stream_output(console, output)
+
+        self.assertIn("Server started", console.export_text())
+
+    def test_yt_dlp_progress_hook_logs_percent_speed_and_eta(self):
+        hook = playlist._make_download_progress_log_hook()
+        with patch.object(playlist.log, "info") as log_info:
+            hook(
+                {
+                    "status": "downloading",
+                    "_percent_str": " 0.7%",
+                    "_total_bytes_str": "1.45GiB",
+                    "_speed_str": "5.04MiB/s",
+                    "_eta_str": "04:53",
+                }
+            )
+
+        log_info.assert_called_once_with(
+            "%s", "[download] 0.7% of 1.45GiB at 5.04MiB/s ETA 04:53"
+        )
+
+    def test_download_logs_one_final_success_with_id_and_collision_note(self):
+        with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL), patch.object(
+            playlist, "download_start", return_value=164
+        ), patch.object(playlist, "download_finish"), patch.object(
+            playlist.log, "success"
+        ) as log_success, tempfile.TemporaryDirectory() as output:
+            result = playlist.download_media(
+                "https://www.youtube.com/shorts/12345678901",
+                output_path=output,
+                quality="720p",
+                adaptive_quality=False,
+            )
+
+        log_success.assert_called_once_with(
+            "Download #%d succeeded%s — %s",
+            164,
+            "",
+            result["filename"],
+        )
+
+    def test_existing_dowflow_server_is_detected(self):
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                import json
+
+                return json.dumps(
+                    {"ready": True, "service": "DowFlow", "build_id": "current-build"}
+                ).encode("utf-8")
+
+        with patch("startup.urlopen", return_value=FakeResponse()), patch(
+            "config.get_runtime_build_id", return_value="current-build"
+        ):
+            self.assertTrue(_is_dowflow_server("127.0.0.1", 5001))
+
+    def test_dowflow_server_with_an_older_build_is_not_reused(self):
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"ready":true,"service":"DowFlow","build_id":"old-build"}'
+
+        with patch("startup.urlopen", return_value=FakeResponse()), patch(
+            "config.get_runtime_build_id", return_value="current-build"
+        ):
+            self.assertFalse(_is_dowflow_server("127.0.0.1", 5001))
+
+    def test_non_dowflow_service_is_not_reused(self):
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"ready":true,"service":"Other"}'
+
+        with patch("startup.urlopen", return_value=FakeResponse()):
+            self.assertFalse(_is_dowflow_server("127.0.0.1", 5001))
+
+    def test_next_port_finder_skips_occupied_ports(self):
+        with patch("startup._port_is_open", side_effect=[True, True, False]) as check_port:
+            self.assertEqual(_next_available_port("127.0.0.1", 5001), 5004)
+
+        self.assertEqual(check_port.call_count, 3)
+
+    def test_server_http_access_logs_are_filtered(self):
+        get_line = (
+            '22:27:38 | INFO | werkzeug | 127.0.0.1 - - [05/Nov/2026 22:27:38] '
+            '"GET /static/export.css HTTP/1.1" 304 -'
+        )
+        get_line_ansi = (
+            '22:27:38 | INFO | werkzeug | 127.0.0.1 - - [05/Nov/2026 22:27:38] '
+            '"\033[36mGET /static/export.css HTTP/1.1\033[0m" 304 -'
+        )
+        post_line = (
+            '22:28:00 | INFO | werkzeug | 127.0.0.1 - - [05/Nov/2026 22:28:00] '
+            '"POST /download-async HTTP/1.1" 200 -'
+        )
+
+        self.assertTrue(_is_redundant_server_line(get_line))
+        self.assertTrue(_is_redundant_server_line(get_line_ansi))
+        self.assertTrue(_is_redundant_server_line(post_line))
+
+    def test_existing_server_logs_are_recovered_and_tailed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            log_path = Path(temporary) / "dowflow.log"
+            startup_log = (
+                "2026-11-04 23:03:19 | SUCCESS | app              | 100 | 1 | "
+                "Server started at http://127.0.0.1:5001\n"
+            )
+            network_log = (
+                "2026-11-04 23:03:20 | INFO    | playlist         | 100 | 1 | "
+                "[perf] Connection tier: x16\n"
+            )
+            log_path.write_text(
+                "2026-11-04 23:03:18 | INFO    | app              | 100 | 1 | "
+                "DowFlow — Multi-Site Media Downloader\n"
+                + startup_log
+                + "2026-11-04 23:03:19 | WARNING | werkzeug         | 100 | 1 | "
+                "WARNING: This is a development server. Do not use it in a production deployment.\n"
+                + "2026-11-04 23:03:19 | INFO    | app              | 100 | 1 | "
+                "Press Ctrl+C to stop\n"
+                + "2026-11-04 23:03:19 | INFO    | werkzeug         | 100 | 1 | "
+                "* Running on http://127.0.0.1:5001\n"
+                + "2026-11-04 23:03:19 | INFO    | werkzeug         | 100 | 1 | "
+                "Press CTRL+C to quit\n",
+                encoding="utf-8",
+            )
+
+            existing_lines, offset = _read_existing_server_logs(log_path)
+            self.assertTrue(
+                any("Server started at http://127.0.0.1:5001" in line for line in existing_lines)
+            )
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(network_log)
+
+            appended_lines, _ = _read_appended_server_logs(log_path, offset)
+
+        self.assertEqual(len(existing_lines), 4)
+        self.assertEqual(len(appended_lines), 1)
+        self.assertIn("Connection tier: x16", appended_lines[0])
+        self.assertTrue(any("development server" in line for line in existing_lines))
+        self.assertEqual(sum("Press Ctrl+C to stop" in line for line in existing_lines), 1)
+        self.assertFalse(any("Running on http://" in line for line in existing_lines))
+        self.assertFalse(any("Press CTRL+C to quit" in line for line in existing_lines))
+
+    def test_runtime_log_reader_keeps_download_events(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            log_path = Path(temporary) / "dowflow.log"
+            log_path.write_text("", encoding="utf-8")
+            offset = log_path.stat().st_size
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "2026-11-04 23:20:17 | INFO    | playlist         | 100 | 1 | "
+                    "yt-dlp — Downloaded: sample.mp4\n"
+                )
+
+            lines, _ = _read_appended_runtime_logs(log_path, offset)
+
+        self.assertEqual(len(lines), 1)
+        self.assertIn("yt-dlp — Downloaded: sample.mp4", lines[0])
+
     def test_startup_panel_keeps_all_logs_through_network_detection(self):
         output = Queue()
         startup_logs = [
@@ -87,8 +283,6 @@ class DownloadStabilityTests(unittest.TestCase):
             "21:24:41 | INFO | werkzeug | WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.",
             " * Running on http://127.0.0.1:5001",
             "21:24:41 | INFO | werkzeug | Press CTRL+C to quit",
-            "Server started at http://127.0.0.1:5001",
-            "Interface opened in the browser.",
             "21:24:42 | SUCCESS | app | Network speed detected: 9.23 Mbps",
             "21:24:42 | INFO | playlist | [perf] Connection tier: x8 (18 cores, speed 9.2 Mbps)",
         ]
@@ -96,7 +290,7 @@ class DownloadStabilityTests(unittest.TestCase):
             output.put(line)
         output.put(None)
         network_log_kinds = set()
-        log_lines = deque(maxlen=500)
+        log_lines = deque()
 
         output_finished = _drain_startup_output(
             output,
@@ -106,17 +300,72 @@ class DownloadStabilityTests(unittest.TestCase):
 
         self.assertTrue(output_finished)
         self.assertEqual(network_log_kinds, {"network_speed", "connection_tier"})
-        self.assertEqual(list(log_lines), startup_logs)
+        self.assertNotIn(" * Running on http://127.0.0.1:5001", log_lines)
+        self.assertNotIn("21:24:41 | INFO | werkzeug | Press CTRL+C to quit", log_lines)
+        self.assertEqual(sum("Server started at" in line for line in log_lines), 1)
 
         panel_console = Console(record=True, width=120)
-        panel_console.print(_logs_panel(log_lines, max_lines=30))
+        panel_console.print(_logs_panel(log_lines))
         panel_rendered = panel_console.export_text()
         self.assertIn("DowFlow — Multi-Site Media Downloader", panel_rendered)
         self.assertIn("Serving Flask app", panel_rendered)
         self.assertIn("Press Ctrl+C to stop", panel_rendered)
-        self.assertIn("Interface opened in the browser.", panel_rendered)
+        self.assertNotIn("Running on http://", panel_rendered)
+        self.assertNotIn("Press CTRL+C to quit", panel_rendered)
+        self.assertEqual(panel_rendered.count("http://127.0.0.1:5001"), 1)
         self.assertIn("Network speed detected: 9.23 Mbps", panel_rendered)
         self.assertIn("Connection tier: x8 (18 cores, speed 9.2 Mbps)", panel_rendered)
+
+    def test_live_log_stream_preserves_history_beyond_terminal_height(self):
+        lines = deque(f"download log {index}" for index in range(80))
+        panel_console = Console(record=True, width=100)
+        panel_console.print(_logs_panel(lines))
+
+        rendered = panel_console.export_text()
+        self.assertIn("download log 0", rendered)
+        self.assertIn("download log 79", rendered)
+
+    def test_startup_capture_waits_for_network_logs_only_in_source_mode(self):
+        self.assertFalse(_startup_capture_complete(True, False, set(), 2.0, 20.0))
+        self.assertTrue(
+            _startup_capture_complete(
+                True,
+                False,
+                {"network_speed", "connection_tier"},
+                2.0,
+                20.0,
+            )
+        )
+        self.assertTrue(_startup_capture_complete(True, True, set(), 2.0, 20.0))
+        self.assertTrue(_startup_capture_complete(True, False, set(), 20.0, 20.0))
+
+    def test_startup_uses_one_live_session_for_startup_and_webview(self):
+        import startup as startup_module
+
+        class FakeLive:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        startup_logs = [
+            "21:24:41 | SUCCESS | app | Server started at http://127.0.0.1:5001",
+            "21:24:42 | SUCCESS | app | Network speed detected: 9.23 Mbps",
+            "21:24:42 | INFO | playlist | [perf] Connection tier: x8",
+        ]
+        with patch.object(startup_module, "_ensure_portable_download_folder", return_value=True), patch.object(
+            startup_module, "_port_is_open", return_value=True
+        ), patch.object(startup_module, "_is_dowflow_server", return_value=True), patch.object(
+            startup_module, "_startup_version_text", return_value="DowFlow V13"
+        ), patch.object(startup_module, "_read_existing_server_logs", return_value=(startup_logs, 0)), patch.object(
+            startup_module, "_read_appended_server_logs", return_value=([], 0)
+        ), patch.object(startup_module, "_update_dashboard"), patch.object(
+            startup_module, "_run_webview_session", return_value=0
+        ), patch.object(startup_module, "Live", side_effect=lambda *args, **kwargs: FakeLive()) as live:
+            self.assertEqual(startup_module.main(), 0)
+
+        self.assertEqual(live.call_count, 1)
 
     def test_adaptive_change_line_gets_separated_from_progress(self):
         adaptive_line = (
@@ -127,7 +376,6 @@ class DownloadStabilityTests(unittest.TestCase):
         console.print(
             _logs_panel(
                 deque(["[download] 10% of 1GiB at 2MiB/s ETA 00:30", adaptive_line]),
-                max_lines=10,
             )
         )
         rendered = console.export_text()
@@ -161,6 +409,7 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertEqual(len(FakeYoutubeDL.instances), 1)
         options = FakeYoutubeDL.instances[-1].options
         self.assertNotIn("writesubtitles", options)
+        self.assertTrue(options["noprogress"])
         self.assertEqual(options["external_downloader"], "aria2c")
         self.assertIn("--split=16", options["external_downloader_args"])
         self.assertIn("--gid=00005c0000000000", options["external_downloader_args"])
@@ -608,7 +857,7 @@ class DownloadStabilityTests(unittest.TestCase):
                     quality="best",
                     adaptive_quality=True,
                 )
-                # Disabled: no real-time monitoring.
+                # Disabled: keep logging progress, but omit adaptive monitoring.
                 playlist._ydlp_download(
                     "https://www.youtube.com/watch?v=123",
                     output_path=output,
@@ -616,8 +865,26 @@ class DownloadStabilityTests(unittest.TestCase):
                     adaptive_quality=False,
                 )
 
-        self.assertIn("progress_hooks", FakeYoutubeDL.instances[-2].options)
-        self.assertNotIn("progress_hooks", FakeYoutubeDL.instances[-1].options)
+        enabled_hooks = FakeYoutubeDL.instances[-2].options["progress_hooks"]
+        disabled_hooks = FakeYoutubeDL.instances[-1].options["progress_hooks"]
+        self.assertEqual(len(enabled_hooks), 2)
+        self.assertEqual(len(disabled_hooks), 1)
+        self.assertIn("_make_download_progress_log_hook", disabled_hooks[0].__qualname__)
+
+    def test_async_progress_hook_uses_native_downloader_when_adaptation_is_disabled(self):
+        with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL):
+            with tempfile.TemporaryDirectory() as output:
+                playlist._ydlp_download(
+                    "https://www.youtube.com/shorts/12345678901",
+                    output_path=output,
+                    quality="best",
+                    adaptive_quality=False,
+                    progress_hook=lambda event: None,
+                )
+
+        options = FakeYoutubeDL.instances[-1].options
+        self.assertNotIn("external_downloader", options)
+        self.assertEqual(len(options["progress_hooks"]), 2)
 
 
 if __name__ == "__main__":

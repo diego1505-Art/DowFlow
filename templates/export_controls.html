@@ -1,0 +1,17 @@
+<div class="export-tools" data-export-tools>
+  {% if can_export %}
+  <button class="export-button" type="button" data-export-scope="{{ export_scope }}" title="Build this DowFlow section as a Windows executable">
+    <span aria-hidden="true">⇧</span> Export EXE
+  </button>
+  <span class="export-status" data-export-status role="status" aria-live="polite"></span>
+  <div class="export-progress" data-export-progress hidden>
+    <div class="export-progress-heading">
+      <span data-export-stage>Preparing build</span>
+      <span><strong data-export-percent>1%</strong> · <span data-export-eta>Estimating remaining time…</span></span>
+    </div>
+    <div class="export-progress-track" role="progressbar" aria-label="EXE build progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="1" data-export-track>
+      <div class="export-progress-fill" data-export-fill></div>
+    </div>
+  </div>
+  {% endif %}
+</div>

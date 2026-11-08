@@ -21,7 +21,7 @@ Use DowFlow only for personal purposes and with content you have the right to do
 - Git for automatic project updates.
 - Internet connection.
 
-`start.bat` detects or installs Playwright Chromium, `aria2c` and FFmpeg via WinGet when they are missing. Node.js LTS can provide more YouTube formats.
+`start.bat` detects or installs Playwright Chromium, `aria2c` and FFmpeg via WinGet when they are missing in source mode. Node.js LTS can provide more YouTube formats. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
 
 ## Getting started
 
@@ -41,7 +41,7 @@ On startup, the script:
 6. Creates `.venv` if needed and checks dependencies automatically; dependency updates do not require confirmation.
 7. Checks Playwright, `aria2c` and FFmpeg.
 
-The application is then available at <http://127.0.0.1:5001>.
+The application opens in its native window and serves its local interface at <http://127.0.0.1:5001>.
 
 For a manual installation:
 
@@ -50,8 +50,28 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m playwright install chromium
-python app.py
+python startup.py
 ```
+
+On the first launch of the portable EXE, or when its saved media drive is unavailable, choose a media root when prompted. DowFlow saves this path in `config.json` beside the EXE and reuses it on later launches. The `+` folder control changes it. In a source checkout, the default remains the project's `downloads/` folder. Portable media tools are installed under `<media root>/bin/`; the EXE opens its window while the tools are checked in the background and shows their progress in the loading screen.
+
+## Portable Windows build
+
+Build the one-file, no-console executable from Windows with the project's virtual environment:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-build.txt
+python -m pip install setuptools==42.0.1
+python -m PyInstaller --clean --noconfirm build.spec
+```
+
+Install the pinned `setuptools` version after the build requirements and before starting PyInstaller. This works around the `ModuleNotFoundError: No module named 'jaraco'` compatibility issue seen in some build environments. The build is windowed (`console=False`) and uses `pywebview` with WebView2 instead of launching a browser window. Tkinter is included for the native folder picker.
+
+The source app offers **Export EXE** in the menu and each workspace. If PyInstaller is missing from the Python environment running DowFlow, the first export installs `requirements-build.txt` into that same environment, then builds the EXE. You can also install it manually with `python -m pip install -r requirements-build.txt`. The menu exports all available pages; Video and Music export scoped editions, while a coming-soon category exports that category shell. The native save dialog chooses the EXE name, and output is kept in `dist/`. Export buttons are available only in the source app, not in an already-built executable.
+
+Close DowFlow before building so the included database and its SQLite write-ahead log form a consistent snapshot. The EXE includes the current `dowflow.db`, a blank `config.json` template, and `youtube.com_cookies.txt` when present. On first launch, mutable seed files are extracted beside the EXE only when no local copy exists; later launches never overwrite user files. Choose an existing media root; downloaded files are stored there. The build excludes `downloads/`, the `music/` media folder, the browser profile, FFmpeg, aria2 and Chromium. Those tools are installed or updated in `<media root>/bin/` after the window opens. Cookie exports grant access to personal accounts: an EXE built with `youtube.com_cookies.txt` contains that signed-in session. Do not distribute that EXE; remove the cookie file before building a shareable copy.
 
 ## Diagnostics
 
@@ -100,7 +120,7 @@ Downloads, logs, SQLite databases, browser profiles, Python caches and virtual e
 | --- | --- |
 | `app.py` | Flask server and HTTP routes |
 | `playlist.py` | Video and audio downloads |
-| `music.py` | Music search and library |
+| `music.py` | Music search, downloads and library |
 | `music_dataset.py` | Local catalog interface |
 | `browser_extractor.py` | Browser-based extraction |
 | `url_expanders/` | URL and episode expansion |

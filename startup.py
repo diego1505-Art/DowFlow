@@ -1,19 +1,22 @@
 """DowFlow's animated terminal startup screen and Flask launcher."""
 
 import codecs
+import io
+import json
 import os
 import re
 import socket
 import subprocess
 import sys
 import time
-import webbrowser
 from collections import deque
 from queue import Empty, Queue
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from typing import BinaryIO
+from urllib.request import urlopen
 
+from config import BASE_DIR, SUBPROCESS_CREATION_FLAGS
 from rich.align import Align
 from rich.box import ROUNDED
 from rich.console import Console, Group
@@ -30,11 +33,16 @@ _LOG_ENTRY_RE = re.compile(
     r"^(?P<time>\d{2}:\d{2}:\d{2})\s*\|\s*(?P<level>[A-Z]+)\s*\|\s*"
     r"(?P<logger>[^|]+?)\s*\|\s*(?P<message>.*)$"
 )
+_FILE_LOG_ENTRY_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}\s+(?P<time>\d{2}:\d{2}:\d{2})\s*\|\s*"
+    r"(?P<level>[A-Z]+)\s*\|\s*(?P<logger>[^|]+?)\s*\|\s*\d+\s*\|\s*\d+\s*\|\s*(?P<message>.*)$"
+)
 _HTTP_ACCESS_RE = re.compile(
     r'^(?P<ip>.+?)\s+-\s+-\s+\[(?P<date>[^\]]+)\]\s+"'
     r'(?P<method>[A-Z]+)\s+(?P<path>.*?)\s+HTTP/(?P<version>[\d.]+)"\s+'
     r'(?P<status>\d{3})\s+(?P<size>\S+)$'
 )
+_ANSI_ESCAPE_RE = re.compile(r"\033\[[0-9;]*m")
 _ARIA2_PROGRESS_RE = re.compile(
     r"^\[#(?P<gid>[0-9a-fA-F]+)\s+(?P<downloaded>[^/\s]+)/(?P<total>[^\s(]+)"
     r"\((?P<percent>[\d.]+%)\)\s+CN:(?P<connections>\d+)"
@@ -115,6 +123,33 @@ def _port_is_open(host: str, port: int) -> bool:
         return False
 
 
+def _is_dowflow_server(host: str, port: int) -> bool:
+    """Return True only for a live DowFlow instance running the current build."""
+    try:
+        with urlopen(f"http://{host}:{port}/api/status", timeout=0.5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if not (
+            response.status == 200
+            and isinstance(payload, dict)
+            and payload.get("ready") is True
+            and payload.get("service") == "DowFlow"
+        ):
+            return False
+        from config import get_runtime_build_id
+
+        return payload.get("build_id") == get_runtime_build_id()
+    except (OSError, ValueError, TimeoutError):
+        return False
+
+
+def _next_available_port(host: str, port: int, attempts: int = 20) -> int | None:
+    final_port = min(65535, port + attempts)
+    for candidate in range(port + 1, final_port + 1):
+        if not _port_is_open(host, candidate):
+            return candidate
+    return None
+
+
 def _version_line(command: str) -> str | None:
     try:
         result = subprocess.run(
@@ -125,6 +160,7 @@ def _version_line(command: str) -> str | None:
             errors="replace",
             timeout=2,
             check=False,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -230,6 +266,14 @@ def _format_output_line(line: str) -> Text:
         text.append(log_match["logger"].strip(), style="bold #7dd3fc")
         text.append(" | ", style="bright_black")
 
+        download_match = _YTDLP_PROGRESS_RE.match(message)
+        if download_match:
+            text.append("[download] ", style="bold bright_cyan")
+            text.append(download_match["percent"], style="bold bright_cyan")
+            text.append(" of ", style="dim")
+            text.append(download_match["details"], style="white")
+            return text
+
         access_match = _HTTP_ACCESS_RE.match(message)
         if access_match:
             access = access_match.groupdict()
@@ -273,6 +317,16 @@ def _print_output_line(console: Console, line: str) -> None:
     console.print(_format_output_line(line), soft_wrap=True)
 
 
+def _stream_output(console: Console, output: Queue[str | None]) -> None:
+    while True:
+        line = output.get()
+        if line is None:
+            return
+        if _is_redundant_server_line(line):
+            continue
+        _print_output_line(console, line)
+
+
 def _network_detection_log_kind(line: str) -> str | None:
     match = _LOG_ENTRY_RE.match(Text.from_ansi(line).plain.strip())
     if not match:
@@ -284,6 +338,148 @@ def _network_detection_log_kind(line: str) -> str | None:
     if logger == "playlist" and message.startswith("[perf] Connection tier:"):
         return "connection_tier"
     return None
+
+
+def _is_redundant_server_line(line: str) -> bool:
+    plain = _ANSI_ESCAPE_RE.sub("", Text.from_ansi(line).plain).strip()
+    if plain.startswith("* Running on http://"):
+        return True
+    match = _LOG_ENTRY_RE.match(plain)
+    logger = match["logger"].strip() if match else "werkzeug"
+    message = match["message"].strip() if match else plain
+    if logger != "werkzeug":
+        return False
+    if message.lower().startswith(("* running on http://", "press ctrl+c to quit")):
+        return True
+    return _HTTP_ACCESS_RE.match(message) is not None
+
+
+def _format_file_log_line(line: str) -> str | None:
+    match = _FILE_LOG_ENTRY_RE.match(line.strip())
+    if not match:
+        return None
+    return (
+        f"{match['time']} | {match['level']} | {match['logger'].strip()} | "
+        f"{match['message']}"
+    )
+
+
+def _is_startup_file_log(line: str) -> bool:
+    match = _LOG_ENTRY_RE.match(line)
+    if not match:
+        plain = Text.from_ansi(line).plain.strip()
+        return plain.startswith(("* Serving Flask app", "* Debug mode:"))
+    logger = match["logger"].strip()
+    message = match["message"]
+    if logger == "app":
+        return message.startswith((
+            "DowFlow — Multi-Site Media Downloader",
+            "Measuring network speed",
+            "Server started at ",
+            "Press Ctrl+C to stop",
+            "Network speed detected:",
+            "Network speed unavailable",
+        ))
+    if logger == "playlist":
+        return message.startswith("[perf] Connection tier:")
+    return logger == "werkzeug" and message.startswith((
+        "WARNING: This is a development server",
+        "* Serving Flask app",
+        "* Debug mode:",
+        "* Running on http://",
+        "Press CTRL+C to quit",
+    ))
+
+
+def _read_existing_server_logs(log_path: Path) -> tuple[list[str], int]:
+    try:
+        with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+            file_size = handle.seek(0, os.SEEK_END)
+            start_offset = max(0, file_size - 512 * 1024)
+            handle.seek(start_offset)
+            if start_offset:
+                handle.readline()
+            raw_lines = handle.readlines()
+            offset = handle.tell()
+    except OSError:
+        return [], 0
+
+    formatted = [
+        _format_file_log_line(line) or line.rstrip("\r\n")
+        for line in raw_lines
+    ]
+    start_index = next(
+        (
+            index
+            for index in range(len(formatted) - 1, -1, -1)
+            if (match := _LOG_ENTRY_RE.match(formatted[index]))
+            and match["logger"].strip() == "app"
+            and match["message"].startswith("DowFlow — Multi-Site Media Downloader")
+        ),
+        None,
+    )
+    if start_index is None:
+        start_index = next(
+            (
+                index
+                for index in range(len(formatted) - 1, -1, -1)
+                if (match := _LOG_ENTRY_RE.match(formatted[index]))
+                and match["logger"].strip() == "app"
+                and match["message"].startswith("Server started at ")
+            ),
+            max(0, len(formatted) - 30),
+        )
+    lines = [
+        line for line in formatted[start_index:]
+        if _is_startup_file_log(line) and not _is_redundant_server_line(line)
+    ]
+    return lines, offset
+
+
+def _read_appended_server_logs(log_path: Path, offset: int) -> tuple[list[str], int]:
+    try:
+        with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+            handle.seek(offset)
+            appended = handle.readlines()
+            next_offset = handle.tell()
+    except OSError:
+        return [], offset
+    lines = []
+    for raw_line in appended:
+        line = _format_file_log_line(raw_line) or raw_line.rstrip("\r\n")
+        if _is_startup_file_log(line) and not _is_redundant_server_line(line):
+            lines.append(line)
+    return lines, next_offset
+
+
+def _read_appended_runtime_logs(log_path: Path, offset: int) -> tuple[list[str], int]:
+    try:
+        with log_path.open("r", encoding="utf-8", errors="replace") as handle:
+            if handle.seek(0, os.SEEK_END) < offset:
+                offset = 0
+            handle.seek(offset)
+            appended = handle.readlines()
+            next_offset = handle.tell()
+    except OSError:
+        return [], offset
+    lines = []
+    for raw_line in appended:
+        line = _format_file_log_line(raw_line) or raw_line.rstrip("\r\n")
+        if not _is_redundant_server_line(line):
+            lines.append(line)
+    return lines, next_offset
+
+
+def _stream_existing_server_logs(
+    log_path: Path,
+    offset: int,
+    console: Console,
+    stop_event: Event,
+) -> None:
+    while not stop_event.wait(0.2):
+        appended, offset = _read_appended_runtime_logs(log_path, offset)
+        for line in appended:
+            _print_output_line(console, line)
 
 
 def _drain_startup_output(
@@ -300,14 +496,16 @@ def _drain_startup_output(
         if item is None:
             finished = True
             continue
+        if _is_redundant_server_line(item):
+            continue
         log_kind = _network_detection_log_kind(item)
         if log_kind:
             network_log_kinds.add(log_kind)
         log_lines.append(item)
 
 
-def _logs_panel(lines: deque[str], max_lines: int) -> Panel:
-    visible_lines = list(lines)[-max_lines:]
+def _logs_panel(lines: deque[str]) -> Panel:
+    visible_lines = list(lines)
     if not visible_lines:
         visible_lines = ["Waiting for startup logs..."]
     content_lines: list[Text] = []
@@ -335,12 +533,114 @@ def _update_dashboard(
             height=STARTUP_PANEL_HEIGHT,
         )
     )
-    log_height = max(1, console.size.height - STARTUP_PANEL_HEIGHT - 3)
-    layout["logs"].update(_logs_panel(lines, log_height))
+    layout["logs"].update(_logs_panel(lines))
+
+
+def _startup_capture_complete(
+    ready: bool,
+    frozen: bool,
+    network_log_kinds: set[str],
+    now: float,
+    deadline: float | None,
+) -> bool:
+    if not ready:
+        return False
+    if frozen or network_log_kinds == {"network_speed", "connection_tier"}:
+        return True
+    return deadline is not None and now >= deadline
+
+
+def _ensure_portable_download_folder() -> bool:
+    if not getattr(sys, "frozen", False):
+        return True
+
+    from config import get_download_path, set_download_path
+    from folder_picker import select_download_folder
+
+    current_path = get_download_path(required=False)
+    if current_path is not None and current_path.is_dir():
+        from config import configure_runtime_paths
+
+        configure_runtime_paths(current_path)
+        return True
+    selected = select_download_folder(
+        str(current_path) if current_path and current_path.is_dir() else None
+    )
+    if not selected:
+        return False
+    set_download_path(selected)
+    return True
+
+
+def _run_webview_session(
+    console: Console,
+    url: str,
+    process,
+    output_reader: Thread | None,
+    output: Queue[str | None],
+    existing_server: bool,
+    existing_log_path: Path,
+    existing_log_offset: int | None,
+) -> int:
+    if process is not None and process.poll() is not None:
+        return process.returncode or 0
+
+    output_streamer: Thread | None = None
+    existing_log_streamer: Thread | None = None
+    stream_stop = Event()
+    try:
+        if process is not None and output_reader is not None:
+            output_streamer = Thread(
+                target=_stream_output,
+                args=(console, output),
+                name="dowflow-live-logs",
+                daemon=True,
+            )
+            output_streamer.start()
+        elif existing_server and existing_log_offset is not None:
+            existing_log_streamer = Thread(
+                target=_stream_existing_server_logs,
+                args=(existing_log_path, existing_log_offset, console, stream_stop),
+                name="dowflow-file-logs",
+                daemon=True,
+            )
+            existing_log_streamer.start()
+
+        import webview
+
+        webview.create_window(
+            "DowFlow",
+            url,
+            width=1280,
+            height=860,
+            min_size=(900, 600),
+        )
+        webview.start()
+        return 0
+    except Exception as error:
+        log.error("Could not open the native application window: %s", error, exc_info=True)
+        return 1
+    finally:
+        stream_stop.set()
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        if output_reader is not None:
+            output_reader.join(timeout=2)
+        if output_streamer is not None:
+            output_streamer.join(timeout=2)
+        if existing_log_streamer is not None:
+            existing_log_streamer.join(timeout=2)
 
 
 def main() -> int:
-    console = Console()
+    console = Console(file=sys.stdout or io.StringIO())
+    if not _ensure_portable_download_folder():
+        return 0
     host = os.environ.get("DOWFLOW_HOST", "127.0.0.1")
     port = int(os.environ.get("DOWFLOW_PORT", "5001"))
     probe_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
@@ -350,32 +650,79 @@ def main() -> int:
     output: Queue[str | None] = Queue()
     output_reader: Thread | None = None
     failure = None
+    existing_server = False
+    port_notice: str | None = None
 
     if _port_is_open(probe_host, port):
-        failure = f"Port {port} is already in use."
-    else:
+        if _is_dowflow_server(probe_host, port):
+            existing_server = True
+            port_notice = "Connected to the existing DowFlow server"
+        else:
+            available_port = _next_available_port(probe_host, port)
+            if available_port is None:
+                failure = f"Ports {port} through {min(65535, port + 20)} are already in use."
+            else:
+                stale_notice = (
+                    f"Outdated or busy DowFlow on port {port}; "
+                    f"starting a fresh server at http://{url_host}:{available_port}"
+                )
+                port = available_port
+                url = f"http://{url_host}:{port}"
+                port_notice = stale_notice
+
+    if failure is None and not existing_server:
         try:
+            capture_output = not getattr(sys, "frozen", False)
+            server_args = (
+                [sys.executable, "--server"]
+                if getattr(sys, "frozen", False)
+                else [sys.executable, str(Path(__file__).with_name("app.py"))]
+            )
             process = subprocess.Popen(
-                [sys.executable, str(Path(__file__).with_name("app.py"))],
-                stdout=subprocess.PIPE,
+                server_args,
+                stdout=subprocess.PIPE if capture_output else subprocess.DEVNULL,
                 stderr=subprocess.STDOUT,
                 bufsize=0,
+                creationflags=SUBPROCESS_CREATION_FLAGS,
+                env={**os.environ, "DOWFLOW_PORT": str(port)},
             )
-            assert process.stdout is not None
-            output_reader = Thread(target=_capture_output, args=(process.stdout, output), daemon=True)
-            output_reader.start()
+            if process.stdout is not None:
+                output_reader = Thread(
+                    target=_capture_output,
+                    args=(process.stdout, output),
+                    daemon=True,
+                )
+                output_reader.start()
         except OSError as error:
             failure = f"Could not start Flask: {error}"
 
-    deadline = time.monotonic() + 10
+    startup_timeout = 1800 if getattr(sys, "frozen", False) else 10
+    deadline = time.monotonic() + startup_timeout
     frame_number = 0
-    ready = False
+    ready = existing_server
     output_finished = False
     exit_code = 1
-    version_text = ""
+    version_text = _startup_version_text() if existing_server else ""
     network_log_kinds: set[str] = set()
-    network_log_deadline: float | None = None
-    log_lines: deque[str] = deque(["Starting DowFlow server..."], maxlen=500)
+    network_log_deadline: float | None = (
+        time.monotonic() + NETWORK_LOG_CAPTURE_TIMEOUT_SECONDS
+        if existing_server else None
+    )
+    log_lines: deque[str] = deque(["Starting DowFlow server..."])
+    if port_notice:
+        log_lines.append(port_notice)
+    existing_log_path = BASE_DIR / "logs" / "dowflow.log"
+    existing_log_offset: int | None = None
+    if existing_server:
+        existing_lines, existing_log_offset = _read_existing_server_logs(existing_log_path)
+        log_lines.extend(existing_lines)
+        for line in existing_lines:
+            log_kind = _network_detection_log_kind(line)
+            if log_kind:
+                network_log_kinds.add(log_kind)
+        if not existing_lines:
+            log_lines.append("Waiting for the existing server's startup logs...")
+
     layout = Layout()
     layout.split_column(
         Layout(name="startup", size=STARTUP_PANEL_HEIGHT),
@@ -390,21 +737,22 @@ def main() -> int:
                     log_lines,
                     network_log_kinds,
                 ) or output_finished
+                if existing_server and existing_log_offset is not None:
+                    appended_lines, existing_log_offset = _read_appended_server_logs(
+                        existing_log_path,
+                        existing_log_offset,
+                    )
+                    log_lines.extend(appended_lines)
+                    for line in appended_lines:
+                        log_kind = _network_detection_log_kind(line)
+                        if log_kind:
+                            network_log_kinds.add(log_kind)
 
                 if not ready and failure is None:
                     if process is not None and _port_is_open(probe_host, port):
                         ready = True
                         network_log_deadline = time.monotonic() + NETWORK_LOG_CAPTURE_TIMEOUT_SECONDS
                         version_text = _startup_version_text()
-                        log_lines.append(f"Server started at {url}")
-                        try:
-                            browser_opened = webbrowser.open(url)
-                        except Exception:
-                            browser_opened = False
-                        if browser_opened:
-                            log_lines.append("Interface opened in the browser.")
-                        else:
-                            log_lines.append(f"Open this address in your browser: {url}")
                     elif process is not None and process.poll() is not None:
                         failure = f"The server stopped during startup (code {process.returncode})."
                     elif process is not None and time.monotonic() >= deadline:
@@ -425,8 +773,7 @@ def main() -> int:
                         log_lines,
                         network_log_kinds,
                     ) or output_finished
-                    log_lines.append(failure)
-                    log_lines.append("See the logs folder for details.")
+                    log_lines.extend((failure, "See the logs folder for details."))
                     _update_dashboard(layout, console, frame_number, log_lines, failed=True)
                     break
 
@@ -459,24 +806,28 @@ def main() -> int:
                     complete=ready,
                     version_text=version_text,
                 )
-                if ready and network_log_kinds == {"network_speed", "connection_tier"}:
-                    break
-                if ready and network_log_deadline is not None and time.monotonic() >= network_log_deadline:
+                if _startup_capture_complete(
+                    ready,
+                    getattr(sys, "frozen", False),
+                    network_log_kinds,
+                    time.monotonic(),
+                    network_log_deadline,
+                ):
                     break
                 frame_number += 1
                 time.sleep(0.125)
 
-        if ready and process is not None:
-            while not output_finished or process.poll() is None:
-                try:
-                    line = output.get(timeout=0.1)
-                except Empty:
-                    continue
-                if line is None:
-                    output_finished = True
-                else:
-                    _print_output_line(console, line)
-            exit_code = process.wait()
+        if ready:
+            exit_code = _run_webview_session(
+                console,
+                url,
+                process,
+                output_reader,
+                output,
+                existing_server,
+                existing_log_path,
+                existing_log_offset,
+            )
     except KeyboardInterrupt:
         if process is not None and process.poll() is None:
             process.terminate()
@@ -487,6 +838,14 @@ def main() -> int:
 
     return exit_code
 
-
 if __name__ == "__main__":
-    main()
+    if getattr(sys, "frozen", False) and "--choose-folder" in sys.argv:
+        from folder_picker import main as folder_picker_main
+
+        raise SystemExit(folder_picker_main(sys.argv[2:]))
+    if getattr(sys, "frozen", False) and "--server" in sys.argv:
+        from app import run_server
+
+        run_server()
+    else:
+        main()

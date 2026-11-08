@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import shutil
@@ -18,6 +19,7 @@ from config import (
     LANGUAGES,
     YOUTUBE_COOKIES_FILE,
     CONNECTIONS_OVERRIDE,
+    get_download_path,
     normalize_language,
     detect_language_from_url,
 )
@@ -701,7 +703,7 @@ def _collect_subtitle_sidecars(
 
 def download_media(
     url,
-    output_path="downloads",
+    output_path: str | None = None,
     download_type="video",
     quality="best",
     video_format="mp4",
@@ -737,7 +739,7 @@ def download_media(
     # Detect the language from the URL if none was provided.
     resolved_lang = normalize_language(language) if language else detect_language_from_url(url)
 
-    base_output_path = output_path
+    base_output_path = output_path or str(get_download_path())
     if force_folder:
         target_output_path = os.path.join(base_output_path, force_folder)
     else:
@@ -922,7 +924,13 @@ def download_media(
         metadata=metadata,
     )
     if final_status == "success":
-        log.success("Download #%d succeeded — %s", dl_id, result.get("filename") or filepath or "")
+        renamed = " (renamed to avoid collision)" if result.get("collision_renamed") else ""
+        log.success(
+            "Download #%d succeeded%s — %s",
+            dl_id,
+            renamed,
+            result.get("filename") or filepath or "",
+        )
     elif final_status == "skipped":
         log.warning("Download #%d skipped: %s", dl_id, result.get("reason"))
     else:
@@ -972,6 +980,64 @@ def _extract_info_with_cookie_retry(url: str, ydl_opts: dict[str, Any]) -> dict[
             return ydl.extract_info(url, download=True)
 
 
+def _flush_download_logs() -> None:
+    root = logging.getLogger()
+    for handler in root.handlers:
+        try:
+            handler.flush()
+        except Exception:
+            pass
+
+
+def _make_download_progress_log_hook() -> Callable[[dict[str, Any]], None]:
+    last_logged_at = 0.0
+    last_percent = -1.0
+
+    def hook(data: dict[str, Any]) -> None:
+        nonlocal last_logged_at, last_percent
+        status = data.get("status")
+        if status == "finished":
+            filename = Path(str(data.get("filename") or "")).name
+            if filename:
+                log.info("[download] 100%% — fragment ready: %s", filename)
+            else:
+                log.info("[download] 100%% — fragment ready")
+            _flush_download_logs()
+            return
+        if status != "downloading":
+            return
+
+        percent_text = str(data.get("_percent_str") or "").strip()
+        try:
+            percent = float(percent_text.replace("%", "").strip())
+        except ValueError:
+            percent = last_percent
+        now = time.monotonic()
+        if now - last_logged_at < 0.35 and percent >= last_percent and percent < 100:
+            return
+
+        total = str(data.get("_total_bytes_str") or "").strip()
+        if not total:
+            total_bytes = data.get("total_bytes") or data.get("total_bytes_estimate")
+            if total_bytes:
+                total = f"{total_bytes / (1024 ** 3):.2f}GiB"
+        speed = str(data.get("_speed_str") or "").strip()
+        eta = str(data.get("_eta_str") or "").strip()
+        parts = ["[download]", percent_text or "progressing"]
+        if total:
+            parts.extend(("of", total))
+        if speed:
+            parts.extend(("at", speed))
+        if eta:
+            parts.extend(("ETA", eta))
+        log.info("%s", " ".join(parts))
+        _flush_download_logs()
+        last_logged_at = now
+        last_percent = percent
+
+    return hook
+
+
 def _ydlp_download(
     url,
     output_path="downloads",
@@ -1005,10 +1071,10 @@ def _ydlp_download(
     # yt-dlp's native downloader can parallelize fragments without that limit.
     connection_tier = get_connection_tier()
     monitor_adaptive = bool(adaptive_quality and download_type == "video" and quality == "best")
-    # yt-dlp forwards aria2c hooks only after a file finishes, so they cannot
-    # provide useful measurements for downgrading during a Turbo download.
+    # aria2c progress hooks are delayed until completion, so async UI jobs use
+    # yt-dlp's native downloader to keep live progress and terminal logs flowing.
     aria2_connections = min(connection_tier, 16)
-    use_turbo = bool(aria2c_path) and not monitor_adaptive
+    use_turbo = bool(aria2c_path) and not monitor_adaptive and progress_hook is None
 
     def build_ydl_opts(quality_key: str, force_native: bool = False) -> dict[str, Any]:
         """Build yt-dlp options for a quality level, rebuilding them on each retry."""
@@ -1035,6 +1101,7 @@ def _ydlp_download(
             "format": format_str,
             "outtmpl": os.path.join(output_path, "%(title).200s.%(ext)s").replace("\\", "/"),
             "quiet": True, # Keep output quiet for all sites.
+            "noprogress": True,
             "no_warnings": False,
             "postprocessors": postprocessors,
             "prefer_ffmpeg": has_ffmpeg,
@@ -1134,7 +1201,9 @@ def _ydlp_download(
         force_native = False
         while True:
             ydl_opts = build_ydl_opts(current_quality, force_native=force_native)
-            hooks: list[Callable[[dict[str, Any]], None]] = []
+            hooks: list[Callable[[dict[str, Any]], None]] = [
+                _make_download_progress_log_hook()
+            ]
             if progress_hook is not None:
                 hooks.append(progress_hook)
             if monitor_adaptive:
@@ -1170,11 +1239,11 @@ def _ydlp_download(
                 raise
 
         raw_title = info.get('title') or "download"
-        log.success("yt-dlp — Downloaded: %s", raw_title)
 
         created_files = _collect_created_files(output_path, before_files)
 
         original_file = _resolve_downloaded_file(info, created_files, output_path, download_type)
+        collision_renamed = False
         if original_file and os.path.isfile(original_file):
             dir_name = os.path.dirname(original_file)
             base_name = os.path.basename(original_file)
@@ -1190,10 +1259,7 @@ def _ydlp_download(
                     while True:
                         alt = os.path.join(dir_name, f"{clean_name}-{collision_counter}{extension}")
                         if not os.path.exists(alt):
-                            log.warning(
-                                "[playlist] Collision detected with %s; renaming to %s",
-                                os.path.basename(new_file), os.path.basename(alt),
-                            )
+                            collision_renamed = True
                             new_file = alt
                             break
                         collision_counter += 1
@@ -1210,6 +1276,7 @@ def _ydlp_download(
             "title": info.get("title") if isinstance(info, dict) else "download",
             "filepath": selected_file,
             "filename": os.path.basename(selected_file) if selected_file else None,
+            "collision_renamed": collision_renamed,
             "subtitle_files": subtitle_paths,
             "quality_requested": requested_quality,
             "quality_used": current_quality,

@@ -20,7 +20,7 @@ from urllib.parse import quote, urlparse
 
 import requests
 
-from config import AUDIO_EXTENSIONS, DOWNLOAD_FOLDER
+from config import AUDIO_EXTENSIONS, DOWNLOAD_FOLDER, get_download_path
 from logger import get_logger
 from music_dataset import get_dataset
 from utils import yt_dlp_runtime_options
@@ -28,7 +28,14 @@ from utils import yt_dlp_runtime_options
 log = get_logger("music")
 
 MUSIC_SUBFOLDER = "music"
-MUSIC_FOLDER = DOWNLOAD_FOLDER / MUSIC_SUBFOLDER
+_DEFAULT_MUSIC_FOLDER = DOWNLOAD_FOLDER / MUSIC_SUBFOLDER
+MUSIC_FOLDER = _DEFAULT_MUSIC_FOLDER
+
+
+def _music_folder():
+    if MUSIC_FOLDER != _DEFAULT_MUSIC_FOLDER:
+        return MUSIC_FOLDER
+    return get_download_path() / MUSIC_SUBFOLDER
 
 COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 DEEZER_SEARCH_URL = "https://api.deezer.com/search"
@@ -337,7 +344,7 @@ def download_music_track(
     """Download a track as audio (with optional cover) into `downloads/music`."""
     from playlist import download_media
 
-    base_output = output_path or str(DOWNLOAD_FOLDER)
+    base_output = output_path or str(get_download_path())
     result = download_media(
         url,
         output_path=base_output,
@@ -372,9 +379,10 @@ def download_music_track(
 
 def list_library(limit: int = 200) -> list[dict[str, Any]]:
     """List tracks in `downloads/music` with any associated cover art."""
-    MUSIC_FOLDER.mkdir(parents=True, exist_ok=True)
+    music_folder = _music_folder()
+    music_folder.mkdir(parents=True, exist_ok=True)
     try:
-        entries = [p for p in MUSIC_FOLDER.iterdir() if p.is_file()]
+        entries = [p for p in music_folder.iterdir() if p.is_file()]
     except OSError:
         return []
 
@@ -391,7 +399,7 @@ def list_library(limit: int = 200) -> list[dict[str, Any]]:
 
         cover_name = None
         for ext in COVER_EXTENSIONS:
-            candidate = MUSIC_FOLDER / f"{path.stem}{ext}"
+            candidate = music_folder / f"{path.stem}{ext}"
             if candidate.is_file():
                 cover_name = candidate.name
                 break
@@ -423,7 +431,8 @@ def delete_track(filename: str) -> bool:
     """Delete a track and its associated cover art."""
     from werkzeug.utils import secure_filename
     safe_name = secure_filename(filename)
-    audio_path = MUSIC_FOLDER / safe_name
+    music_folder = _music_folder()
+    audio_path = music_folder / safe_name
     
     if not audio_path.is_file():
         return False
@@ -435,7 +444,7 @@ def delete_track(filename: str) -> bool:
         # Delete the cover art if it exists (same base filename).
         base_name = audio_path.stem
         for ext in COVER_EXTENSIONS:
-            cover_path = MUSIC_FOLDER / f"{base_name}{ext}"
+            cover_path = music_folder / f"{base_name}{ext}"
             if cover_path.is_file():
                 cover_path.unlink()
         return True

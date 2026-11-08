@@ -20,6 +20,8 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
 if str(BASE) not in sys.path:
     sys.path.insert(0, str(BASE))
+from config import SUBPROCESS_CREATION_FLAGS
+
 LOG_DIR = BASE / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SESSION_LOG = LOG_DIR / f"debug_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -194,6 +196,7 @@ def check_git_update() -> None:
             capture_output=True,
             text=True,
             check=False,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
         )
         if local_result.returncode != 0:
             warn("Git repository not found or not initialized")
@@ -207,6 +210,7 @@ def check_git_update() -> None:
             text=True,
             timeout=15,
             check=False,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
         )
         if remote_result.returncode != 0:
             warn("Unable to check GitHub")
@@ -222,6 +226,7 @@ def check_git_update() -> None:
                 capture_output=True,
                 text=True,
                 check=False,
+                creationflags=SUBPROCESS_CREATION_FLAGS,
             )
             if changes.stdout.strip():
                 warn("Update available, but local changes are present")
@@ -275,7 +280,11 @@ def check_playwright() -> None:
     except Exception as e:
         warn(f"Chromium failed to launch; attempting installation: {e}")
         try:
-            subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+            subprocess.run(
+                [sys.executable, "-m", "playwright", "install", "chromium"],
+                check=False,
+                creationflags=SUBPROCESS_CREATION_FLAGS,
+            )
             with sync_playwright() as p:
                 b = p.chromium.launch(headless=True)
                 b.close()
@@ -513,7 +522,11 @@ def open_folders() -> None:
     if os.name == "nt":
         os.startfile(str(path))  # type: ignore[attr-defined]
     else:
-        subprocess.run(["xdg-open", str(path)], check=False)
+        subprocess.run(
+            ["xdg-open", str(path)],
+            check=False,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
     ok(f"Opened: {path}")
 
 
@@ -528,9 +541,18 @@ def start_debug_server() -> None:
     info("URL : http://127.0.0.1:5001")
     info("Press Ctrl+C to stop")
     if os.name == "nt":
-        subprocess.Popen(["cmd", "/c", "start", "", "http://127.0.0.1:5001"])
+        subprocess.Popen(
+            ["cmd", "/c", "start", "", "http://127.0.0.1:5001"],
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
     try:
-        subprocess.run([sys.executable, str(BASE / "app.py")], cwd=str(BASE), env=env, check=False)
+        subprocess.run(
+            [sys.executable, str(BASE / "app.py")],
+            cwd=str(BASE),
+            env=env,
+            check=False,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
     except KeyboardInterrupt:
         warn("Server stopped")
 
@@ -597,7 +619,10 @@ def main() -> int:
     if venv_py.is_file() and Path(sys.executable).resolve() != venv_py.resolve():
         # Re-run inside the virtual environment for dependency checks.
         if "--no-reexec" not in sys.argv:
-            return subprocess.call([str(venv_py), str(BASE / "tools" / "debug_center.py"), "--no-reexec"])
+            return subprocess.call(
+                [str(venv_py), str(BASE / "tools" / "debug_center.py"), "--no-reexec"],
+                creationflags=SUBPROCESS_CREATION_FLAGS,
+            )
 
     actions = {key: fn for key, _, fn in MENU}
     while True:

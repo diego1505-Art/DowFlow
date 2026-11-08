@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DowFlow - Menu</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
+    {% if is_frozen %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='dependencies-loading.css') }}">
+    {% endif %}
     <style>
         :root {
             --surface: rgba(255, 255, 255, 0.08);
@@ -125,9 +129,38 @@
         dialog label { display: block; margin: 14px 0 6px; color: rgba(255, 255, 255, 0.7); font-size: 0.85rem; }
         dialog input, dialog select { width: 100%; border: 1px solid #675044; border-radius: 10px; padding: 10px; color: #fff; background: #120e0b; font: inherit; }
         .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+        #downloadFolderDialog { margin: auto; }
+        #downloadFolderDialog p { color: rgba(255, 255, 255, 0.72); line-height: 1.5; }
+        #downloadFolderStatus { margin-top: 12px; overflow-wrap: anywhere; }
     </style>
 </head>
 <body>
+    {% if is_frozen %}
+    <section id="dependencyLoading" class="dependency-loading" role="status" aria-live="polite">
+        <div class="dependency-loading__content">
+            <div class="dependency-loading__mark" aria-hidden="true">D</div>
+            <p class="dependency-loading__eyebrow">DowFlow portable</p>
+            <h1>Preparing your media tools</h1>
+            <p id="dependencyStage" class="dependency-loading__stage">Checking media tools</p>
+            <div
+                id="dependencyTrack"
+                class="dependency-loading__track"
+                role="progressbar"
+                aria-label="Dependency setup progress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+            >
+                <span id="dependencyFill" class="dependency-loading__fill"></span>
+            </div>
+            <p id="dependencyPercent" class="dependency-loading__percent">0%</p>
+            <p id="dependencyError" class="dependency-loading__error" hidden></p>
+            <button id="dependencyRetry" class="dependency-loading__retry" type="button" hidden>
+                Retry setup
+            </button>
+        </div>
+    </section>
+    {% endif %}
     <div class="bg-video-container">
         <video autoplay muted loop playsinline poster="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop">
             <source src="https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-night-sky-background-9937-large.mp4" type="video/mp4">
@@ -149,6 +182,7 @@
                     <span class="dot{% if has_ffmpeg %} online{% endif %}" id="ffmpegDot"></span>
                     <span id="ffmpegText">FFmpeg: {% if has_ffmpeg %}OK{% else %}not installed{% endif %}</span>
                 </div>
+                {% include "export_controls.html" %}
             </header>
 
             <section class="hero">
@@ -161,36 +195,46 @@
             </section>
 
             <section class="grid">
+                {% if app_scope in ["all", "video"] %}
                 <a class="card available" href="/video" data-menu-id="video">
                     <div class="card-index">01</div>
                     <h3>Video</h3>
                     <p>Download video or audio from a URL.</p>
                     <span class="badge on">Available</span>
                 </a>
+                {% endif %}
+                {% if app_scope in ["all", "music"] %}
                 <a class="card available" href="/music" data-menu-id="music">
                     <div class="card-index">02</div>
                     <h3>Music</h3>
                     <p>Search, download and manage your music library.</p>
                     <span class="badge on">Available</span>
                 </a>
+                {% endif %}
+                {% if app_scope in ["all", "film"] %}
                 <a class="card disabled" href="/film" data-menu-id="film">
                     <div class="card-index">03</div>
                     <h3>Movies / Series</h3>
                     <p>Movies and series with audio and subtitles.</p>
                     <span class="badge soon">Coming soon</span>
                 </a>
+                {% endif %}
+                {% if app_scope in ["all", "anime"] %}
                 <a class="card disabled" href="/anime" data-menu-id="anime">
                     <div class="card-index">04</div>
                     <h3>Anime / Animation</h3>
                     <p>Anime and animated shows with multiple languages.</p>
                     <span class="badge soon">Coming soon</span>
                 </a>
+                {% endif %}
+                {% if app_scope in ["all", "image"] %}
                 <a class="card disabled" href="/image" data-menu-id="image">
                     <div class="card-index">05</div>
                     <h3>Manhwa / Manga / Comics / Images</h3>
                     <p>Chapters, pages and images.</p>
                     <span class="badge soon">Coming soon</span>
                 </a>
+                {% endif %}
             </section>
 
             <footer class="footer">
@@ -199,6 +243,56 @@
             </footer>
         </section>
     </main>
+
+    <dialog id="downloadFolderDialog" aria-labelledby="downloadFolderTitle">
+        <h2 id="downloadFolderTitle">Choose a download folder</h2>
+        <p>DowFlow needs a writable folder for downloaded videos, music and playlists.</p>
+        <p id="downloadFolderStatus">No folder selected.</p>
+        <div class="dialog-actions">
+            <button class="action-button" id="chooseDownloadFolderButton" type="button">Choose folder</button>
+        </div>
+    </dialog>
+
+    <script>
+        const folderDialog = document.getElementById("downloadFolderDialog");
+        const folderStatus = document.getElementById("downloadFolderStatus");
+        const chooseFolderButton = document.getElementById("chooseDownloadFolderButton");
+
+        async function refreshFolderStatus() {
+            try {
+                const response = await fetch("/api/download-folder");
+                const data = await response.json();
+                folderStatus.textContent = data.path ? "Active folder: " + data.path : "No folder selected.";
+                if (data.required && !folderDialog.open) folderDialog.showModal();
+            } catch {
+                folderStatus.textContent = "Unable to read the download folder.";
+            }
+        }
+
+        chooseFolderButton.addEventListener("click", async () => {
+            chooseFolderButton.disabled = true;
+            try {
+                const response = await fetch("/api/download-folder/select", { method: "POST" });
+                const data = await response.json();
+                if (data.success) {
+                    folderStatus.textContent = "Active folder: " + data.path;
+                    folderDialog.close();
+                } else if (data.error) {
+                    folderStatus.textContent = data.error;
+                }
+            } catch {
+                folderStatus.textContent = "Unable to open the folder picker.";
+            } finally {
+                chooseFolderButton.disabled = false;
+            }
+        });
+
+        void refreshFolderStatus();
+    </script>
+    {% if is_frozen %}
+    <script src="{{ url_for('static', filename='dependencies-loading.js') }}"></script>
+    {% endif %}
+    <script src="{{ url_for('static', filename='export.js') }}"></script>
 
 </body>
 </html>

@@ -9,7 +9,8 @@ from typing import Any
 from urllib.request import ProxyHandler, build_opener, urlopen
 
 from config import (
-    FFMPEG_FALLBACK_DIRS,
+    get_bin_folder,
+    get_ffmpeg_fallback_dirs,
     PROXIES,
     PROXY_AUTO,
     PROXY_POOL_TTL_SECONDS,
@@ -28,7 +29,11 @@ def _resolve_ffmpeg_dir() -> str | None:
     if system_ffmpeg and system_ffprobe:
         return None
 
-    for path in FFMPEG_FALLBACK_DIRS:
+    bin_folder = get_bin_folder()
+    if (bin_folder / "ffmpeg.exe").is_file() and (bin_folder / "ffprobe.exe").is_file():
+        return str(bin_folder)
+
+    for path in get_ffmpeg_fallback_dirs():
         if (path / "ffmpeg.exe").exists() and (path / "ffprobe.exe").exists():
             return str(path)
 
@@ -39,6 +44,11 @@ def has_ffmpeg() -> bool:
     if shutil.which("ffmpeg") and shutil.which("ffprobe"):
         return True
     return _resolve_ffmpeg_dir() is not None
+
+
+def clear_ffmpeg_cache() -> None:
+    _resolve_ffmpeg_dir.cache_clear()
+    has_ffmpeg.cache_clear()
 
 def is_http_url(value: str) -> bool:
     """Check whether a string is an HTTP(S) URL."""

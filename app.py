@@ -1,14 +1,31 @@
+import importlib
+import importlib.util
+import json
 import os
+import subprocess
+import sys
 import threading
 import time
 import uuid
 from pathlib import Path
+from typing import Any
+from urllib.parse import quote
 
 from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory, url_for
 from werkzeug.utils import secure_filename
+from folder_picker import select_download_folder
 
 from config import (
-    DOWNLOAD_FOLDER,
+    APP_SCOPE,
+    BASE_DIR,
+    DownloadPathNotConfigured,
+    IS_FROZEN,
+    SUBPROCESS_CREATION_FLAGS,
+    VIDEO_EXTENSIONS,
+    get_download_path,
+    get_runtime_build_id,
+    has_configured_download_path,
+    set_download_path,
     LOCAL_MEDIA_TTL_SECONDS,
     LOCAL_MEDIA_MAX_ENTRIES,
     ALLOWED_LOCAL_EXTENSIONS,
@@ -26,13 +43,75 @@ from database import (
     favorite_add,
     favorite_remove,
 )
-import music
+if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
+    music = importlib.import_module("music")
 
 log = get_logger("app")
+_APP_BUILD_ID = get_runtime_build_id()
 
 app = Flask(__name__)
+_EXPORT_JOBS: dict[str, dict[str, Any]] = {}
+_EXPORT_LOCK = threading.Lock()
+_EXPORT_RUNNING = False
 
-DOWNLOAD_FOLDER.mkdir(exist_ok=True)
+
+def _download_folder(*, create: bool = True) -> Path:
+    folder = get_download_path()
+    if create:
+        folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _scope_allows_path(scope: str, path: str) -> bool:
+    common_paths = {
+        "/",
+        "/service-worker.js",
+        "/api/status",
+        "/api/dependencies/progress",
+        "/api/dependencies/retry",
+        "/check-ffmpeg",
+        "/api/download-folder",
+        "/api/download-folder/select",
+        "/open-folder",
+    }
+    if path in common_paths or path.startswith(("/static/", "/media/", "/media-local/")):
+        return True
+    if scope == "all":
+        return True
+    if scope == "video":
+        return path in {
+            "/video", "/config", "/history", "/jobs", "/download", "/download-async",
+            "/upload-local", "/url-options", "/expand-url", "/fetch-episodes", "/api/local-videos",
+        } or path.startswith("/jobs/")
+    if scope == "music":
+        return path in {"/music", "/music/explore", "/music/liked"} or path.startswith("/api/music/")
+    return path == f"/{scope}"
+
+
+@app.before_request
+def enforce_export_scope():
+    if IS_FROZEN and not _scope_allows_path(APP_SCOPE, request.path):
+        abort(404)
+
+
+@app.context_processor
+def export_template_context():
+    path = request.path
+    if path == "/":
+        export_scope = "all"
+    elif path.startswith("/music"):
+        export_scope = "music"
+    elif path == "/video":
+        export_scope = "video"
+    elif path.strip("/") in COMING_SOON_CATEGORIES:
+        export_scope = path.strip("/")
+    else:
+        export_scope = "all"
+    return {
+        "app_scope": APP_SCOPE,
+        "can_export": not IS_FROZEN,
+        "export_scope": export_scope,
+    }
 
 # Categories not available yet in the main menu
 COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
@@ -101,7 +180,12 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 @app.route("/")
 def index():
     """Main menu for selecting a download type."""
-    return render_template("menu.html", has_ffmpeg=has_ffmpeg())
+    return render_template(
+        "menu.html",
+        has_ffmpeg=has_ffmpeg(),
+        app_scope=APP_SCOPE,
+        is_frozen=IS_FROZEN,
+    )
 
 
 @app.get("/service-worker.js")
@@ -115,8 +199,28 @@ def application_status():
     return jsonify({
         "ready": True,
         "service": "DowFlow",
+        "build_id": _APP_BUILD_ID,
         "ffmpeg": has_ffmpeg(),
     })
+
+
+@app.get("/api/dependencies/progress")
+def dependency_progress():
+    if not IS_FROZEN:
+        return jsonify({"status": "ready", "percent": 100, "stage": "Ready", "error": None})
+    from bootstrap import dependency_progress as get_progress
+
+    return jsonify(get_progress())
+
+
+@app.post("/api/dependencies/retry")
+def retry_dependency_setup():
+    if not IS_FROZEN:
+        return jsonify({"success": False, "error": "Dependency setup is only used by the portable app."}), 409
+    from bootstrap import start_dependency_setup
+
+    start_dependency_setup(force=True)
+    return jsonify({"success": True})
 
 
 @app.route("/video")
@@ -199,10 +303,15 @@ def music_download():
     if audio_format not in AUDIO_OUTPUT_FORMATS:
         audio_format = "mp3"
 
+    try:
+        output_folder = _download_folder()
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
+
     job_id = start_download_job(
         music.download_music_track,
         url,
-        output_path=str(DOWNLOAD_FOLDER),
+        output_path=str(output_folder),
         audio_format=audio_format,
         with_cover=bool(data.get("with_cover", True)),
         title=data.get("title"),
@@ -217,7 +326,11 @@ def music_library():
         limit = int(request.args.get("limit") or 200)
     except (TypeError, ValueError):
         limit = 200
-    return jsonify({"success": True, "items": music.list_library(max(1, min(limit, 500)))})
+    try:
+        items = music.list_library(max(1, min(limit, 500)))
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
+    return jsonify({"success": True, "items": items})
 
 
 @app.get("/api/music/favorites")
@@ -257,6 +370,265 @@ def music_delete():
 @app.route("/check-ffmpeg")
 def check_ffmpeg():
     return jsonify({"has_ffmpeg": has_ffmpeg()})
+
+
+@app.get("/api/download-folder")
+def download_folder_status():
+    folder = get_download_path(required=False)
+    return jsonify(
+        {
+            "configured": has_configured_download_path(),
+            "path": str(folder) if folder else None,
+            "required": IS_FROZEN and (folder is None or not folder.is_dir()),
+        }
+    )
+
+
+@app.post("/api/download-folder/select")
+def choose_download_folder():
+    try:
+        current = get_download_path(required=False)
+        initial_directory = str(current if current and current.is_dir() else Path.home())
+        selected = select_download_folder(initial_directory)
+        if not selected:
+            return jsonify({"success": False, "cancelled": True}), 200
+
+        folder = set_download_path(selected)
+        if IS_FROZEN:
+            from bootstrap import start_dependency_setup
+            from utils import clear_ffmpeg_cache
+
+            clear_ffmpeg_cache()
+            start_dependency_setup(force=True)
+        return jsonify({"success": True, "path": str(folder)})
+    except Exception as exc:
+        log.error("[download-folder] Could not select folder: %s", exc, exc_info=True)
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.get("/api/local-videos")
+def local_videos():
+    try:
+        folder = _download_folder(create=False)
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
+
+    items = []
+    known_media_folders = {
+        "youtube", "instagram", "snapchat", "tiktok", "twitter", "x",
+        "facebook", "vimeo", "dailymotion", "reddit", "franime", "music",
+    }
+    try:
+        media_roots = [
+            child for child in folder.iterdir()
+            if child.is_dir() and child.name.casefold() in known_media_folders
+        ]
+    except OSError:
+        media_roots = []
+
+    for media_root in media_roots:
+        for path in media_root.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            relative = path.relative_to(folder).as_posix()
+            items.append(
+                {
+                    "filename": path.name,
+                    "relative_path": relative,
+                    "file_url": f"/media/{quote(relative, safe='/')}",
+                    "size": stat.st_size,
+                    "modified": stat.st_mtime,
+                }
+            )
+    items.sort(key=lambda item: item["modified"], reverse=True)
+    return jsonify({"success": True, "items": items})
+
+
+def _run_export_job(job_id: str, scope: str, name: str, output_path: Path) -> None:
+    global _EXPORT_RUNNING
+    try:
+        if importlib.util.find_spec("PyInstaller") is None:
+            requirements_file = BASE_DIR / "requirements-build.txt"
+            if not requirements_file.is_file():
+                raise RuntimeError("requirements-build.txt was not found in the project folder.")
+            with _EXPORT_LOCK:
+                _EXPORT_JOBS[job_id].update(
+                    stage="Installing build dependencies",
+                    progress=1,
+                    eta_seconds=None,
+                    eta_updated_at=time.time(),
+                )
+            install = subprocess.Popen(
+                [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
+                cwd=BASE_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                creationflags=SUBPROCESS_CREATION_FLAGS,
+            )
+            install_output: list[str] = []
+            if install.stdout is not None:
+                for line in install.stdout:
+                    install_output.append(line.rstrip())
+                    install_output = install_output[-100:]
+            if install.wait() != 0:
+                detail = "\n".join(install_output)[-5000:]
+                raise RuntimeError(detail or "Unable to install build dependencies.")
+            if importlib.util.find_spec("PyInstaller") is None:
+                raise RuntimeError("PyInstaller is still unavailable after installing build dependencies.")
+
+        build_script = BASE_DIR / "build_export.py"
+        process = subprocess.Popen(
+            [sys.executable, str(build_script), scope, name, "--json-progress"],
+            cwd=BASE_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
+        recent_output: list[str] = []
+        if process.stdout is not None:
+            for line in process.stdout:
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    recent_output.append(line.rstrip())
+                    recent_output = recent_output[-100:]
+                    continue
+                if event.get("type") != "progress":
+                    continue
+                with _EXPORT_LOCK:
+                    job = _EXPORT_JOBS.get(job_id)
+                    if job:
+                        job.update(
+                            progress=event.get("percent", job.get("progress", 0)),
+                            stage=event.get("stage", job.get("stage")),
+                            elapsed_seconds=event.get("elapsed_seconds", job.get("elapsed_seconds", 0)),
+                            eta_seconds=event.get("eta_seconds"),
+                            eta_updated_at=event.get("eta_updated_at", time.time()),
+                        )
+        return_code = process.wait()
+        with _EXPORT_LOCK:
+            job = _EXPORT_JOBS[job_id]
+            if return_code == 0 and output_path.is_file():
+                job.update(
+                    status="success",
+                    progress=100,
+                    stage="Complete",
+                    eta_seconds=0,
+                    eta_updated_at=time.time(),
+                    path=str(output_path),
+                    error=None,
+                )
+            else:
+                detail = "\n".join(recent_output)[-5000:]
+                job.update(
+                    status="failed",
+                    stage="Build failed",
+                    eta_seconds=None,
+                    eta_updated_at=time.time(),
+                    path=None,
+                    error=detail.strip() or "PyInstaller failed.",
+                )
+    except Exception as exc:
+        with _EXPORT_LOCK:
+            _EXPORT_JOBS[job_id].update(status="failed", path=None, error=str(exc))
+    finally:
+        with _EXPORT_LOCK:
+            _EXPORT_RUNNING = False
+
+
+@app.post("/api/export")
+def start_export():
+    global _EXPORT_RUNNING
+    if IS_FROZEN:
+        return jsonify({"success": False, "error": "Export is available from the source project only."}), 409
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        return jsonify({"success": False, "error": "Export is restricted to the local computer."}), 403
+    data = request.get_json(silent=True) or {}
+    scope = str(data.get("scope") or "")
+    allowed_scopes = {"all", "video", "music", "film", "anime", "image"}
+    if scope not in allowed_scopes:
+        return jsonify({"success": False, "error": "Unsupported export scope."}), 400
+
+    dist_dir = BASE_DIR / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    picker = Path(__file__).with_name("folder_picker.py")
+    try:
+        picker_result = subprocess.run(
+            [sys.executable, str(picker), "--save-exe", scope, str(dist_dir)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=600,
+            check=False,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
+    except Exception as exc:
+        return jsonify({"success": False, "error": f"Unable to open the save dialog: {exc}"}), 500
+    selected = picker_result.stdout.strip()
+    if picker_result.returncode != 0:
+        return jsonify({"success": False, "error": picker_result.stderr.strip() or "Save dialog failed."}), 500
+    if not selected:
+        return jsonify({"success": False, "cancelled": True}), 200
+
+    target_path = Path(selected).expanduser().resolve()
+    if target_path.parent != dist_dir.resolve() or target_path.suffix.lower() != ".exe":
+        return jsonify({"success": False, "error": "Choose an .exe name directly inside the dist folder."}), 400
+
+    from build_export import sanitize_exe_name
+
+    try:
+        name = sanitize_exe_name(target_path.name)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    target_path = dist_dir / f"{name}.exe"
+
+    with _EXPORT_LOCK:
+        if _EXPORT_RUNNING:
+            return jsonify({"success": False, "error": "Another executable is already being built."}), 409
+        _EXPORT_RUNNING = True
+        job_id = uuid.uuid4().hex[:12]
+        _EXPORT_JOBS[job_id] = {
+            "id": job_id,
+            "scope": scope,
+            "name": name,
+            "status": "running",
+            "progress": 1,
+            "stage": "Preparing build",
+            "elapsed_seconds": 0,
+            "eta_seconds": None,
+            "eta_updated_at": time.time(),
+            "path": None,
+            "error": None,
+        }
+
+    threading.Thread(
+        target=_run_export_job,
+        args=(job_id, scope, name, target_path),
+        name=f"export-{job_id}",
+        daemon=True,
+    ).start()
+    return jsonify({"success": True, "job_id": job_id, "name": name})
+
+
+@app.get("/api/export/<job_id>")
+def export_status(job_id: str):
+    with _EXPORT_LOCK:
+        job = _EXPORT_JOBS.get(job_id)
+        if job is None:
+            return jsonify({"success": False, "error": "Export job not found."}), 404
+        return jsonify({"success": True, "job": dict(job)})
 
 
 @app.route("/history")
@@ -334,7 +706,7 @@ def download_async():
         job_id = start_download_job(
             download_media,
             source_value,
-            output_path=str(DOWNLOAD_FOLDER),
+            output_path=str(_download_folder()),
             download_type=download_type,
             quality=quality,
             video_format=video_format,
@@ -345,6 +717,8 @@ def download_async():
         )
         log.info("[download-async] job=%s url=%s", job_id, source_value[:120])
         return jsonify({"success": True, "async": True, "job_id": job_id})
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
     except Exception as e:
         log.error("[download-async] %s", e, exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
@@ -360,7 +734,11 @@ def frontend_config():
 
 @app.route("/media/<path:filename>")
 def serve_media(filename: str):
-    return send_from_directory(DOWNLOAD_FOLDER, filename, as_attachment=False)
+    try:
+        folder = _download_folder()
+    except DownloadPathNotConfigured:
+        abort(409)
+    return send_from_directory(folder, filename, as_attachment=False)
 
 
 @app.route("/media-local/<token>")
@@ -381,7 +759,7 @@ def serve_local_media(token: str):
 @app.route("/open-folder")
 def open_folder():
     try:
-        os.startfile(str(DOWNLOAD_FOLDER))  # type: ignore[attr-defined]
+        os.startfile(str(_download_folder()))  # type: ignore[attr-defined]
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -400,7 +778,7 @@ def upload_local():
 
         safe_name = secure_filename(file.filename) or f"local-{uuid.uuid4().hex}{suffix}"
         stored_name = f"{uuid.uuid4().hex[:8]}-{safe_name}"
-        destination = DOWNLOAD_FOLDER / stored_name
+        destination = _download_folder() / stored_name
         file.save(destination)
 
         return jsonify(
@@ -414,6 +792,8 @@ def upload_local():
                 "previewable": Path(stored_name).suffix.lower() in PREVIEWABLE_EXTENSIONS,
             }
         )
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
     except Exception as e:
         return jsonify({"success": False, "error": f"Local upload failed: {e}"}), 500
 
@@ -544,7 +924,7 @@ def download():
 
         result = download_media(
             source_value,
-            output_path=str(DOWNLOAD_FOLDER),
+            output_path=str(_download_folder()),
             download_type=download_type,
             quality=quality,
             video_format=video_format,
@@ -599,6 +979,8 @@ def download():
 
         return jsonify(payload)
 
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
     except Exception as e:
         error_msg = str(e).strip() or type(e).__name__
         log.error("[download] Failed: %s", error_msg, exc_info=True)
@@ -632,9 +1014,14 @@ def _start_network_detection() -> None:
     threading.Thread(target=worker, name="dowflow-network-detection", daemon=True).start()
 
 
-if __name__ == "__main__":
+def run_server() -> None:
     from logger import banner
     banner(log, "DowFlow — Multi-Site Media Downloader")
+
+    if getattr(sys, "frozen", False):
+        from bootstrap import start_dependency_setup
+
+        start_dependency_setup()
 
     _start_network_detection()
 
@@ -644,10 +1031,20 @@ if __name__ == "__main__":
     if DEBUG_MODE:
         log.info("DEBUG: historique=/history  jobs=/jobs  async=/download-async")
     log.info("Press Ctrl+C to stop")
-    app.run(
-        debug=DEBUG_MODE,
-        host=os.environ.get("DOWFLOW_HOST", "127.0.0.1"),
-        port=configured_port,
-        use_reloader=False,
-        threaded=True,
-    )
+    host = os.environ.get("DOWFLOW_HOST", "127.0.0.1")
+    if getattr(sys, "frozen", False):
+        from waitress import serve
+
+        serve(app, host=host, port=configured_port, threads=8)
+    else:
+        app.run(
+            debug=DEBUG_MODE,
+            host=host,
+            port=configured_port,
+            use_reloader=False,
+            threaded=True,
+        )
+
+
+if __name__ == "__main__":
+    run_server()

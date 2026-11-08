@@ -227,14 +227,13 @@ class PortableConfigurationTests(unittest.TestCase):
             (bin_dir / "ffmpeg.exe").write_bytes(b"ffmpeg")
             (bin_dir / "ffprobe.exe").write_bytes(b"ffprobe")
             (bin_dir / ".ffmpeg.sha256").write_text("a" * 64, encoding="ascii")
-            (bin_dir / "aria2c.exe").write_bytes(b"aria2")
             progress = []
 
             with patch.object(bootstrap, "get_download_path", return_value=media_root), patch.object(
                 bootstrap, "get_bin_folder", return_value=bin_dir
             ), patch.object(bootstrap, "configure_runtime_paths", return_value=bin_dir) as configure, patch.object(
                 bootstrap, "_read_url", return_value=("a" * 64).encode("ascii")
-            ), patch.object(bootstrap, "_aria2_is_current", return_value=True), patch.object(
+            ), patch.object(
                 bootstrap, "_install_chromium"
             ) as install_chromium:
                 bootstrap.ensure_external_dependencies(

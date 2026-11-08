@@ -1,5 +1,5 @@
 
-# DowFlow V13
+# DowFlow V15
 
 DowFlow is a Windows Flask application for downloading, organizing and playing videos and music locally.
 
@@ -8,7 +8,7 @@ Use DowFlow only for personal purposes and with content you have the right to do
 ## Features
 
 - Video and audio downloads with `yt-dlp`.
-- Optional acceleration with `aria2c` and parallel connections.
+- Native parallel fragment downloads through `yt-dlp`.
 - Adaptive quality, VTT subtitles and resumable downloads.
 - Music search, album covers, favorites and a local library.
 - Browser-based extraction with Playwright for sites that are not supported directly.
@@ -21,7 +21,7 @@ Use DowFlow only for personal purposes and with content you have the right to do
 - Git for automatic project updates.
 - Internet connection.
 
-`start.bat` detects or installs Playwright Chromium, `aria2c` and FFmpeg via WinGet when they are missing in source mode. Node.js LTS can provide more YouTube formats. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
+`start.bat` detects or installs Playwright Chromium and FFmpeg via WinGet when they are missing in source mode. Node.js LTS can provide more YouTube formats. yt-dlp handles fragment parallelism natively; no additional download accelerator is installed. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
 
 ## Getting started
 
@@ -39,7 +39,7 @@ On startup, the script:
 4. If accepted, temporarily stashes tracked local changes, applies a fast-forward update, and restores the changes.
 5. If declined, skips only the project-code update and continues startup.
 6. Creates `.venv` if needed and checks dependencies automatically; dependency updates do not require confirmation.
-7. Checks Playwright, `aria2c` and FFmpeg.
+7. Checks Playwright and FFmpeg.
 
 The application opens in its native window and serves its local interface at <http://127.0.0.1:5001>.
 
@@ -71,7 +71,7 @@ Install the pinned `setuptools` version after the build requirements and before 
 
 The source app offers **Export EXE** in the menu and each workspace. If PyInstaller is missing from the Python environment running DowFlow, the first export installs `requirements-build.txt` into that same environment, then builds the EXE. You can also install it manually with `python -m pip install -r requirements-build.txt`. The menu exports all available pages; Video and Music export scoped editions, while a coming-soon category exports that category shell. The native save dialog chooses the EXE name, and output is kept in `dist/`. Export buttons are available only in the source app, not in an already-built executable.
 
-Close DowFlow before building so the included database and its SQLite write-ahead log form a consistent snapshot. The EXE includes the current `dowflow.db`, a blank `config.json` template, and `youtube.com_cookies.txt` when present. On first launch, mutable seed files are extracted beside the EXE only when no local copy exists; later launches never overwrite user files. Choose an existing media root; downloaded files are stored there. The build excludes `downloads/`, the `music/` media folder, the browser profile, FFmpeg, aria2 and Chromium. Those tools are installed or updated in `<media root>/bin/` after the window opens. Cookie exports grant access to personal accounts: an EXE built with `youtube.com_cookies.txt` contains that signed-in session. Do not distribute that EXE; remove the cookie file before building a shareable copy.
+Close DowFlow before building so the included database and its SQLite write-ahead log form a consistent snapshot. The EXE includes the current `dowflow.db`, a blank `config.json` template, and `youtube.com_cookies.txt` when present. On first launch, mutable seed files are extracted beside the EXE only when no local copy exists; later launches never overwrite user files. Choose an existing media root; downloaded files are stored there. The build excludes `downloads/`, the `music/` media folder, the browser profile, FFmpeg and Chromium. Those tools are installed or updated in `<media root>/bin/` after the window opens. Cookie exports grant access to personal accounts: an EXE built with `youtube.com_cookies.txt` contains that signed-in session. Do not distribute that EXE; remove the cookie file before building a shareable copy.
 
 ## Diagnostics
 
@@ -81,7 +81,7 @@ The diagnostic center uses the venv, ANSI colors and non-destructive checks:
 .\debug.bat
 ```
 
-It can check Python, dependencies, imports, FFmpeg, FFprobe, `aria2c`, Chrome, Playwright, the network, SQLite, the Flask APIs and the latest commit available on GitHub. Results are kept in `logs/debug_*.log`.
+It can check Python, dependencies, imports, FFmpeg, FFprobe, Chrome, Playwright, the network, SQLite, the Flask APIs and the latest commit available on GitHub. Results are kept in `logs/debug_*.log`.
 
 ## Tests
 

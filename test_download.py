@@ -389,30 +389,24 @@ class DownloadStabilityTests(unittest.TestCase):
         _print_output_line(console, adaptive_line)
         self.assertIn("ETA 00:30\n\n23:28:27", console.export_text())
 
-    def test_youtube_uses_aria2_and_skips_subtitles_by_default(self):
+    def test_youtube_uses_native_fragments_and_skips_subtitles_by_default(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL):
-            with patch.object(
-                playlist.shutil,
-                "which",
-                side_effect=lambda name: "aria2c.exe" if name == "aria2c" else None,
-            ):
-                with tempfile.TemporaryDirectory() as output:
-                    result = playlist._ydlp_download(
-                        "https://www.youtube.com/shorts/12345678901",
-                        output_path=output,
-                        quality="720p",
-                        download_id=92,
-                    )
-                    self.assertTrue(Path(result["filepath"]).is_file())
+            with tempfile.TemporaryDirectory() as output:
+                result = playlist._ydlp_download(
+                    "https://www.youtube.com/shorts/12345678901",
+                    output_path=output,
+                    quality="720p",
+                    download_id=92,
+                )
+                self.assertTrue(Path(result["filepath"]).is_file())
 
-        # A fixed quality remains compatible with aria2c.
+        # A fixed quality uses yt-dlp native fragments.
         self.assertEqual(len(FakeYoutubeDL.instances), 1)
         options = FakeYoutubeDL.instances[-1].options
         self.assertNotIn("writesubtitles", options)
         self.assertTrue(options["noprogress"])
-        self.assertEqual(options["external_downloader"], "aria2c")
-        self.assertIn("--split=16", options["external_downloader_args"])
-        self.assertIn("--gid=00005c0000000000", options["external_downloader_args"])
+        self.assertNotIn("external_downloader", options)
+        self.assertNotIn("external_downloader_args", options)
         self.assertTrue(options["quiet"])
         self.assertIn("[protocol^=http]", options["format"])
         self.assertEqual(options["retries"], 10)
@@ -456,17 +450,12 @@ class DownloadStabilityTests(unittest.TestCase):
         with patch.object(playlist.yt_dlp, "YoutubeDL", AdaptiveYoutubeDL), patch.object(
             playlist, "get_connection_tier", return_value=16
         ):
-            with patch.object(
-                playlist.shutil,
-                "which",
-                side_effect=lambda name: "aria2c.exe" if name == "aria2c" else None,
-            ):
-                with tempfile.TemporaryDirectory() as output:
-                    result = playlist._ydlp_download(
-                        "https://www.youtube.com/watch?v=123",
-                        output_path=output,
-                        quality="best",
-                    )
+            with tempfile.TemporaryDirectory() as output:
+                result = playlist._ydlp_download(
+                    "https://www.youtube.com/watch?v=123",
+                    output_path=output,
+                    quality="best",
+                )
 
         self.assertTrue(result["quality_changed"])
         self.assertEqual(result["quality_used"], "1440p")
@@ -593,9 +582,8 @@ class DownloadStabilityTests(unittest.TestCase):
                                 quality="240p",
                             )
 
-        # Four instances: Turbo (no cookies, then Chrome cookies), followed by
-        # native fallback (no cookies, then Chrome cookies).
-        self.assertEqual(len(BotCheckLockedChromeYoutubeDL.instances), 4)
+        # Two attempts: no cookies, then Chrome cookies.
+        self.assertEqual(len(BotCheckLockedChromeYoutubeDL.instances), 2)
         self.assertNotIn(
             "cookiesfrombrowser", BotCheckLockedChromeYoutubeDL.instances[0].options
         )
@@ -649,26 +637,21 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertIn("cookies.txt", message)
         self.assertIn("do not share or publish it", message)
 
-    def test_other_sites_use_aria2_when_available(self):
+    def test_other_sites_use_native_fragments(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL):
-            with patch.object(
-                playlist.shutil,
-                "which",
-                side_effect=lambda name: "aria2c.exe" if name == "aria2c" else None,
-            ):
-                with patch.object(playlist, "get_connection_tier", return_value=32):
-                    with tempfile.TemporaryDirectory() as output:
-                        result = playlist._ydlp_download(
-                            "https://www.instagram.com/reel/example/",
-                            output_path=output,
-                            quality="720p",
-                        )
-                        self.assertTrue(Path(result["filepath"]).is_file())
+            with patch.object(playlist, "get_connection_tier", return_value=32):
+                with tempfile.TemporaryDirectory() as output:
+                    result = playlist._ydlp_download(
+                        "https://www.instagram.com/reel/example/",
+                        output_path=output,
+                        quality="720p",
+                    )
+                    self.assertTrue(Path(result["filepath"]).is_file())
 
         options = FakeYoutubeDL.instances[-1].options
-        self.assertEqual(options["external_downloader"], "aria2c")
-        self.assertIn("--max-connection-per-server=16", options["external_downloader_args"])
-        self.assertIn("--split=16", options["external_downloader_args"])
+        self.assertNotIn("external_downloader", options)
+        self.assertNotIn("external_downloader_args", options)
+        self.assertEqual(options["concurrent_fragment_downloads"], 32)
 
     def test_subtitles_are_requested_in_main_download_when_enabled(self):
         with patch.object(playlist.yt_dlp, "YoutubeDL", FakeYoutubeDL):

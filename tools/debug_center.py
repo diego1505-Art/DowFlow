@@ -112,7 +112,7 @@ def clear() -> None:
 
 
 def ensure_path_tools() -> None:
-    """Add WinGet FFmpeg and aria2 directories to this session's PATH."""
+    """Add the WinGet FFmpeg directory to this session's PATH."""
     local = Path(os.environ.get("LOCALAPPDATA", ""))
     packages = local / "Microsoft" / "WinGet" / "Packages"
     ffmpeg_bins = sorted(packages.glob("Gyan.FFmpeg*/ffmpeg-*/bin"), reverse=True)
@@ -121,14 +121,6 @@ def ensure_path_tools() -> None:
             if str(ffmpeg) not in os.environ.get("PATH", ""):
                 os.environ["PATH"] = str(ffmpeg) + os.pathsep + os.environ.get("PATH", "")
             break
-
-    if packages.is_dir():
-        for d in packages.glob("aria2.aria2*"):
-            for sub in d.glob("aria2*"):
-                exe = sub / "aria2c.exe"
-                if exe.is_file():
-                    os.environ["PATH"] = str(sub) + os.pathsep + os.environ.get("PATH", "")
-                    return
 
 
 # ── Checks ───────────────────────────────────────────────────────────────────
@@ -240,12 +232,10 @@ def check_git_update() -> None:
 def check_tools() -> None:
     section("External tools")
     ensure_path_tools()
-    for tool in ("ffmpeg", "ffprobe", "aria2c"):
+    for tool in ("ffmpeg", "ffprobe"):
         path = shutil.which(tool)
         if path:
             ok(f"{tool} → {path}")
-        elif tool == "aria2c":
-            warn(f"{tool} missing (optional, speeds up downloads)")
         else:
             fail(f"{tool} not found")
 
@@ -477,12 +467,12 @@ def check_config_dump() -> None:
 
 
 def clean_partials() -> None:
-    section("Clean partial files (.part / .aria2 / .ytdl)")
+    section("Clean partial files (.part / .ytdl)")
     downloads = BASE / "downloads"
     if not downloads.is_dir():
         warn("No downloads/ folder")
         return
-    patterns = ("*.part", "*.aria2", "*.ytdl")
+    patterns = ("*.part", "*.ytdl")
     removed = 0
     freed = 0
     for pat in patterns:
@@ -578,14 +568,14 @@ MENU = [
     ("1", "Full diagnostic (all checks)", full_diagnostic),
     ("2", "Check Python + download folders", check_python),
     ("3", "Check dependencies + code imports", check_deps),
-    ("4", "Check FFmpeg / FFprobe / aria2c / Chrome", check_tools),
+    ("4", "Check FFmpeg / FFprobe / Chrome", check_tools),
     ("5", "Check Playwright + browser", check_playwright),
     ("6", "Test yt-dlp YouTube (metadata)", test_ytdlp),
     ("7", "Test network + target sites (YouTube, Deezer...)", test_network),
     ("8", "Project files + API health check", check_codebase),
     ("9", "SQLite history + site strategies", check_database),
     ("10", "Config dump (formats, quality, environment)", check_config_dump),
-    ("11", "Clean partial files (.part / .aria2)", clean_partials),
+    ("11", "Clean partial files (.part)", clean_partials),
     ("12", "Open logs / downloads / music / project", open_folders),
     ("13", "Start DowFlow in DEBUG mode", start_debug_server),
     ("14", "Check GitHub commit", check_git_update),

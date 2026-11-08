@@ -134,19 +134,6 @@ if "!DOWFLOW_DEPS_FRESH!"=="0" (
     )
 )
 
-REM -- aria2c: check every launch, not only after installation -------------
-aria2c --version >nul 2>&1
-if errorlevel 1 (
-    echo Installing aria2c...
-    winget install aria2.aria2 --silent --accept-package-agreements --accept-source-agreements
-    REM Add the WinGet path to PATH for this session.
-    for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\aria2.aria2*") do (
-        for /d %%S in ("%%D\aria2*") do set "PATH=%%S;%PATH%"
-    )
-    aria2c --version >nul 2>&1
-    if errorlevel 1 set "DOWFLOW_WARN=1"
-)
-
 REM -- FFmpeg -------------------------------------------------------------
 for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*") do (
     for /d %%S in ("%%D\ffmpeg-*") do (

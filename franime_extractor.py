@@ -667,16 +667,6 @@ def _download_stream(stream_url: str, player_name: str, page_url: str,
     ep_tag = f"s{params.get('s','1')}-ep{params.get('ep','1')}{lang_tag or ''}"
     ydl_opts["outtmpl"] = os.path.join(output_path, f"{title}-{ep_tag}.%(ext)s")
 
-    if shutil.which("aria2c"):
-        ydl_opts["external_downloader"] = "aria2c"
-        ydl_opts["external_downloader_args"] = [
-            "--max-connection-per-server=16",
-            "--split=16",
-            "--min-split-size=1M",
-            "--continue=true",
-        ]
-        log.success('  [aria2c] Fast downloader enabled for Franime')
-
     # Try the download.
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:

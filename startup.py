@@ -28,7 +28,7 @@ from rich.text import Text
 
 STARTUP_PANEL_HEIGHT = 18
 NETWORK_LOG_CAPTURE_TIMEOUT_SECONDS = 20.0
-APP_VERSION = "V13"
+APP_VERSION = "V15"
 _LOG_ENTRY_RE = re.compile(
     r"^(?P<time>\d{2}:\d{2}:\d{2})\s*\|\s*(?P<level>[A-Z]+)\s*\|\s*"
     r"(?P<logger>[^|]+?)\s*\|\s*(?P<message>.*)$"
@@ -43,11 +43,6 @@ _HTTP_ACCESS_RE = re.compile(
     r'(?P<status>\d{3})\s+(?P<size>\S+)$'
 )
 _ANSI_ESCAPE_RE = re.compile(r"\033\[[0-9;]*m")
-_ARIA2_PROGRESS_RE = re.compile(
-    r"^\[#(?P<gid>[0-9a-fA-F]+)\s+(?P<downloaded>[^/\s]+)/(?P<total>[^\s(]+)"
-    r"\((?P<percent>[\d.]+%)\)\s+CN:(?P<connections>\d+)"
-    r"(?:\s+DL:(?P<speed>\S+))?(?:\s+ETA:(?P<eta>[^\]\s]+))?\]$"
-)
 _YTDLP_PROGRESS_RE = re.compile(
     r"^\[download\]\s+(?P<percent>[\d.]+%)\s+of\s+(?P<details>.+)$"
 )
@@ -170,14 +165,8 @@ def _version_line(command: str) -> str | None:
 
 
 def _startup_version_text() -> str:
-    aria2_version = _version_line("aria2c")
     node_version = _version_line("node")
-    details: list[str] = [f"DowFlow {APP_VERSION}"]
-    if aria2_version:
-        version = aria2_version.removeprefix("aria2 version ")
-        details.append(f"aria2c v{version}")
-    else:
-        details.append("aria2c unavailable")
+    details: list[str] = [f"DowFlow {APP_VERSION}", "yt-dlp native fragments"]
     details.append(f"Node {node_version}" if node_version else "Node.js absent")
     return "  |  ".join(details)
 
@@ -200,42 +189,6 @@ def _capture_output(stream: BinaryIO, output: Queue[str | None]) -> None:
 def _format_output_line(line: str) -> Text:
     source = Text.from_ansi(line)
     plain = source.plain.strip()
-
-    aria_match = _ARIA2_PROGRESS_RE.match(plain)
-    if aria_match:
-        parts = aria_match.groupdict()
-        percent_style = "bold bright_cyan"
-        display_id = parts["gid"]
-        if len(display_id) == 6:
-            try:
-                display_id = str(int(display_id, 16))
-            except ValueError:
-                pass
-        elif len(display_id) == 16:
-            try:
-                display_id = str(int(display_id, 16))
-            except ValueError:
-                pass
-        text = Text()
-        text.append("[", style="dim")
-        text.append("#", style="dim")
-        text.append(display_id, style="bold bright_magenta")
-        text.append(" ", style="dim")
-        text.append(parts["downloaded"], style="bold bright_green")
-        text.append("/", style="dim")
-        text.append(parts["total"], style="bright_black")
-        text.append("(", style="dim")
-        text.append(parts["percent"], style=percent_style)
-        text.append(") CN:", style="dim")
-        text.append(parts["connections"], style="bold bright_cyan")
-        if parts["speed"]:
-            text.append(" DL:", style="dim")
-            text.append(parts["speed"], style="bold bright_green")
-        if parts["eta"]:
-            text.append(" ETA:", style="dim")
-            text.append(parts["eta"], style="bold yellow")
-        text.append("]", style="dim")
-        return text
 
     ytdlp_match = _YTDLP_PROGRESS_RE.match(plain)
     if ytdlp_match:

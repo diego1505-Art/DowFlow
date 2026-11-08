@@ -506,7 +506,7 @@ def _cleanup_partial_files(output_path: str, before_files: set[str]) -> None:
     for name in names:
         if name in before_files:
             continue
-        if name.lower().endswith((".part", ".ytdl", ".aria2", ".frag")):
+        if name.lower().endswith((".part", ".ytdl", ".frag")):
             try:
                 os.remove(os.path.join(output_path, name))
             except OSError:
@@ -1062,21 +1062,14 @@ def _ydlp_download(
     # ── Build yt-dlp options (single pass: video + subtitles) ─────────────────
     subtitle_lang_opts = _build_subtitle_lang_options(language) if write_subtitles else {}
     runtime_options = yt_dlp_runtime_options()
-    aria2c_path = shutil.which("aria2c")
     proxy_url = pick_proxy()
     if proxy_url:
         log.info("[proxy] Trafic via %s", proxy_url.split("@")[-1])
 
-    # aria2c supports at most 16 connections per server. For higher tiers,
-    # yt-dlp's native downloader can parallelize fragments without that limit.
     connection_tier = get_connection_tier()
     monitor_adaptive = bool(adaptive_quality and download_type == "video" and quality == "best")
-    # aria2c progress hooks are delayed until completion, so async UI jobs use
-    # yt-dlp's native downloader to keep live progress and terminal logs flowing.
-    aria2_connections = min(connection_tier, 16)
-    use_turbo = bool(aria2c_path) and not monitor_adaptive and progress_hook is None
 
-    def build_ydl_opts(quality_key: str, force_native: bool = False) -> dict[str, Any]:
+    def build_ydl_opts(quality_key: str) -> dict[str, Any]:
         """Build yt-dlp options for a quality level, rebuilding them on each retry."""
         if download_type == "audio":
             format_str = _build_audio_format_string(audio_format)
@@ -1085,7 +1078,7 @@ def _ydlp_download(
             postprocessors: list[dict[str, Any]] = [audio_pp] if audio_pp else []
             merge_output_format = None
         else:  # video
-            # Prefer HTTP protocols, which are more stable with aria2c.
+            # Prefer HTTP protocols for stable native fragment downloads.
             format_str = _build_video_format_string(
                 quality_key, video_format, has_ffmpeg, prefer_http=True
             )
@@ -1107,9 +1100,8 @@ def _ydlp_download(
             "prefer_ffmpeg": has_ffmpeg,
             "merge_output_format": merge_output_format,
             "noplaylist": True,
-            # The native downloader parallelizes fragments according to machine
-            # capacity (8 to 128). Quiet fallback mode uses one fragment.
-            "concurrent_fragment_downloads": 1 if force_native else get_connection_tier(),
+            # yt-dlp natively parallelizes fragments according to machine capacity.
+            "concurrent_fragment_downloads": get_connection_tier(),
             "retries": 10, # Use 10 retries for all sites.
             "fragment_retries": 10,
             "file_access_retries": 5,
@@ -1132,38 +1124,6 @@ def _ydlp_download(
         if ffmpeg_dir:
             opts["ffmpeg_location"] = ffmpeg_dir
 
-        # Turbo (aria2c) versus native downloader strategy.
-        if use_turbo and not force_native:
-            opts["external_downloader"] = "aria2c"
-            args = [
-                *(
-                    [f"--gid={download_id:06x}{'0' * 10}"]
-                    if download_id is not None and download_id < 0x1000000
-                    else []
-                ),
-                f"--max-connection-per-server={aria2_connections}",
-                f"--split={aria2_connections}",
-                "--min-split-size=1M",
-                f"--max-concurrent-downloads={aria2_connections}",
-                "--optimize-concurrent-downloads=true",
-                "--file-allocation=none",
-                "--disk-cache=64M",
-                "--continue=true",
-                # For blocked or slow agents, retry faster than the 60-second default
-                # instead of letting a dead connection occupy a slot.
-                "--connect-timeout=10",
-                "--timeout=30",
-                "--max-tries=10",
-                "--retry-wait=2",
-                # Ignore global aria2.conf settings that could interfere (proxy, splits, etc.).
-                "--no-conf=true",
-                # Videos are already compressed, so skip unnecessary gzip negotiation.
-                "--http-accept-gzip=false",
-                "--enable-http-keep-alive=true",
-            ]
-            if proxy_url:
-                args.append(f"--all-proxy={proxy_url}")
-            opts["external_downloader_args"] = args
         return opts
 
     requested_quality = quality
@@ -1171,13 +1131,7 @@ def _ydlp_download(
     quality_changed = False
     adaptive_note: str | None = None
 
-    if use_turbo:
-        log.info(
-            "[turbo] aria2c active (up to %d connections)",
-            aria2_connections,
-        )
-    else:
-        log.info("[native] yt-dlp downloader active (x%d fragments)", connection_tier)
+    log.info("[native] yt-dlp fragmented downloader active (x%d fragments)", connection_tier)
 
     before_files = set(os.listdir(output_path))
 
@@ -1196,11 +1150,9 @@ def _ydlp_download(
         log.info("yt-dlp — %s", " | ".join(extra_bits))
 
         # Start at the highest quality. Adaptive mode monitors throughput for
-        # 10 seconds and retries at a lower quality if the ETA is too long. If
-        # blocked (403/Forbidden), switch from Turbo (aria2c) to quiet native mode.
-        force_native = False
+        # 10 seconds and retries at a lower quality if the ETA is too long.
         while True:
-            ydl_opts = build_ydl_opts(current_quality, force_native=force_native)
+            ydl_opts = build_ydl_opts(current_quality)
             hooks: list[Callable[[dict[str, Any]], None]] = [
                 _make_download_progress_log_hook()
             ]
@@ -1220,22 +1172,7 @@ def _ydlp_download(
                 quality_changed = True
                 _cleanup_partial_files(output_path, before_files)
                 current_quality = downgrade.quality
-            except Exception as e:
-                # If Turbo mode encounters a block or protocol error, try once
-                # more with the quiet native downloader.
-                if not force_native and use_turbo:
-                    msg = str(e).lower()
-                    # "aria2c exited with code 22" does not contain "403", even when
-                    # the actual cause is a 403; fall back on any aria2c failure.
-                    is_blocking = any(
-                        k in msg
-                        for k in ("403", "forbidden", "inaccessible", "429", "denied", "aria2c exited with code")
-                    )
-                    if is_blocking:
-                        log.warning("[fallback] Turbo mode blocked -> switching to native downloader")
-                        force_native = True
-                        _cleanup_partial_files(output_path, before_files)
-                        continue
+            except Exception:
                 raise
 
         raw_title = info.get('title') or "download"

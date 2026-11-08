@@ -352,8 +352,7 @@ CONNECTIONS_OVERRIDE = os.environ.get("DOWFLOW_CONNECTIONS", "").strip()
 # Note: free public proxies often time out; Direct is tried first.
 PROXIES = []
 
-# Automatically fetch and validate free public proxies (used by aria2c and
-# yt-dlp). Disabled by default because proxies are unstable and may slow down or
+# Automatically fetch and validate free public proxies for yt-dlp. Disabled by default because proxies are unstable and may slow down or
 # break downloads. Enable explicitly: set DOWFLOW_PROXY_AUTO=1
 PROXY_AUTO = os.environ.get("DOWFLOW_PROXY_AUTO", "").strip().lower() in {"1", "true", "yes", "on"}
 PROXY_SOURCES = (

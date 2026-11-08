@@ -25,11 +25,6 @@ log = get_logger("bootstrap")
 
 FFMPEG_ARCHIVE_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 FFMPEG_CHECKSUM_URL = FFMPEG_ARCHIVE_URL + ".sha256"
-ARIA2_ARCHIVE_URL = (
-    "https://github.com/aria2/aria2/releases/download/release-1.37.0/"
-    "aria2-1.37.0-win-64bit-build1.zip"
-)
-ARIA2_SHA256 = "67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288"
 _PROGRESS_LOCK = threading.Lock()
 _PROGRESS = {
     "status": "pending",
@@ -189,25 +184,6 @@ def _install_ffmpeg(bin_folder: Path | None = None, progress_callback=None) -> s
         return expected_hash
 
 
-def _install_aria2(bin_folder: Path | None = None) -> None:
-    bin_folder = bin_folder or get_bin_folder()
-    log.info("Downloading aria2 1.37.0 into %s", bin_folder)
-    with tempfile.TemporaryDirectory(prefix="dowflow-aria2-") as temporary:
-        archive_path = Path(temporary) / "aria2.zip"
-        _read_url(ARIA2_ARCHIVE_URL, archive_path)
-        if _sha256(archive_path) != ARIA2_SHA256:
-            raise RuntimeError("aria2 checksum mismatch; the archive was not installed.")
-
-        with zipfile.ZipFile(archive_path) as archive:
-            member = next(
-                (item for item in archive.infolist() if Path(item.filename).name.lower() == "aria2c.exe"),
-                None,
-            )
-            if member is None:
-                raise RuntimeError("The aria2 archive did not contain aria2c.exe.")
-            _copy_zip_member(archive, member, bin_folder / "aria2c.exe")
-
-
 def _chromium_installed(browser_dir: Path) -> bool:
     return browser_dir.is_dir() and any(browser_dir.rglob("chrome.exe"))
 
@@ -239,25 +215,8 @@ def _install_chromium(browser_dir: Path, progress_callback=None) -> None:
         raise RuntimeError("Playwright completed without installing Chromium.")
 
 
-def _aria2_is_current(binary: Path) -> bool:
-    try:
-        result = subprocess.run(
-            [str(binary), "--version"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=5,
-            check=False,
-            creationflags=SUBPROCESS_CREATION_FLAGS,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0 and "aria2 version 1.37.0" in result.stdout
-
-
 def ensure_external_dependencies(progress_callback=None) -> None:
-    """Verify or update FFmpeg, aria2, and Chromium under the media root's bin/."""
+    """Verify or update FFmpeg and Chromium under the media root's bin/."""
     download_root = get_download_path()
     bin_folder = get_bin_folder()
     bin_folder.mkdir(parents=True, exist_ok=True)
@@ -291,11 +250,6 @@ def ensure_external_dependencies(progress_callback=None) -> None:
     elif progress_callback:
         progress_callback(50, "FFmpeg is up to date")
 
-    if progress_callback:
-        progress_callback(55, "Checking aria2")
-    aria2_binary = bin_folder / "aria2c.exe"
-    if not _aria2_is_current(aria2_binary):
-        _install_aria2(bin_folder)
     if progress_callback:
         progress_callback(74, "Checking Chromium")
     _install_chromium(

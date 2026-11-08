@@ -325,15 +325,14 @@ def download_with_browser(url: str, output_path: str = "downloads",
 
     ffmpeg_dir = _resolve_ffmpeg_dir_proxy()
     has_ffmpeg = bool(ffmpeg_dir) or (bool(shutil.which("ffmpeg")) and bool(shutil.which("ffprobe")))
-    aria2c_path = shutil.which("aria2c")
 
-    def build_opts(force_native: bool = False) -> dict[str, Any]:
+    def build_opts() -> dict[str, Any]:
         opts: dict[str, Any] = {
             "format":   _build_video_format(quality) if download_type != "audio" else "bestaudio/best",
             "outtmpl":  os.path.join(output_path, f"{slug}.%(ext)s"),
             "quiet":    False,
             "noplaylist": True,
-            "concurrent_fragment_downloads": 1 if force_native else 16,
+            "concurrent_fragment_downloads": 16,
             "retries":  10,
             "fragment_retries": 10,
             "http_chunk_size": 10 * 1024 * 1024,
@@ -347,12 +346,6 @@ def download_with_browser(url: str, output_path: str = "downloads",
         if ffmpeg_dir: opts["ffmpeg_location"] = ffmpeg_dir
         if has_ffmpeg and download_type != "audio": opts["merge_output_format"] = "mp4"
 
-        if aria2c_path and not force_native:
-            opts["external_downloader"] = "aria2c"
-            opts["external_downloader_args"] = [
-                "--max-connection-per-server=16", "--split=16",
-                "--min-split-size=1M", "--continue=true",
-            ]
         return opts
 
     # Snapshot files before the download to detect new or modified files.
@@ -361,21 +354,9 @@ def download_with_browser(url: str, output_path: str = "downloads",
         for f in os.listdir(output_path)
     }
 
-    force_native = False
-    while True:
-        current_opts = build_opts(force_native=force_native)
-        try:
-            with yt_dlp.YoutubeDL(current_opts) as ydl:
-                ydl.extract_info(stream_url, download=True)
-            break
-        except Exception as e:
-            if not force_native and aria2c_path:
-                msg = str(e).lower()
-                if any(k in msg for k in ("403", "forbidden", "429", "inaccessible")):
-                    log.warning("[browser-fallback] Turbo blocked; switching to quiet native mode")
-                    force_native = True
-                    continue
-            raise
+    current_opts = build_opts()
+    with yt_dlp.YoutubeDL(current_opts) as ydl:
+        ydl.extract_info(stream_url, download=True)
 
     # Prefer new or modified files, sorted by descending modification time.
     candidates = []

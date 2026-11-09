@@ -72,6 +72,10 @@ The source app offers **Export EXE** in the menu and each workspace. If PyInstal
 
 Close DowFlow before building so the included database and its SQLite write-ahead log form a consistent snapshot. The EXE embeds the current `dowflow.db`, a blank `config.json` template, the scoped `app_scope.json`, and `youtube.com_cookies.txt` when present. On first launch, choose an existing portable root; DowFlow creates `config.json`, `dowflow.db`, `logs/dowflow.log`, `downloads/`, and `bin/` there. The large Playwright Node runtime is no longer embedded in the EXE; a verified portable `node.exe` is installed in `<portable root>/bin/` on first launch and used by Playwright. This substantially reduces the EXE size while keeping the application independent of a system Node installation. The EXE may be moved anywhere and does not require the `dist/` folder on the target PC. FFmpeg, its DLLs, Node.js, and Playwright Chromium are installed or updated in `<portable root>/bin/` after the window opens. A small Windows registry pointer remembers the selected root without placing configuration beside the EXE. Cookie exports grant access to personal accounts: an EXE built with `youtube.com_cookies.txt` contains that signed-in session. Do not distribute that EXE; remove the cookie file before building a shareable copy.
 
+### Local launcher icon
+
+When running from a source ZIP with `start.bat`, Windows normally shows the generic Python icon because the batch file starts `python.exe`. Build the small windowless launcher with `build_launcher.bat`; it creates `dist/DowFlow-Launcher.exe` using `static/dowflow.ico`. `start.bat` detects that launcher automatically and delegates to the same virtual environment and `startup.py`, so the local application uses the DowFlow identity instead of the Python launch icon. If the launcher has not been built yet, `start.bat` keeps the normal Python fallback.
+
 ## Diagnostics
 
 The diagnostic center uses the venv, ANSI colors and non-destructive checks:

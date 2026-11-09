@@ -160,5 +160,15 @@ if "!DOWFLOW_WARN!"=="1" (
     echo Check logs\dowflow.log or run debug.bat.
     echo.
 )
-python startup.py
+REM Prefer the windowless DowFlow launcher so Windows uses the DowFlow icon
+REM instead of the generic Python process icon in the taskbar. The launcher
+REM delegates to this same venv and startup.py; keep the Python fallback for
+REM source ZIPs where the launcher has not been built yet.
+if exist "%~dp0DowFlow-Launcher.exe" (
+    "%~dp0DowFlow-Launcher.exe"
+) else if exist "%~dp0dist\DowFlow-Launcher.exe" (
+    "%~dp0dist\DowFlow-Launcher.exe"
+) else (
+    python startup.py
+)
 pause

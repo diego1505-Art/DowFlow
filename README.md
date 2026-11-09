@@ -18,10 +18,10 @@ Use DowFlow only for personal purposes and with content you have the right to do
 
 - Windows 10 or later.
 - Python 3.10 or later in the `PATH`.
-- Git for automatic project updates.
+- Git for automatic updates when running a clone; ZIP updates use GitHub directly.
 - Internet connection.
 
-`start.bat` detects or installs Playwright Chromium and FFmpeg via WinGet when they are missing in source mode. A ZIP downloaded from GitHub is standalone: because it has no `.git` folder, automatic Git updates are skipped and the application starts directly. Node.js LTS can provide more YouTube formats. yt-dlp handles fragment parallelism natively; no additional download accelerator is installed. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
+`start.bat` detects or installs Playwright Chromium and FFmpeg via WinGet when they are missing in source mode. A ZIP downloaded from GitHub has no `.git` folder, so `start.bat` checks GitHub's latest `main` commit through the API, compares the project files, and can replace only project files while preserving `.venv`, `downloads`, `config.json`, `dowflow.db`, and `logs`. Node.js LTS can provide more YouTube formats. yt-dlp handles fragment parallelism natively; no additional download accelerator is installed. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
 
 ## Getting started
 
@@ -33,13 +33,12 @@ From the project root:
 
 On startup, the script:
 
-1. Checks the latest `main` commit on [GitHub](https://github.com/diego1505-Art/DowFlow).
-2. Shows a colored terminal animation while downloading the GitHub update; its color changes every 10 seconds and it stops when the download finishes.
-3. If a newer commit is available, shows its author and summary, then asks whether to install the project update.
-4. If accepted, temporarily stashes tracked local changes, applies a fast-forward update, and restores the changes.
-5. If declined, skips only the project-code update and continues startup.
-6. Creates `.venv` if needed and checks dependencies automatically; dependency updates do not require confirmation.
-7. Checks Playwright and FFmpeg.
+1. Checks the latest `main` commit on [GitHub](https://github.com/diego1505-Art/DowFlow); clones use Git, while ZIPs use the GitHub API and archive.
+2. If a ZIP update is available, asks whether to install it and preserves runtime data and the virtual environment.
+3. If a clone update is available, temporarily stashes tracked local changes, applies a fast-forward update, and restores the changes.
+4. If declined, skips only the project-code update and continues startup.
+5. Creates `.venv` if needed and checks dependencies automatically; dependency updates do not require confirmation.
+6. Checks Playwright and FFmpeg.
 
 The application opens in its native window and serves its local interface at <http://127.0.0.1:5001>.
 

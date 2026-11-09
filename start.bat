@@ -10,7 +10,13 @@ if /i "%~1"=="--updated" goto :after_update
 REM GitHub ZIP downloads do not contain .git. Never let Git walk into a
 REM parent directory and treat an unrelated repository as DowFlow.
 if not exist "%~dp0.git\HEAD" (
-    echo [INFO] Standalone ZIP detected; automatic project updates skipped.
+    echo [INFO] Standalone ZIP detected; checking GitHub for project updates...
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\zip_update.ps1" -Repository "https://github.com/diego1505-Art/DowFlow.git" -Branch "main" -ProjectRoot "%CD%"
+    if errorlevel 10 (
+        del /q "%~dp0.venv\deps_ok.flag" >nul 2>&1
+        endlocal & call "%~f0" --updated & exit /b
+    )
+    if errorlevel 1 echo [WARNING] ZIP project update failed; local files are preserved.
     goto :after_update
 )
 

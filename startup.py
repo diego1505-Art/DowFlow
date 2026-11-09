@@ -538,7 +538,18 @@ def _apply_windows_window_icon(icon_path: str) -> None:
         import ctypes
 
         user32 = ctypes.windll.user32
-        hwnd = user32.FindWindowW(None, "DowFlow")
+        shell32 = ctypes.windll.shell32
+        try:
+            shell32.SetCurrentProcessExplicitAppUserModelID("DowFlow.DowFlow")
+        except (AttributeError, OSError):
+            pass
+
+        hwnd = 0
+        for _ in range(30):
+            hwnd = user32.FindWindowW(None, "DowFlow")
+            if hwnd:
+                break
+            time.sleep(0.1)
         if not hwnd:
             return
         image_icon = 1  # IMAGE_ICON
@@ -554,6 +565,12 @@ def _apply_windows_window_icon(icon_path: str) -> None:
         icon_big = 1
         user32.SendMessageW(hwnd, wm_seticon, icon_small, handle)
         user32.SendMessageW(hwnd, wm_seticon, icon_big, handle)
+        # Also replace the class icon used by the title bar/taskbar when the
+        # backend cached the Python process icon before WM_SETICON arrived.
+        set_class_long_ptr = getattr(user32, "SetClassLongPtrW", None)
+        if set_class_long_ptr is not None:
+            set_class_long_ptr(hwnd, -34, handle)  # GCLP_HICON
+            set_class_long_ptr(hwnd, -14, handle)  # GCLP_HICONSM
     except (AttributeError, OSError):
         return
 

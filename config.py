@@ -186,6 +186,9 @@ def configure_runtime_paths(download_path: str | Path | None = None) -> Path:
     current_entries = os.environ.get("PATH", "").split(os.pathsep)
     if str(bin_folder) not in current_entries:
         os.environ["PATH"] = str(bin_folder) + os.pathsep + os.environ.get("PATH", "")
+    node_binary = bin_folder / ("node.exe" if os.name == "nt" else "node")
+    if node_binary.is_file():
+        os.environ["PLAYWRIGHT_NODEJS_PATH"] = str(node_binary)
     return bin_folder
 
 

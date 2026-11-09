@@ -238,6 +238,8 @@ class PortableConfigurationTests(unittest.TestCase):
             ), patch.object(bootstrap, "configure_runtime_paths", return_value=bin_dir) as configure, patch.object(
                 bootstrap, "_read_url", return_value=("a" * 64).encode("ascii")
             ), patch.object(
+                bootstrap, "_install_playwright_node"
+            ), patch.object(
                 bootstrap, "_install_chromium"
             ) as install_chromium:
                 bootstrap.ensure_external_dependencies(
@@ -468,6 +470,17 @@ class LocalVideoApiTests(unittest.TestCase):
             client = app_module.app.test_client()
             self.assertEqual(client.get("/video").status_code, 200)
             self.assertEqual(client.get("/music").status_code, 404)
+
+    def test_scoped_app_redirects_root_to_its_only_page(self):
+        import app as app_module
+
+        with patch.object(app_module, "IS_FROZEN", True), patch.object(
+            app_module, "APP_SCOPE", "video"
+        ):
+            response = app_module.app.test_client().get("/", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/video")
 
     def test_export_name_is_safe_for_windows(self):
         self.assertEqual(build_export.sanitize_exe_name("My DowFlow.exe"), "My DowFlow")

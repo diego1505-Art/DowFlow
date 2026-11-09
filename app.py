@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, url_for
 from werkzeug.utils import secure_filename
 from folder_picker import select_download_folder
 
@@ -179,7 +179,15 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 
 @app.route("/")
 def index():
-    """Main menu for selecting a download type."""
+    """Main menu, or the direct entry point for a scoped executable."""
+    if IS_FROZEN and APP_SCOPE != "all":
+        return redirect({
+            "video": "/video",
+            "music": "/music",
+            "film": "/film",
+            "anime": "/anime",
+            "image": "/image",
+        }[APP_SCOPE])
     return render_template(
         "menu.html",
         has_ffmpeg=has_ffmpeg(),

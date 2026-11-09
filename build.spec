@@ -15,14 +15,14 @@ template_sets = {
         "menu.html", "download.html", "music.html", "music_explore.html",
         "music_liked.html", "coming_soon.html", "export_controls.html",
     ],
-    "video": ["menu.html", "download.html", "export_controls.html"],
+    "video": ["download.html", "export_controls.html"],
     "music": [
-        "menu.html", "music.html", "music_explore.html", "music_liked.html",
+        "music.html", "music_explore.html", "music_liked.html",
         "export_controls.html",
     ],
-    "film": ["menu.html", "coming_soon.html", "export_controls.html"],
-    "anime": ["menu.html", "coming_soon.html", "export_controls.html"],
-    "image": ["menu.html", "coming_soon.html", "export_controls.html"],
+    "film": ["coming_soon.html", "export_controls.html"],
+    "anime": ["coming_soon.html", "export_controls.html"],
+    "image": ["coming_soon.html", "export_controls.html"],
 }
 templates = [(str(PROJECT_ROOT / "templates" / name), "templates") for name in template_sets[BUILD_SCOPE]]
 static_files = [
@@ -43,11 +43,23 @@ if BUILD_SCOPE in {"all", "music"}:
 
 for package in ("flask", "jinja2", "werkzeug", "waitress", "yt_dlp", "playwright", "requests", "rich", "webview"):
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
+    if package == "playwright":
+        # The bundled Node runtime is about 120 MB in the build environment.
+        # DowFlow installs a verified portable node.exe in the selected root/bin
+        # on first launch and points Playwright to it at runtime.
+        def is_playwright_node(item):
+            source = str(item[0]).lower()
+            return Path(source).name in {"node", "node.exe"} and "playwright" in source and "driver" in source
+
+        package_datas = [item for item in package_datas if not is_playwright_node(item)]
+        package_binaries = [
+            item for item in package_binaries if not is_playwright_node(item)
+        ]
     datas += package_datas
     binaries += package_binaries
     hiddenimports += package_hiddenimports
 
-# Initial mutable data is extracted beside the EXE without overwriting user files.
+# Initial mutable data is extracted into the user-selected portable root.
 portable_files = [
     (PROJECT_ROOT / "dowflow.db", "portable_data"),
     (PROJECT_ROOT / "dowflow.db-wal", "portable_data"),

@@ -25,6 +25,10 @@ log = get_logger("bootstrap")
 
 FFMPEG_ARCHIVE_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 FFMPEG_CHECKSUM_URL = FFMPEG_ARCHIVE_URL + ".sha256"
+NODE_VERSION = "22.14.0"
+NODE_ARCHIVE_NAME = f"node-v{NODE_VERSION}-win-x64.zip"
+NODE_ARCHIVE_URL = f"https://nodejs.org/dist/v{NODE_VERSION}/{NODE_ARCHIVE_NAME}"
+NODE_CHECKSUM_URL = f"https://nodejs.org/dist/v{NODE_VERSION}/SHASUMS256.txt"
 _PROGRESS_LOCK = threading.Lock()
 _PROGRESS = {
     "status": "pending",
@@ -184,6 +188,49 @@ def _install_ffmpeg(bin_folder: Path | None = None, progress_callback=None) -> s
         return expected_hash
 
 
+def _install_playwright_node(bin_folder: Path | None = None, progress_callback=None) -> None:
+    """Install the small external Node runtime used by Playwright's CLI driver."""
+    if os.name != "nt":
+        return
+    bin_folder = bin_folder or get_bin_folder()
+    node_binary = bin_folder / "node.exe"
+    if node_binary.is_file():
+        return
+    log.info("Downloading Node.js %s into %s", NODE_VERSION, bin_folder)
+    with tempfile.TemporaryDirectory(prefix="dowflow-node-") as temporary:
+        archive_path = Path(temporary) / NODE_ARCHIVE_NAME
+        checksums = _read_url(NODE_CHECKSUM_URL).decode("ascii", errors="replace")
+        expected_hash = next(
+            (
+                line.split()[0].lower()
+                for line in checksums.splitlines()
+                if line.strip().endswith(NODE_ARCHIVE_NAME) and len(line.split()) >= 2
+            ),
+            None,
+        )
+        if expected_hash is None:
+            raise RuntimeError("The official Node.js checksum could not be read.")
+        _read_url(
+            NODE_ARCHIVE_URL,
+            archive_path,
+            progress_callback=(
+                lambda value: progress_callback(value)
+                if progress_callback is not None else None
+            ),
+        )
+        if _sha256(archive_path) != expected_hash:
+            raise RuntimeError("Node.js checksum mismatch; the archive was not installed.")
+        with zipfile.ZipFile(archive_path) as archive:
+            member = next(
+                (item for item in archive.infolist() if PurePosixPath(item.filename).name.lower() == "node.exe"),
+                None,
+            )
+            if member is None:
+                raise RuntimeError("The Node.js archive did not contain node.exe.")
+            _copy_zip_member(archive, member, node_binary)
+    os.environ["PLAYWRIGHT_NODEJS_PATH"] = str(node_binary)
+
+
 def _chromium_installed(browser_dir: Path) -> bool:
     return browser_dir.is_dir() and any(browser_dir.rglob("chrome.exe"))
 
@@ -250,6 +297,13 @@ def ensure_external_dependencies(progress_callback=None) -> None:
     elif progress_callback:
         progress_callback(50, "FFmpeg is up to date")
 
+    if progress_callback:
+        progress_callback(55, "Checking Node.js")
+    _install_playwright_node(
+        bin_folder,
+        (lambda value: progress_callback(55 + value * 18 // 100, "Updating Node.js"))
+        if progress_callback else None,
+    )
     if progress_callback:
         progress_callback(74, "Checking Chromium")
     _install_chromium(

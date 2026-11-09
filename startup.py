@@ -561,20 +561,23 @@ def _run_webview_session(
 
         import webview
 
-        bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-        icon_path = bundle_root / "static" / "dowflow.ico"
         webview.create_window(
             "DowFlow",
             url,
             width=1280,
             height=860,
             min_size=(900, 600),
-            icon=str(icon_path) if icon_path.is_file() else None,
         )
         webview.start()
         return 0
     except Exception as error:
-        log.error("Could not open the native application window: %s", error, exc_info=True)
+        from logger import get_logger
+
+        get_logger("startup").error(
+            "Could not open the native application window: %s",
+            error,
+            exc_info=True,
+        )
         return 1
     finally:
         stream_stop.set()

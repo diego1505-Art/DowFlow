@@ -7,6 +7,13 @@ setlocal EnableExtensions EnableDelayedExpansion
 REM Restart after update: skip directly to the setup phase.
 if /i "%~1"=="--updated" goto :after_update
 
+REM GitHub ZIP downloads do not contain .git. Never let Git walk into a
+REM parent directory and treat an unrelated repository as DowFlow.
+if not exist "%~dp0.git\HEAD" (
+    echo [INFO] Standalone ZIP detected; automatic project updates skipped.
+    goto :after_update
+)
+
 set "DOWFLOW_GITHUB_REPO=https://github.com/diego1505-Art/DowFlow.git"
 where git >nul 2>&1
 if errorlevel 1 (

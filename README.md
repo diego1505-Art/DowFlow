@@ -21,7 +21,7 @@ Use DowFlow only for personal purposes and with content you have the right to do
 - Git for automatic project updates.
 - Internet connection.
 
-`start.bat` detects or installs Playwright Chromium and FFmpeg via WinGet when they are missing in source mode. Node.js LTS can provide more YouTube formats. yt-dlp handles fragment parallelism natively; no additional download accelerator is installed. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
+`start.bat` detects or installs Playwright Chromium and FFmpeg via WinGet when they are missing in source mode. A ZIP downloaded from GitHub is standalone: because it has no `.git` folder, automatic Git updates are skipped and the application starts directly. Node.js LTS can provide more YouTube formats. yt-dlp handles fragment parallelism natively; no additional download accelerator is installed. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
 
 ## Getting started
 

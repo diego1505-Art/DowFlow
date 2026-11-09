@@ -575,6 +575,18 @@ def _apply_windows_window_icon(icon_path: str) -> None:
         return
 
 
+def _prepare_windows_app_identity() -> None:
+    """Give source-mode launches a DowFlow taskbar identity before GUI creation."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("DowFlow.DowFlow")
+    except (AttributeError, OSError):
+        return
+
+
 def _run_webview_session(
     console: Console,
     url: str,
@@ -613,6 +625,7 @@ def _run_webview_session(
 
         bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
         icon_path = bundle_root / "static" / "dowflow.ico"
+        _prepare_windows_app_identity()
         webview.create_window(
             "DowFlow",
             url,

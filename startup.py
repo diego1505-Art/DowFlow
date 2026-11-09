@@ -16,7 +16,7 @@ from threading import Event, Thread
 from typing import BinaryIO
 from urllib.request import urlopen
 
-from config import BASE_DIR, SUBPROCESS_CREATION_FLAGS
+from config import SUBPROCESS_CREATION_FLAGS, get_data_root
 from rich.align import Align
 from rich.box import ROUNDED
 from rich.console import Console, Group
@@ -664,7 +664,7 @@ def main() -> int:
     log_lines: deque[str] = deque(["Starting DowFlow server..."])
     if port_notice:
         log_lines.append(port_notice)
-    existing_log_path = BASE_DIR / "logs" / "dowflow.log"
+    existing_log_path = get_data_root() / "logs" / "dowflow.log"
     existing_log_offset: int | None = None
     if existing_server:
         existing_lines, existing_log_offset = _read_existing_server_logs(existing_log_path)

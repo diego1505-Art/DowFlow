@@ -103,6 +103,7 @@ class PortableConfigurationTests(unittest.TestCase):
             bundled_music.mkdir()
             (bundled_music / "seed.mp3").write_bytes(b"audio")
             config_file = app_dir / "config.json"
+            selected_config = selected / "config.json"
 
             with patch.object(config, "IS_FROZEN", True), patch.object(
                 config, "BASE_DIR", app_dir
@@ -110,11 +111,14 @@ class PortableConfigurationTests(unittest.TestCase):
                 self.assertEqual(config.set_download_path(selected), selected.resolve())
                 self.assertEqual(config.get_download_path(), selected.resolve())
 
-            self.assertEqual(
-                json.loads(config_file.read_text(encoding="utf-8"))["download_path"],
-                str(selected.resolve()),
-            )
-            self.assertFalse((selected / "music").exists())
+                self.assertEqual(
+                    json.loads(selected_config.read_text(encoding="utf-8"))["download_path"],
+                    str(selected.resolve()),
+                )
+                self.assertFalse(config_file.exists())
+                self.assertTrue((selected / "downloads").is_dir())
+                self.assertTrue((selected / "bin").is_dir())
+                self.assertFalse((selected / "music").exists())
 
     def test_portable_data_extraction_never_overwrites_existing_files(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -10,14 +10,80 @@ from typing import Literal, overload
 
 IS_FROZEN = bool(getattr(sys, "frozen", False))
 SOURCE_DIR = Path(__file__).resolve().parent
-BASE_DIR = Path(sys.executable).resolve().parent if IS_FROZEN else SOURCE_DIR
+EXECUTABLE_DIR = Path(sys.executable).resolve().parent if IS_FROZEN else SOURCE_DIR
 BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", SOURCE_DIR))
-DOWNLOAD_FOLDER = BASE_DIR / "downloads"
-CONFIG_FILE = BASE_DIR / "config.json"
-APP_SCOPE_FILE = BASE_DIR / "app_scope.json"
-BIN_FOLDER = BASE_DIR / "bin"
 SUBPROCESS_CREATION_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 _CONFIG_LOCK = threading.RLock()
+_REGISTRY_KEY = r"Software\DowFlow"
+
+
+def _registry_data_root() -> Path | None:
+    if not IS_FROZEN or os.name != "nt":
+        return None
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY) as key:
+            value, _ = winreg.QueryValueEx(key, "DataRoot")
+        candidate = Path(str(value)).expanduser()
+        return candidate if candidate.is_dir() else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _legacy_data_root() -> Path | None:
+    """Find the pre-root-selection config beside an older portable EXE."""
+    if not IS_FROZEN:
+        return None
+    legacy_config = EXECUTABLE_DIR / "config.json"
+    try:
+        with legacy_config.open("r", encoding="utf-8") as handle:
+            value = json.load(handle).get("download_path")
+        candidate = Path(value).expanduser() if isinstance(value, str) and value.strip() else None
+        return candidate if candidate is not None and candidate.is_dir() else None
+    except (OSError, ValueError, AttributeError, TypeError):
+        return None
+
+
+def _initial_data_root() -> Path:
+    if not IS_FROZEN:
+        return SOURCE_DIR
+    return _registry_data_root() or _legacy_data_root() or EXECUTABLE_DIR
+
+
+BASE_DIR = _initial_data_root()
+DOWNLOAD_FOLDER = BASE_DIR / "downloads"
+CONFIG_FILE = BASE_DIR / "config.json"
+BIN_FOLDER = BASE_DIR / "bin"
+APP_SCOPE_FILE = (
+    BUNDLE_DIR / "portable_data" / "app_scope.json"
+    if IS_FROZEN
+    else SOURCE_DIR / "build" / "app_scope.json"
+)
+
+
+def get_data_root() -> Path:
+    return BASE_DIR
+
+
+def _set_data_root(root: Path) -> None:
+    global BASE_DIR, DOWNLOAD_FOLDER, CONFIG_FILE, BIN_FOLDER
+    BASE_DIR = root
+    DOWNLOAD_FOLDER = root / "downloads"
+    CONFIG_FILE = root / "config.json"
+    BIN_FOLDER = root / "bin"
+
+
+def _remember_data_root(root: Path) -> None:
+    if not IS_FROZEN or os.name != "nt":
+        return
+    try:
+        import winreg
+
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY) as key:
+            winreg.SetValueEx(key, "DataRoot", 0, winreg.REG_SZ, str(root))
+    except OSError:
+        pass
 
 
 def get_runtime_build_id() -> str:
@@ -53,13 +119,16 @@ def _copy_missing(source: Path, destination: Path) -> None:
 
 
 def initialize_portable_data() -> None:
-    """Extract bundled mutable data beside a one-file executable, once."""
+    """Extract bundled mutable data into the selected portable data root."""
     if not IS_FROZEN:
         return
 
     bundled_data = BUNDLE_DIR / "portable_data"
     if bundled_data.is_dir():
         for item in bundled_data.iterdir():
+            # app_scope.json describes the executable and stays inside the bundle.
+            if item.name == "app_scope.json":
+                continue
             _copy_missing(item, BASE_DIR / item.name)
 
     saved_path = _saved_download_path()
@@ -127,6 +196,10 @@ def set_download_path(path: str | Path) -> Path:
         raise ValueError("The selected download folder does not exist.")
 
     with _CONFIG_LOCK:
+        _set_data_root(selected_path)
+        _remember_data_root(selected_path)
+        (selected_path / "downloads").mkdir(parents=True, exist_ok=True)
+        (selected_path / "bin").mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         temporary_file = CONFIG_FILE.with_suffix(".json.tmp")
         temporary_file.write_text(
@@ -134,6 +207,7 @@ def set_download_path(path: str | Path) -> Path:
             encoding="utf-8",
         )
         temporary_file.replace(CONFIG_FILE)
+        initialize_portable_data()
         if IS_FROZEN:
             configure_runtime_paths(selected_path)
 

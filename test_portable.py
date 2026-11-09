@@ -46,7 +46,7 @@ class PortableConfigurationTests(unittest.TestCase):
     def test_frozen_bin_folder_is_inside_the_saved_media_root(self):
         media_root = Path("D:/media")
         with patch.object(config, "IS_FROZEN", True), patch.object(
-            config, "_saved_download_path", return_value=media_root
+            config, "BASE_DIR", media_root
         ):
             self.assertEqual(config.get_bin_folder(), media_root / "bin")
 
@@ -109,16 +109,16 @@ class PortableConfigurationTests(unittest.TestCase):
                 config, "BASE_DIR", app_dir
             ), patch.object(config, "CONFIG_FILE", config_file):
                 self.assertEqual(config.set_download_path(selected), selected.resolve())
-                self.assertEqual(config.get_download_path(), selected.resolve())
+                self.assertEqual(config.get_download_path(), (selected / "downloads").resolve())
 
-                self.assertEqual(
-                    json.loads(selected_config.read_text(encoding="utf-8"))["download_path"],
-                    str(selected.resolve()),
-                )
-                self.assertFalse(config_file.exists())
-                self.assertTrue((selected / "downloads").is_dir())
-                self.assertTrue((selected / "bin").is_dir())
-                self.assertFalse((selected / "music").exists())
+            self.assertEqual(
+                json.loads(selected_config.read_text(encoding="utf-8"))["download_path"],
+                str((selected / "downloads").resolve()),
+            )
+            self.assertFalse(config_file.exists())
+            self.assertTrue((selected / "downloads").is_dir())
+            self.assertTrue((selected / "bin").is_dir())
+            self.assertFalse((selected / "music").exists())
 
     def test_portable_data_extraction_never_overwrites_existing_files(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -148,7 +148,7 @@ class PortableConfigurationTests(unittest.TestCase):
                 config.initialize_portable_data()
                 self.assertEqual(
                     os.environ["PLAYWRIGHT_BROWSERS_PATH"],
-                    str(media_root / "bin" / "ms-playwright"),
+                    str(app_dir / "bin" / "ms-playwright"),
                 )
 
             self.assertEqual((app_dir / "dowflow.db").read_bytes(), b"user-db")

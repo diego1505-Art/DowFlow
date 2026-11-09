@@ -144,7 +144,12 @@ def _saved_download_path() -> Path | None:
         return None
     if not isinstance(value, str) or not value.strip():
         return None
-    return Path(value).expanduser()
+    candidate = Path(value).expanduser()
+    # Migrate configurations created before the portable root and the media
+    # folder were separated: those stored the selected root itself.
+    if candidate == BASE_DIR or (candidate / "config.json").is_file():
+        return candidate / "downloads"
+    return candidate
 
 
 @overload
@@ -173,7 +178,7 @@ def get_download_path(*, required: bool = True) -> Path | None:
 def get_bin_folder() -> Path:
     """Return the tools folder inside the portable media root when frozen."""
     if IS_FROZEN:
-        return (_saved_download_path() or DOWNLOAD_FOLDER) / "bin"
+        return BASE_DIR / "bin"
     return BIN_FOLDER
 
 
@@ -181,7 +186,7 @@ def configure_runtime_paths(download_path: str | Path | None = None) -> Path:
     """Point native tools and Playwright at the selected media root."""
     if download_path is None:
         download_path = get_download_path(required=False)
-    bin_folder = (Path(download_path) if download_path else BASE_DIR) / "bin"
+    bin_folder = BASE_DIR / "bin" if IS_FROZEN else (Path(download_path) if download_path else BASE_DIR) / "bin"
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bin_folder / "ms-playwright")
     current_entries = os.environ.get("PATH", "").split(os.pathsep)
     if str(bin_folder) not in current_entries:
@@ -206,7 +211,7 @@ def set_download_path(path: str | Path) -> Path:
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         temporary_file = CONFIG_FILE.with_suffix(".json.tmp")
         temporary_file.write_text(
-            json.dumps({"download_path": str(selected_path)}, indent=2),
+            json.dumps({"download_path": str(selected_path / "downloads")}, indent=2),
             encoding="utf-8",
         )
         temporary_file.replace(CONFIG_FILE)

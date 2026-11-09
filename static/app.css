@@ -1,0 +1,96 @@
+:root {
+  --dw-bg: #0b0d10;
+  --dw-surface: #13171c;
+  --dw-surface-2: #191e25;
+  --dw-surface-3: #20262e;
+  --dw-border: #2b333d;
+  --dw-border-soft: rgba(255, 255, 255, .08);
+  --dw-text: #f4f6f8;
+  --dw-muted: #9ba5b1;
+  --dw-subtle: #687482;
+  --dw-accent: #e56b3f;
+  --dw-accent-strong: #f18759;
+  --dw-success: #54c58a;
+  --dw-radius: 14px;
+  --dw-shadow: 0 18px 48px rgba(0, 0, 0, .28);
+}
+
+html, body { background: var(--dw-bg) !important; color: var(--dw-text) !important; }
+body {
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  letter-spacing: -.01em;
+}
+
+.bg-video-container, .bg-video-container video, .bg-overlay { display: none !important; }
+.page { width: min(1240px, calc(100% - 40px)) !important; margin: 24px auto !important; }
+.shell, .app-shell, .card, .panel, .sidebar-card, .music-card, .artist-card {
+  border: 1px solid var(--dw-border) !important;
+  background: var(--dw-surface) !important;
+  box-shadow: var(--dw-shadow) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.shell { border-radius: 18px !important; overflow: hidden; }
+.topbar, .footer { background: #101419 !important; border-color: var(--dw-border) !important; }
+.topbar { padding: 18px 24px !important; }
+.brand { text-decoration: none; }
+.brand-mark {
+  width: 42px !important; height: 42px !important; border-radius: 11px !important;
+  background: #20262e url("/static/favicon.svg") center / 30px 30px no-repeat !important;
+  border: 1px solid #46515e !important; box-shadow: none !important;
+  color: transparent !important; font-size: 0 !important;
+}
+.brand-copy h1, .brand-copy h1 a { color: var(--dw-text) !important; letter-spacing: .08em !important; }
+.brand-copy p, .brand p, .footer, .footer-note { color: var(--dw-muted) !important; }
+.ffmpeg-status, .page-header-pill, .page-header-chip, .chip {
+  background: var(--dw-surface-2) !important; border: 1px solid var(--dw-border) !important; color: var(--dw-muted) !important;
+}
+.ffmpeg-status .dot.online { background: var(--dw-success) !important; }
+.hero, .hero-copy, .content-section { background: transparent !important; }
+.hero { padding: 42px 34px 28px !important; }
+.hero h2, .hero h1, .page-header h2 { color: var(--dw-text) !important; letter-spacing: -.035em !important; }
+.hero p.lead, .hero-copy p, .field-label, .status, .feature p, .card p { color: var(--dw-muted) !important; }
+.eyebrow, .category-code {
+  background: rgba(229, 107, 63, .1) !important; border: 1px solid rgba(229, 107, 63, .35) !important;
+  color: var(--dw-accent-strong) !important;
+}
+.grid { gap: 14px !important; padding: 24px 34px 36px !important; }
+.card {
+  border-radius: var(--dw-radius) !important; background: var(--dw-surface-2) !important; min-height: 190px !important;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease !important;
+}
+.card.available:hover, .card:hover, .music-card:hover, .artist-card:hover {
+  transform: translateY(-2px) !important; border-color: rgba(229, 107, 63, .7) !important; background: #20262d !important;
+}
+.card-index { background: #11151a !important; border-color: var(--dw-border) !important; color: var(--dw-accent-strong) !important; }
+.badge.on { background: rgba(84, 197, 138, .12) !important; border-color: rgba(84, 197, 138, .35) !important; color: #8be1b0 !important; }
+.badge.soon { background: #242a31 !important; border-color: var(--dw-border) !important; color: var(--dw-muted) !important; }
+button, .action-button, .btn, .primary-button, .ghost-button {
+  font-family: inherit !important; border-radius: 9px !important; box-shadow: none !important;
+}
+button.primary-button, .primary-button, .btn, .action-button:hover {
+  background: var(--dw-accent) !important; border-color: var(--dw-accent) !important; color: #fff !important;
+}
+button:hover, .action-button:hover, .btn:hover { filter: brightness(1.08); }
+input, select, textarea {
+  background: #0e1216 !important; color: var(--dw-text) !important; border-color: var(--dw-border) !important; border-radius: 9px !important;
+}
+dialog { background: var(--dw-surface) !important; border-color: var(--dw-border) !important; border-radius: var(--dw-radius) !important; }
+
+/* Video workspace: remove the oversized decorative treatment and keep a clear work surface. */
+.download-card, .url-card, .settings-card, .history-card, .player-card, .feature-card {
+  background: var(--dw-surface-2) !important; border-color: var(--dw-border) !important; border-radius: var(--dw-radius) !important;
+}
+
+/* Music workspace: align its shell with the DowFlow product language. */
+.music-page, .app-shell { background: var(--dw-bg) !important; }
+.sidebar { background: #101419 !important; border-color: var(--dw-border) !important; }
+.main-content { background: var(--dw-bg) !important; }
+.panel, .sidebar-card, .music-card, .artist-card, .now-playing-card { border-radius: var(--dw-radius) !important; }
+.menu-item:hover, .menu-item.active { background: rgba(229, 107, 63, .12) !important; color: var(--dw-text) !important; }
+
+@media (max-width: 720px) {
+  .page { width: min(100% - 20px, 1240px) !important; margin: 10px auto !important; }
+  .topbar, .hero { padding-left: 18px !important; padding-right: 18px !important; }
+  .grid { padding-left: 18px !important; padding-right: 18px !important; }
+}

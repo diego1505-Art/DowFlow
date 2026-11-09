@@ -525,6 +525,39 @@ def _ensure_portable_download_folder() -> bool:
     return True
 
 
+def _apply_windows_window_icon(icon_path: str) -> None:
+    """Set the native window/taskbar icon for pywebview on Windows.
+
+    pywebview versions used by existing DowFlow installations do not accept an
+    ``icon=`` argument in ``create_window``.  Applying the icon after the GUI
+    is ready keeps compatibility with those versions and with source mode.
+    """
+    if os.name != "nt" or not os.path.isfile(icon_path):
+        return
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, "DowFlow")
+        if not hwnd:
+            return
+        image_icon = 1  # IMAGE_ICON
+        load_from_file = 0x00000010
+        default_size = 0x00000040
+        handle = user32.LoadImageW(
+            None, icon_path, image_icon, 0, 0, load_from_file | default_size
+        )
+        if not handle:
+            return
+        wm_seticon = 0x0080
+        icon_small = 0
+        icon_big = 1
+        user32.SendMessageW(hwnd, wm_seticon, icon_small, handle)
+        user32.SendMessageW(hwnd, wm_seticon, icon_big, handle)
+    except (AttributeError, OSError):
+        return
+
+
 def _run_webview_session(
     console: Console,
     url: str,
@@ -561,6 +594,8 @@ def _run_webview_session(
 
         import webview
 
+        bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+        icon_path = bundle_root / "static" / "dowflow.ico"
         webview.create_window(
             "DowFlow",
             url,
@@ -568,7 +603,10 @@ def _run_webview_session(
             height=860,
             min_size=(900, 600),
         )
-        webview.start()
+        webview.start(
+            _apply_windows_window_icon,
+            args=(str(icon_path),),
+        )
         return 0
     except Exception as error:
         from logger import get_logger

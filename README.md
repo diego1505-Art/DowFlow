@@ -143,7 +143,7 @@ The main options are in `config.py`:
 - `DOWFLOW_PROXY_AUTO` enables fetching public proxies (disabled by default).
 - `DOWFLOW_YOUTUBE_COOKIES` sets an alternative cookies file.
 
-Public proxies are intentionally disabled by default: they are unstable and can slow down or compromise downloads.
+Public proxies are intentionally disabled by default : they are unstable and can slow down or compromise downloads.
 ## License
 
 DowFlow is distributed under the Apache-2.0 license. See [LICENSE](LICENSE).

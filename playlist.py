@@ -26,6 +26,7 @@ from config import (
 from utils import _resolve_ffmpeg_dir, pick_connection_tier, pick_proxy, yt_dlp_runtime_options
 from logger import get_logger
 from database import download_start, download_finish
+from downloader.strategy_selector import MediaInfo, StrategySelector
 
 log = get_logger("playlist")
 
@@ -1067,6 +1068,9 @@ def _ydlp_download(
         log.info("[proxy] Trafic via %s", proxy_url.split("@")[-1])
 
     connection_tier = get_connection_tier()
+    media_info = MediaInfo.infer_from_url(url)
+    strategy = StrategySelector(fragment_connections=connection_tier).choose(media_info)
+    strategy_options = strategy.yt_dlp_options()
     monitor_adaptive = bool(adaptive_quality and download_type == "video" and quality == "best")
 
     def build_ydl_opts(quality_key: str) -> dict[str, Any]:
@@ -1100,8 +1104,6 @@ def _ydlp_download(
             "prefer_ffmpeg": has_ffmpeg,
             "merge_output_format": merge_output_format,
             "noplaylist": True,
-            # yt-dlp natively parallelizes fragments according to machine capacity.
-            "concurrent_fragment_downloads": get_connection_tier(),
             "retries": 10, # Use 10 retries for all sites.
             "fragment_retries": 10,
             "file_access_retries": 5,
@@ -1109,6 +1111,7 @@ def _ydlp_download(
             "http_chunk_size": 10485760,
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         }
+        opts.update(strategy_options)
         if proxy_url:
             opts["proxy"] = proxy_url
         if format_sort:
@@ -1131,7 +1134,10 @@ def _ydlp_download(
     quality_changed = False
     adaptive_note: str | None = None
 
-    log.info("[native] yt-dlp fragmented downloader active (x%d fragments)", connection_tier)
+    if strategy.name == "yt-dlp-fragments":
+        log.info("[strategy] native yt-dlp fragments active (x%d)", connection_tier)
+    else:
+        log.info("[strategy] native yt-dlp mono-connection active for direct media")
 
     before_files = set(os.listdir(output_path))
 
@@ -1219,6 +1225,7 @@ def _ydlp_download(
             "quality_used": current_quality,
             "quality_changed": quality_changed,
             "adaptive_note": adaptive_note,
+            "strategy": strategy.name,
             # Do not return yt-dlp info objects, which are not JSON serializable.
         }
     except Exception as e:

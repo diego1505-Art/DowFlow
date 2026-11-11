@@ -8,13 +8,13 @@ const storageKeys = {
   onlineCollapsed: "dowflow-music-online-collapsed",
 };
 
-// LOCKING AUDIO OPTIMIZATION FOR MOBILE
+// Load metadata immediately so the browser can validate the media source before playback.
 const audio = document.getElementById("audio-player");
 if (audio) {
-  audio.preload = "none"; // Avoid saturating mobile bandwidth.
+  audio.preload = "metadata";
 }
 const preloadAudio = new Audio();
-preloadAudio.preload = "none";
+preloadAudio.preload = "metadata";
 
 // SYNC LIBRARY LOADING
 

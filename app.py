@@ -767,6 +767,23 @@ def serve_media(filename: str):
     return send_from_directory(folder, filename, as_attachment=False)
 
 
+@app.route("/media/music/<path:filename>")
+def serve_music_media(filename: str):
+    """Serve Music files from the configured Music folder with HTTP ranges."""
+    if music is None:
+        abort(404)
+    try:
+        music_folder = music._music_folder()
+    except DownloadPathNotConfigured:
+        abort(409)
+    return send_from_directory(
+        music_folder,
+        filename,
+        as_attachment=False,
+        conditional=True,
+    )
+
+
 @app.route("/media-local/<token>")
 def serve_local_media(token: str):
     cleanup_local_media_registry()

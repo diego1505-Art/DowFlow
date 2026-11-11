@@ -6,7 +6,7 @@
     <title>DowFlow - Menu</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20251111b">
     {% if is_frozen %}
     <link rel="stylesheet" href="{{ url_for('static', filename='dependencies-loading.css') }}">
     {% endif %}
@@ -135,7 +135,7 @@
         #downloadFolderStatus { margin-top: 12px; overflow-wrap: anywhere; }
     </style>
 </head>
-<body>
+<body class="menu-page">
     {% if is_frozen %}
     <section id="dependencyLoading" class="dependency-loading" role="status" aria-live="polite">
         <div class="dependency-loading__content">

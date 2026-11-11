@@ -6,7 +6,7 @@
     <title>DowFlow - Multi-Site Downloader</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20251111b">
     <style>
         :root {
             --bg: #f6efe5;
@@ -1203,7 +1203,7 @@
         }
     </style>
 </head>
-<body>
+<body class="download-page">
     <div class="bg-video-container">
         <video autoplay muted loop playsinline poster="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop">
             <source src="https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-night-sky-background-9937-large.mp4" type="video/mp4">

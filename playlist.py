@@ -913,6 +913,8 @@ def download_media(
         metadata["reason"] = result.get("reason")
     if relative_subs:
         metadata["subtitle_files"] = relative_subs
+    selected_strategy = result.get("strategy")
+    is_fragmented = selected_strategy == "yt-dlp-fragments" if selected_strategy else None
     download_finish(
         dl_id,
         final_status,
@@ -922,6 +924,8 @@ def download_media(
         file_path=filepath,
         file_size_bytes=fsize,
         duration_ms=dur_ms,
+        strategy=selected_strategy,
+        is_fragmented=is_fragmented,
         metadata=metadata,
     )
     if final_status == "success":

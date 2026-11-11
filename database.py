@@ -20,7 +20,7 @@ from config import BASE_DIR
 DB_PATH = BASE_DIR / "dowflow.db"
 
 _LOCK = threading.Lock()
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -127,6 +127,12 @@ def init_db() -> None:
             """
         )
 
+        columns = {row["name"] for row in c.execute("PRAGMA table_info(downloads)").fetchall()}
+        if "strategy" not in columns:
+            c.execute("ALTER TABLE downloads ADD COLUMN strategy TEXT")
+        if "is_fragmented" not in columns:
+            c.execute("ALTER TABLE downloads ADD COLUMN is_fragmented INTEGER")
+
         c.execute(
             "INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)",
             ("schema_version", str(_SCHEMA_VERSION)),
@@ -169,6 +175,8 @@ def download_finish(
     file_path: str | None = None,
     file_size_bytes: int | None = None,
     duration_ms: int | None = None,
+    strategy: str | None = None,
+    is_fragmented: bool | None = None,
     metadata: dict | None = None,
 ) -> None:
     """Finalize a download and trigger automatic learning."""
@@ -188,6 +196,8 @@ def download_finish(
                       file_path      = ?,
                       file_size_bytes= ?,
                       duration_ms    = ?,
+                      strategy      = ?,
+                      is_fragmented = ?,
                       finished_at    = ?,
                       metadata_json  = COALESCE(?, metadata_json)
                 WHERE id = ?""",
@@ -199,6 +209,8 @@ def download_finish(
                 file_path,
                 file_size_bytes,
                 duration_ms,
+                strategy,
+                int(is_fragmented) if is_fragmented is not None else None,
                 finished,
                 _json_dumps(metadata or {}),
                 download_id,
@@ -248,6 +260,52 @@ def download_count_by_status() -> dict[str, int]:
             "SELECT status, COUNT(*) AS n FROM downloads GROUP BY status"
         ).fetchall()
     return {r["status"]: int(r["n"]) for r in rows}
+
+
+def download_stats() -> dict[str, Any]:
+    """Return aggregate metrics for the Stats API and page."""
+    with _conn() as c:
+        totals = c.execute(
+            """SELECT COUNT(*) AS total,
+                      COALESCE(SUM(CASE WHEN status='success' THEN 1 ELSE 0 END), 0) AS successes,
+                      COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END), 0) AS failures,
+                      COALESCE(SUM(CASE WHEN status='skipped' THEN 1 ELSE 0 END), 0) AS skipped,
+                      COALESCE(SUM(file_size_bytes), 0) AS bytes,
+                      COALESCE(AVG(CASE WHEN status='success' THEN duration_ms END), 0) AS avg_duration_ms
+                 FROM downloads"""
+        ).fetchone()
+        by_strategy = c.execute(
+            """SELECT COALESCE(strategy, 'unknown') AS strategy, COUNT(*) AS total,
+                      SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS successes,
+                      SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failures,
+                      COALESCE(AVG(CASE WHEN status='success' THEN duration_ms END), 0) AS avg_duration_ms,
+                      COALESCE(SUM(file_size_bytes), 0) AS bytes
+                 FROM downloads GROUP BY COALESCE(strategy, 'unknown') ORDER BY total DESC"""
+        ).fetchall()
+        by_domain = c.execute(
+            """SELECT COALESCE(domain, 'unknown') AS domain, COUNT(*) AS total,
+                      SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS successes,
+                      COALESCE(AVG(CASE WHEN status='success' THEN duration_ms END), 0) AS avg_duration_ms
+                 FROM downloads GROUP BY COALESCE(domain, 'unknown') ORDER BY total DESC LIMIT 20"""
+        ).fetchall()
+        recent = c.execute(
+            """SELECT id, domain, status, strategy, is_fragmented, file_size_bytes,
+                      duration_ms, started_at, finished_at
+                 FROM downloads ORDER BY started_at DESC LIMIT 20"""
+        ).fetchall()
+
+    def clean(row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        if item.get("is_fragmented") is not None:
+            item["is_fragmented"] = bool(item["is_fragmented"])
+        return item
+
+    return {
+        "totals": dict(totals),
+        "by_strategy": [clean(row) for row in by_strategy],
+        "by_domain": [clean(row) for row in by_domain],
+        "recent": [clean(row) for row in recent],
+    }
 
 
 def favorite_list() -> list[str]:

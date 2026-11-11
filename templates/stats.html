@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DowFlow — Stats</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20251111b">
+</head>
+<body class="stats-page">
+  <main class="page">
+    <section class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">
+          <div class="brand-mark">▼</div>
+          <div class="brand-copy"><h1>DowFlow</h1><p>Performance statistics</p></div>
+        </a>
+        <nav class="stats-nav"><a class="nav-link" href="/">Home</a><a class="nav-link active" href="/stats">Stats</a></nav>
+      </header>
+      <section class="stats-content">
+        <div class="stats-heading">
+          <div><div class="eyebrow">Phase 4</div><h2>Download performance</h2><p>Compare native yt-dlp strategies from your actual download history.</p></div>
+          <button class="ghost-button" id="refreshStats" type="button">Refresh</button>
+        </div>
+        <div class="stat-cards" id="summaryCards"><div class="stat-card"><span>Loading</span><strong>—</strong></div></div>
+        <div class="stats-grid">
+          <section class="stats-panel"><div class="panel-heading"><h3>By strategy</h3><span>Success and speed</span></div><div id="strategyTable" class="stats-table-wrap"><p class="empty-state">Loading statistics…</p></div></section>
+          <section class="stats-panel"><div class="panel-heading"><h3>By domain</h3><span>Top 20 domains</span></div><div id="domainTable" class="stats-table-wrap"><p class="empty-state">Loading statistics…</p></div></section>
+        </div>
+        <section class="stats-panel recent-panel"><div class="panel-heading"><h3>Recent downloads</h3><span>Last 20 entries</span></div><div id="recentTable" class="stats-table-wrap"><p class="empty-state">Loading statistics…</p></div></section>
+      </section>
+      <footer class="footer"><span>DowFlow — native yt-dlp telemetry</span><span>aria2c is not enabled by this page</span></footer>
+    </section>
+  </main>
+<script>
+const esc = value => String(value ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
+const seconds = ms => ms ? (Number(ms) / 1000).toFixed(1) + " s" : "—";
+const mb = bytes => bytes ? (Number(bytes) / 1048576).toFixed(1) + " MB" : "0 MB";
+function table(headers, rows) {
+  if (!rows.length) return '<p class="empty-state">No data yet.</p>';
+  return '<div class="scroll-table"><table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
+}
+async function loadStats() {
+  const response = await fetch('/api/stats', { cache: 'no-store' });
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error || 'Unable to load statistics');
+  const t = data.totals || {};
+  document.getElementById('summaryCards').innerHTML = [
+    ['Downloads', t.total || 0], ['Successes', t.successes || 0], ['Failures', t.failures || 0], ['Data', mb(t.bytes)], ['Avg. duration', seconds(t.avg_duration_ms)]
+  ].map(([label, value]) => `<div class="stat-card"><span>${label}</span><strong>${esc(value)}</strong></div>`).join('');
+  document.getElementById('strategyTable').innerHTML = table(['Strategy','Runs','Success','Failures','Avg. time','Data'], (data.by_strategy || []).map(r => `<tr><td><span class="strategy-pill">${esc(r.strategy)}</span></td><td>${r.total}</td><td class="good">${r.successes || 0}</td><td>${r.failures || 0}</td><td>${seconds(r.avg_duration_ms)}</td><td>${mb(r.bytes)}</td></tr>`));
+  document.getElementById('domainTable').innerHTML = table(['Domain','Runs','Success','Avg. time'], (data.by_domain || []).map(r => `<tr><td>${esc(r.domain)}</td><td>${r.total}</td><td class="good">${r.successes || 0}</td><td>${seconds(r.avg_duration_ms)}</td></tr>`));
+  document.getElementById('recentTable').innerHTML = table(['Domain','Status','Strategy','Fragmented','Size','Duration'], (data.recent || []).map(r => `<tr><td>${esc(r.domain)}</td><td><span class="status-pill ${esc(r.status)}">${esc(r.status)}</span></td><td>${esc(r.strategy)}</td><td>${r.is_fragmented == null ? '—' : (r.is_fragmented ? 'Yes' : 'No')}</td><td>${mb(r.file_size_bytes)}</td><td>${seconds(r.duration_ms)}</td></tr>`));
+}
+document.getElementById('refreshStats').addEventListener('click', () => loadStats().catch(showError));
+function showError(error) { document.getElementById('summaryCards').innerHTML = `<div class="empty-state">${esc(error.message)}</div>`; }
+loadStats().catch(showError);
+</script>
+</body>
+</html>

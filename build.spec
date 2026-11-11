@@ -13,9 +13,9 @@ if BUILD_SCOPE not in {"all", "video", "music", "film", "anime", "image"}:
 template_sets = {
     "all": [
         "menu.html", "download.html", "music.html", "music_explore.html",
-        "music_liked.html", "coming_soon.html", "export_controls.html",
+        "music_liked.html", "coming_soon.html", "stats.html", "export_controls.html",
     ],
-    "video": ["download.html", "export_controls.html"],
+    "video": ["download.html", "stats.html", "export_controls.html"],
     "music": [
         "music.html", "music_explore.html", "music_liked.html",
         "export_controls.html",

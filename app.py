@@ -39,6 +39,7 @@ from jobs import start_download_job, get_job, list_jobs
 from database import (
     download_list,
     download_count_by_status,
+    download_stats,
     favorite_list,
     favorite_add,
     favorite_remove,
@@ -72,6 +73,8 @@ def _scope_allows_path(scope: str, path: str) -> bool:
         "/check-ffmpeg",
         "/api/download-folder",
         "/api/download-folder/select",
+        "/api/stats",
+        "/stats",
         "/open-folder",
     }
     if path in common_paths or path.startswith(("/static/", "/media/", "/media-local/")):
@@ -81,7 +84,7 @@ def _scope_allows_path(scope: str, path: str) -> bool:
     if scope == "video":
         return path in {
             "/video", "/config", "/history", "/jobs", "/download", "/download-async",
-            "/upload-local", "/url-options", "/expand-url", "/fetch-episodes", "/api/local-videos",
+            "/upload-local", "/url-options", "/expand-url", "/fetch-episodes", "/api/local-videos", "/stats",
         } or path.startswith("/jobs/")
     if scope == "music":
         return path in {"/music", "/music/explore", "/music/liked"} or path.startswith("/api/music/")
@@ -657,6 +660,21 @@ def history():
     except Exception as e:
         log.error("[history] %s", e, exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.get("/api/stats")
+def stats_api():
+    """Return aggregate download metrics and recent strategy usage."""
+    try:
+        return jsonify({"success": True, **download_stats()})
+    except Exception as e:
+        log.error("[stats] %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.get("/stats")
+def stats_page():
+    return render_template("stats.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/jobs", methods=["GET"])

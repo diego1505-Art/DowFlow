@@ -52,6 +52,10 @@ log = get_logger("app")
 _APP_BUILD_ID = get_runtime_build_id()
 
 app = Flask(__name__)
+if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
+    from music_stream_api import music_stream_api
+
+    app.register_blueprint(music_stream_api)
 _EXPORT_JOBS: dict[str, dict[str, Any]] = {}
 _EXPORT_LOCK = threading.Lock()
 _EXPORT_RUNNING = False

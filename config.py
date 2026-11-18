@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, overload
 
 IS_FROZEN = bool(getattr(sys, "frozen", False))
+ELECTRON_SHELL = os.environ.get("DOWFLOW_DESKTOP_SHELL", "").strip().casefold() == "electron"
 SOURCE_DIR = Path(__file__).resolve().parent
 EXECUTABLE_DIR = Path(sys.executable).resolve().parent if IS_FROZEN else SOURCE_DIR
 BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", SOURCE_DIR))
@@ -46,6 +47,13 @@ def _legacy_data_root() -> Path | None:
 
 
 def _initial_data_root() -> Path:
+    if ELECTRON_SHELL:
+        raw_root = os.environ.get("DOWFLOW_DATA_ROOT", "").strip()
+        if not raw_root:
+            raise RuntimeError("The Electron shell must set DOWFLOW_DATA_ROOT.")
+        root = Path(raw_root).expanduser().resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        return root
     if not IS_FROZEN:
         return SOURCE_DIR
     return _registry_data_root() or _legacy_data_root() or EXECUTABLE_DIR
@@ -186,7 +194,10 @@ def configure_runtime_paths(download_path: str | Path | None = None) -> Path:
     """Point native tools and Playwright at the selected media root."""
     if download_path is None:
         download_path = get_download_path(required=False)
-    bin_folder = BASE_DIR / "bin" if IS_FROZEN else (Path(download_path) if download_path else BASE_DIR) / "bin"
+    if IS_FROZEN or ELECTRON_SHELL:
+        bin_folder = BASE_DIR / "bin"
+    else:
+        bin_folder = (Path(download_path) if download_path else BASE_DIR) / "bin"
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bin_folder / "ms-playwright")
     current_entries = os.environ.get("PATH", "").split(os.pathsep)
     if str(bin_folder) not in current_entries:
@@ -204,10 +215,12 @@ def set_download_path(path: str | Path) -> Path:
         raise ValueError("The selected download folder does not exist.")
 
     with _CONFIG_LOCK:
-        _set_data_root(selected_path)
-        _remember_data_root(selected_path)
+        if not ELECTRON_SHELL:
+            _set_data_root(selected_path)
+            _remember_data_root(selected_path)
         (selected_path / "downloads").mkdir(parents=True, exist_ok=True)
-        (selected_path / "bin").mkdir(parents=True, exist_ok=True)
+        bin_root = BASE_DIR if ELECTRON_SHELL else selected_path
+        (bin_root / "bin").mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         temporary_file = CONFIG_FILE.with_suffix(".json.tmp")
         temporary_file.write_text(
@@ -216,7 +229,7 @@ def set_download_path(path: str | Path) -> Path:
         )
         temporary_file.replace(CONFIG_FILE)
         initialize_portable_data()
-        if IS_FROZEN:
+        if IS_FROZEN or ELECTRON_SHELL:
             configure_runtime_paths(selected_path)
 
     return selected_path

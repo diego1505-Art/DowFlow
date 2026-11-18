@@ -27,4 +27,19 @@ The desktop identity is DowFlow throughout: the Electron product name and defaul
 
 Electron also injects a per-launch `X-DowFlow-Desktop` header only into requests to the local Flask origin. The backend checks this token only when launched by this shell; normal source and PyWebView launches are unchanged. The renderer receives a deliberately small `window.dowflow` API (`desktop.getRuntimeInfo` and `youtube.mintPoToken`); it does not receive Node.js or `ipcRenderer` access. The hidden YouTube worker has a separate sandboxed preload and accepts only mint requests; the optional TV-session and player-`n` solver paths are not ported yet.
 
-This prototype does not yet package the Python backend or create a Windows installer. The packaged-backend layout and Electron Builder configuration will be added after the development lifecycle and Music integration are validated. Do not distribute this prototype.
+This remains an experimental desktop build. The Windows packaging path below is configured but still requires a native Windows build and clean-machine smoke test before distribution.
+
+## Windows package
+
+Build from a Windows checkout with Python and Node.js installed. Use the project's Python virtual environment, install pnpm, and run:
+
+```powershell
+cd desktop/electron
+pnpm package:win
+```
+
+The script builds the Music renderer, creates the PyInstaller backend as `dist/DowFlow.exe`, then invokes Electron Builder for an x64 NSIS installer. The expected installer is written under `desktop/electron/release/` as `DowFlow-<version>-x64.exe`. This is an unsigned per-user installer; it does not configure an update feed. The installer can offer an install location and creates Start Menu/Desktop shortcuts. Uninstalling preserves DowFlow's user data.
+
+The packaged backend starts with a clean profile and does not embed the checkout's SQLite database, config, or YouTube cookies. Electron stores its database, configuration, and logs in its per-user `userData` directory; the selected media/download folder remains separate. The normal PyInstaller portable export keeps its existing seed-data behavior. `static/dowflow.ico` is used for the application, installer, and uninstaller icons.
+
+PyInstaller does not cross-build a Windows executable from this Linux sandbox. Run `pnpm package:win` on Windows, then verify first launch, `/api/status` authentication, `/music` assets, log/database/config writes, media-folder selection, backend shutdown, install/uninstall data retention, and absence of DB/WAL/cookie seeds in the installer before treating it as usable. The packaged startup wait is extended to 120 seconds to allow first-run extraction of the one-file backend.

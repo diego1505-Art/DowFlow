@@ -66,8 +66,9 @@ for package in ("flask", "jinja2", "werkzeug", "waitress", "yt_dlp", "playwright
     binaries += package_binaries
     hiddenimports += package_hiddenimports
 
-# Initial mutable data is extracted into the user-selected portable root.
-portable_files = [
+# Portable exports retain their existing seed-data behavior. Electron builds
+# start with a clean per-user profile and must never embed checkout credentials.
+portable_files = [] if os.environ.get("DOWFLOW_ELECTRON_BUILD") == "1" else [
     (PROJECT_ROOT / "dowflow.db", "portable_data"),
     (PROJECT_ROOT / "dowflow.db-wal", "portable_data"),
     (PROJECT_ROOT / "portable_data" / "config.json", "portable_data"),

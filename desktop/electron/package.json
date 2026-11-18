@@ -10,16 +10,65 @@
     "build:music": "vite build --config renderer/vite.config.mts",
     "build:worker": "esbuild youtube/potoken-worker.js --bundle --platform=browser --format=cjs --external:electron --outfile=build/potoken-preload.cjs",
     "typecheck:music": "tsc --noEmit -p renderer/tsconfig.json",
-    "check": "node --check main.cjs && node --check preload.cjs && node --check youtube/potoken-service.cjs && pnpm typecheck:music && pnpm build:music && pnpm build:worker"
+    "check": "node --check main.cjs && node --check preload.cjs && node --check youtube/potoken-service.cjs && pnpm typecheck:music && pnpm build:music && pnpm build:worker",
+    "package:win": "powershell -ExecutionPolicy Bypass -File ./build-win.ps1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "electron": "44.9.3",
+    "electron-builder": "26.18.0",
     "esbuild": "^0.28.2",
     "typescript": "^5.9.3",
     "vite": "^8.3.8"
+  },
+  "build": {
+    "appId": "DowFlow.DowFlow",
+    "productName": "DowFlow",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "youtube/**/*",
+      "build/potoken-preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../dist/DowFlow.exe",
+        "to": "backend/DowFlow.exe"
+      },
+      {
+        "from": "../../static/dowflow.ico",
+        "to": "static/dowflow.ico"
+      }
+    ],
+    "win": {
+      "icon": "../../static/dowflow.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "../../static/dowflow.ico",
+      "uninstallerIcon": "../../static/dowflow.ico"
+    }
   },
   "dependencies": {
     "bgutils-js": "4.0.3",

@@ -12,7 +12,7 @@ app.setName(APP_NAME);
 if (process.platform === "win32") app.setAppUserModelId(WINDOWS_APP_ID);
 
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
-const STARTUP_TIMEOUT_MS = 20_000;
+const STARTUP_TIMEOUT_MS = app.isPackaged ? 120_000 : 20_000;
 const HEALTH_INTERVAL_MS = 250;
 const MUSIC_CORS_HEADERS = new Set([
   "access-control-allow-origin",
@@ -92,6 +92,8 @@ function startBackend(port, token) {
       DOWFLOW_HOST: "127.0.0.1",
       DOWFLOW_PORT: String(port),
       DOWFLOW_DESKTOP_TOKEN: token,
+      DOWFLOW_DESKTOP_SHELL: "electron",
+      DOWFLOW_DATA_ROOT: app.getPath("userData"),
       PYTHONUNBUFFERED: "1",
     },
   });
@@ -206,7 +208,9 @@ function isTrustedBackendUrl(candidate) {
 }
 
 async function createMainWindow() {
-  const iconPath = path.join(PROJECT_ROOT, "static", "dowflow.ico");
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, "static", "dowflow.ico")
+    : path.join(PROJECT_ROOT, "static", "dowflow.ico");
   const options = {
     title: APP_NAME,
     width: 1280,

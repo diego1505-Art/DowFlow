@@ -5,10 +5,15 @@
   "description": "Electron desktop shell for the existing DowFlow Flask application",
   "main": "main.cjs",
   "scripts": {
-    "dev": "electron .",
-    "check": "node --check main.cjs && node --check preload.cjs"
+    "dev": "pnpm build:worker && electron .",
+    "build:worker": "esbuild youtube/potoken-worker.js --bundle --platform=browser --format=cjs --external:electron --outfile=build/potoken-preload.cjs",
+    "check": "node --check main.cjs && node --check preload.cjs && node --check youtube/potoken-service.cjs && pnpm build:worker"
   },
   "devDependencies": {
-    "electron": "44.9.3"
+    "electron": "44.9.3",
+    "esbuild": "^0.28.2"
+  },
+  "dependencies": {
+    "bgutils-js": "4.0.3"
   }
 }

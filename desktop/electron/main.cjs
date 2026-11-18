@@ -4,6 +4,7 @@ const { createServer } = require("node:net");
 const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { PoTokenService } = require("./youtube/potoken-service.cjs");
 
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const STARTUP_TIMEOUT_MS = 20_000;
@@ -15,6 +16,7 @@ let backendOrigin = null;
 let desktopToken = null;
 let backendSpawnError = null;
 let quitting = false;
+let poTokenService = null;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -183,6 +185,14 @@ ipcMain.handle("dowflow:runtime-info", () => ({
   version: app.getVersion(),
 }));
 
+ipcMain.handle("dowflow:youtube:mint-po-token", (event, identifier) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    throw new Error("Untrusted DowFlow renderer");
+  }
+  if (!poTokenService) throw new Error("YouTube PoToken service is unavailable");
+  return poTokenService.mint(identifier);
+});
+
 async function startDesktop() {
   const port = await findAvailablePort();
   backendOrigin = `http://127.0.0.1:${port}`;
@@ -191,6 +201,7 @@ async function startDesktop() {
   backendProcess = startBackend(port, desktopToken);
   await waitForBackend(backendOrigin, desktopToken, backendProcess);
   console.log(`[DowFlow Electron] Flask is ready at ${backendOrigin}`);
+  poTokenService = new PoTokenService(path.join(__dirname, "build", "potoken-preload.cjs"));
   await createMainWindow();
 }
 
@@ -202,6 +213,7 @@ app.whenReady().then(startDesktop).catch((error) => {
 
 app.on("before-quit", () => {
   quitting = true;
+  poTokenService?.destroy();
   if (backendProcess && backendProcess.exitCode === null) {
     backendProcess.kill();
   }

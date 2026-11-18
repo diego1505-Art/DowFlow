@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from tkinter import Tk, filedialog
 
 
 def select_download_folder(
     initial_directory: str | None = None,
     title: str = "Select Media Download Folder",
 ) -> str | None:
+    from tkinter import Tk, filedialog
+
     root = Tk()
     root.withdraw()
     try:
@@ -34,6 +35,8 @@ def main(arguments: list[str] | None = None) -> int:
             return 2
         scope, initial_directory = values[1], values[2]
         default_name = "DowFlow.exe" if scope == "all" else f"DowFlow-{scope.title()}.exe"
+        from tkinter import Tk, filedialog
+
         root = Tk()
         root.withdraw()
         try:

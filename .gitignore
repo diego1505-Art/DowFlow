@@ -17,6 +17,11 @@ config.json
 .vscode/
 *.code-workspace
 
+# Electron shell dependencies and packaged artifacts
+node_modules/
+desktop/electron/release/
+desktop/electron/dist/
+
 # OS artifacts
 .DS_Store
 Thumbs.db

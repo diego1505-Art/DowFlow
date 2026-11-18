@@ -1,0 +1,14 @@
+{
+  "name": "@dowflow/electron-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop shell for the existing DowFlow Flask application",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "check": "node --check main.cjs && node --check preload.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.9.3"
+  }
+}

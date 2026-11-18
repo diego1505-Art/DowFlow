@@ -1,6 +1,7 @@
 import importlib
 import importlib.util
 import json
+import hmac
 import os
 import subprocess
 import sys
@@ -54,6 +55,18 @@ app = Flask(__name__)
 _EXPORT_JOBS: dict[str, dict[str, Any]] = {}
 _EXPORT_LOCK = threading.Lock()
 _EXPORT_RUNNING = False
+
+
+@app.before_request
+def require_electron_desktop_token():
+    """Require the per-launch secret only when Electron starts this backend."""
+    expected = os.environ.get("DOWFLOW_DESKTOP_TOKEN")
+    if not expected:
+        return None
+    supplied = request.headers.get("X-DowFlow-Desktop", "")
+    if not hmac.compare_digest(expected, supplied):
+        abort(403)
+    return None
 
 
 def _download_folder(*, create: bool = True) -> Path:

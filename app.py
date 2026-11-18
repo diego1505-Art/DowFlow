@@ -104,7 +104,10 @@ def _scope_allows_path(scope: str, path: str) -> bool:
             "/upload-local", "/url-options", "/expand-url", "/fetch-episodes", "/api/local-videos", "/stats",
         } or path.startswith("/jobs/")
     if scope == "music":
-        return path in {"/music", "/music/explore", "/music/liked", "/music/stream"} or path.startswith("/api/music/")
+        return path in {
+            "/music", "/music/stream", "/music/explore", "/music/liked",
+            "/music/explore/legacy", "/music/liked/legacy",
+        } or path.startswith("/api/music/")
     return path == f"/{scope}"
 
 
@@ -257,29 +260,26 @@ def video_page():
     return render_template("download.html", has_ffmpeg=has_ffmpeg())
 
 
-@app.route("/music")
-def music_page():
-    """Music home page (player, themes, and recent tracks)."""
-    return render_template("music.html", has_ffmpeg=has_ffmpeg())
-
-
-@app.route("/music/stream")
+@app.route("/music", endpoint="music_page")
+@app.route("/music/explore", endpoint="music_explore_page")
+@app.route("/music/liked", endpoint="music_liked_page")
+@app.route("/music/stream", endpoint="music_stream_page")
 def music_stream_page():
-    """Serve the React streaming prototype built into the static bundle."""
+    """Serve the React Music application from every current Music entry route."""
     stream_ui = Path(app.static_folder or "static") / "music-stream"
     if not (stream_ui / "index.html").is_file():
         abort(503, description="The Music streaming interface has not been built yet.")
     return send_from_directory(stream_ui, "index.html")
 
 
-@app.route("/music/explore")
-def music_explore_page():
+@app.route("/music/explore/legacy")
+def music_explore_legacy_page():
     """Music explorer (local library and online downloads)."""
     return render_template("music_explore.html", has_ffmpeg=has_ffmpeg())
 
 
-@app.route("/music/liked")
-def music_liked_page():
+@app.route("/music/liked/legacy")
+def music_liked_legacy_page():
     """Music favorites page."""
     return render_template("music_liked.html", has_ffmpeg=has_ffmpeg())
 

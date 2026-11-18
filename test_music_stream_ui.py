@@ -1,28 +1,45 @@
 import re
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 import app as app_module
 
 
 class MusicStreamUiRouteTests(unittest.TestCase):
+    MUSIC_ROUTES = ("/music", "/music/stream", "/music/explore", "/music/liked")
+    LEGACY_ROUTES = {
+        "/music/explore/legacy": (
+            b'data-page="explore"', b"DowFlow Music - Explore",
+            b'href="/music/explore/legacy"', b'href="/music/liked/legacy"',
+        ),
+        "/music/liked/legacy": (
+            b'data-page="liked"', b"DowFlow Music - Favorites",
+            b'href="/music/explore/legacy"', b'href="/music/liked/legacy"',
+        ),
+    }
+
     def setUp(self):
         app_module.app.config.update(TESTING=True)
         self.client = app_module.app.test_client()
 
-    def test_music_home_links_to_streaming(self):
-        response = self.client.get("/music")
-        try:
-            self.assertEqual(response.status_code, 200)
-            self.assertIn(b'href="/music/stream"', response.data)
-        finally:
-            response.close()
+    def test_music_routes_serve_the_same_built_react_entry_and_asset(self):
+        bundle_index = Path(app_module.app.static_folder or "static") / "music-stream" / "index.html"
+        if not bundle_index.is_file():
+            self.skipTest("The compiled Music React bundle is not present.")
 
-    def test_stream_route_serves_built_react_entry_and_asset(self):
-        response = self.client.get("/music/stream")
+        responses = []
         try:
-            self.assertEqual(response.status_code, 200)
-            self.assertIn(b"DowFlow Music", response.data)
-            match = re.search(rb"/static/music-stream/assets/[^\"]+\.js", response.data)
+            for route in self.MUSIC_ROUTES:
+                response = self.client.get(route)
+                responses.append(response)
+                self.assertEqual(response.status_code, 200, route)
+                self.assertIn(b"DowFlow Music", response.data)
+                self.assertIn(b'id="root"', response.data)
+
+            expected = responses[0].data
+            self.assertTrue(all(response.data == expected for response in responses[1:]))
+            match = re.search(rb"/static/music-stream/assets/[^\"]+\.js", expected)
             self.assertIsNotNone(match)
             asset_response = self.client.get(match.group(0).decode("utf-8"))
             try:
@@ -31,10 +48,35 @@ class MusicStreamUiRouteTests(unittest.TestCase):
             finally:
                 asset_response.close()
         finally:
-            response.close()
+            for response in responses:
+                response.close()
 
-    def test_music_export_scope_allows_stream_route(self):
-        self.assertTrue(app_module._scope_allows_path("music", "/music/stream"))
+    def test_music_routes_return_503_when_react_bundle_is_missing(self):
+        with patch.object(app_module.Path, "is_file", return_value=False):
+            for route in self.MUSIC_ROUTES:
+                response = self.client.get(route)
+                try:
+                    self.assertEqual(response.status_code, 503, route)
+                finally:
+                    response.close()
+
+    def test_legacy_music_routes_render_their_historical_templates(self):
+        for route, markers in self.LEGACY_ROUTES.items():
+            with self.subTest(route=route):
+                response = self.client.get(route)
+                try:
+                    self.assertEqual(response.status_code, 200)
+                    for marker in markers:
+                        self.assertIn(marker, response.data)
+                finally:
+                    response.close()
+
+    def test_music_export_scope_includes_react_and_legacy_routes(self):
+        allowed_routes = self.MUSIC_ROUTES + tuple(self.LEGACY_ROUTES)
+        for route in allowed_routes:
+            with self.subTest(route=route):
+                self.assertTrue(app_module._scope_allows_path("music", route))
+        self.assertFalse(app_module._scope_allows_path("music", "/music/not-a-route"))
 
 
 if __name__ == "__main__":

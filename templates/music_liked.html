@@ -20,8 +20,8 @@
         </a>
         <nav class="menu">
           <a class="menu-item" data-nav="home" href="{{ url_for('music_page') }}">Home</a>
-          <a class="menu-item" data-nav="explore" href="{{ url_for('music_explore_page') }}">Explore</a>
-          <a class="menu-item active" data-nav="liked" href="{{ url_for('music_liked_page') }}">Favorites</a>
+          <a class="menu-item" data-nav="explore" href="{{ url_for('music_explore_legacy_page') }}">Explore</a>
+          <a class="menu-item active" data-nav="liked" href="{{ url_for('music_liked_legacy_page') }}">Favorites</a>
         </nav>
         <nav class="menu sidebar-menu-extra">
           <a class="menu-item" href="{{ url_for('index') }}">← DowFlow menu</a>
@@ -66,7 +66,7 @@
         <section class="content-section">
           <div class="section-heading">
             <h3>Favorite playlist</h3>
-            <a href="{{ url_for('music_explore_page') }}">Add more tracks</a>
+            <a href="{{ url_for('music_explore_legacy_page') }}">Add more tracks</a>
           </div>
           <div class="panel">
             <div class="table-list" id="liked-list"></div>

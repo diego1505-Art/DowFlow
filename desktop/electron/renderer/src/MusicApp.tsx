@@ -1,10 +1,28 @@
-import { useEffect, useRef, useState } from "react";
-import { addMusicFavorite, fetchMusicFavorites, removeMusicFavorite } from "./musicApi";
-import type { StoredMusicFavorite } from "./musicApi";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  addLocalMusicFavorite,
+  addMusicFavorite,
+  fetchLocalMusicFavorites,
+  fetchMusicFavorites,
+  fetchMusicLibrary,
+  removeLocalMusicFavorite,
+  removeMusicFavorite,
+} from "./musicApi";
+import type { LocalMusicFile, StoredMusicFavorite } from "./musicApi";
 import { searchMusicTracks } from "./youtube/musicSearch";
 import type { MusicTrack } from "./types";
 
-type MusicView = "search" | "favorites";
+type MusicRoute = "home" | "stream" | "library" | "favorites";
+type PlaybackItem =
+  | { kind: "youtube"; uiId: string; track: MusicTrack }
+  | { kind: "local"; uiId: string; file: LocalMusicFile };
+
+function routeFromPath(pathname: string): MusicRoute {
+  if (pathname === "/music/stream") return "stream";
+  if (pathname === "/music/explore") return "library";
+  if (pathname === "/music/liked") return "favorites";
+  return "home";
+}
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -14,6 +32,30 @@ function formatTime(seconds: number): string {
 
 function artistLine(track: MusicTrack): string {
   return track.artists.map((artist) => artist.name).filter(Boolean).join(", ") || "Artiste inconnu";
+}
+
+function itemTitle(item: PlaybackItem): string {
+  return item.kind === "youtube" ? item.track.title : item.file.title;
+}
+
+function itemArtist(item: PlaybackItem): string {
+  return item.kind === "youtube" ? artistLine(item.track) : item.file.artist || "Artiste inconnu";
+}
+
+function itemCover(item: PlaybackItem): string {
+  return item.kind === "youtube" ? item.track.cover.url : item.file.cover_url ?? "";
+}
+
+function itemDuration(item: PlaybackItem): number {
+  return item.kind === "youtube" ? item.track.durationMs : 0;
+}
+
+function youtubeItem(track: MusicTrack): PlaybackItem {
+  return { kind: "youtube", uiId: `youtube:${track.id}`, track };
+}
+
+function localItem(file: LocalMusicFile): PlaybackItem {
+  return { kind: "local", uiId: `local:${file.filename}`, file };
 }
 
 function favoriteToTrack(favorite: StoredMusicFavorite): MusicTrack {
@@ -26,18 +68,31 @@ function favoriteToTrack(favorite: StoredMusicFavorite): MusicTrack {
   };
 }
 
+function localErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Impossible de charger la bibliothèque locale.";
+  if (message.includes("(409")) {
+    return `La bibliothèque locale est temporairement indisponible. ${message}`;
+  }
+  return message;
+}
+
 export default function MusicApp() {
+  const [route, setRoute] = useState<MusicRoute>(() => routeFromPath(window.location.pathname));
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<MusicView>("search");
+  const [libraryFilter, setLibraryFilter] = useState("");
   const [tracks, setTracks] = useState<MusicTrack[]>([]);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [searchError, setSearchError] = useState("");
-  const [favorites, setFavorites] = useState<StoredMusicFavorite[]>([]);
+  const [library, setLibrary] = useState<LocalMusicFile[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const [libraryError, setLibraryError] = useState("");
+  const [youtubeFavorites, setYoutubeFavorites] = useState<StoredMusicFavorite[]>([]);
+  const [localFavoriteFiles, setLocalFavoriteFiles] = useState<string[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(true);
   const [favoritesError, setFavoritesError] = useState("");
   const [favoriteBusyIds, setFavoriteBusyIds] = useState<Set<string>>(() => new Set());
   const [favoriteActionError, setFavoriteActionError] = useState("");
-  const [currentTrack, setCurrentTrack] = useState<MusicTrack | null>(null);
+  const [currentItem, setCurrentItem] = useState<PlaybackItem | null>(null);
   const [playbackState, setPlaybackState] = useState<"idle" | "resolving" | "ready" | "playing" | "paused" | "error">("idle");
   const [playbackMessage, setPlaybackMessage] = useState("Choisis un titre pour commencer.");
   const [position, setPosition] = useState(0);
@@ -46,29 +101,69 @@ export default function MusicApp() {
   const [volume, setVolume] = useState(0.8);
   const audioRef = useRef<HTMLAudioElement>(null);
   const searchController = useRef<AbortController | null>(null);
+  const libraryController = useRef<AbortController | null>(null);
   const playbackController = useRef<AbortController | null>(null);
   const electronReady = Boolean(window.dowflow?.youtube?.mintPoToken);
 
-  async function loadFavorites(signal?: AbortSignal): Promise<void> {
+  const loadLibrary = useCallback(async () => {
+    libraryController.current?.abort();
+    const controller = new AbortController();
+    libraryController.current = controller;
+    setLibraryLoading(true);
+    setLibraryError("");
+    try {
+      const items = await fetchMusicLibrary(controller.signal);
+      if (!controller.signal.aborted) setLibrary(items);
+    } catch (error) {
+      if (!controller.signal.aborted) setLibraryError(localErrorMessage(error));
+    } finally {
+      if (!controller.signal.aborted) setLibraryLoading(false);
+    }
+  }, []);
+
+  const loadFavorites = useCallback(async () => {
     setFavoritesLoading(true);
     setFavoritesError("");
     try {
-      const items = await fetchMusicFavorites(signal);
-      if (signal?.aborted) return;
-      setFavorites(items.filter((item) => item.source === "youtube"));
+      const [streamItems, localItems] = await Promise.all([
+        fetchMusicFavorites(),
+        fetchLocalMusicFavorites(),
+      ]);
+      setYoutubeFavorites(streamItems.filter((item) => item.source === "youtube"));
+      setLocalFavoriteFiles(localItems);
     } catch (error) {
-      if (signal?.aborted) return;
       setFavoritesError(error instanceof Error ? error.message : "Impossible de charger les favoris.");
     } finally {
-      if (!signal?.aborted) setFavoritesLoading(false);
+      setFavoritesLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void loadFavorites(controller.signal);
-    return () => controller.abort();
+    const onPopState = () => setRoute(routeFromPath(window.location.pathname));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    if (route !== "stream") void loadLibrary();
+  }, [route, loadLibrary]);
+
+  useEffect(() => {
+    void loadFavorites();
+  }, [loadFavorites]);
+
+  useEffect(() => {
+    const refreshOnReturn = () => {
+      if (document.visibilityState !== "hidden" && route !== "stream") void loadLibrary();
+      if (document.visibilityState !== "hidden" && route === "favorites") void loadFavorites();
+    };
+    window.addEventListener("focus", refreshOnReturn);
+    window.addEventListener("pageshow", refreshOnReturn);
+    return () => {
+      window.removeEventListener("focus", refreshOnReturn);
+      window.removeEventListener("pageshow", refreshOnReturn);
+    };
+  }, [route, loadLibrary, loadFavorites]);
 
   useEffect(() => {
     const normalized = query.trim();
@@ -127,7 +222,7 @@ export default function MusicApp() {
     const onError = () => {
       if (!audio.error) return;
       setPlaybackState("error");
-      setPlaybackMessage("Le flux n’a pas pu être lu. Réessaie ou choisis un autre résultat.");
+      setPlaybackMessage("Le fichier ou flux audio n’a pas pu être lu. Réessaie ou choisis un autre titre.");
     };
     audio.addEventListener("timeupdate", updateTime);
     audio.addEventListener("durationchange", updateDuration);
@@ -149,30 +244,53 @@ export default function MusicApp() {
 
   useEffect(() => () => {
     searchController.current?.abort();
+    libraryController.current?.abort();
     playbackController.current?.abort();
   }, []);
 
-  async function chooseTrack(track: MusicTrack): Promise<void> {
+  function navigate(path: string): void {
+    if (window.location.pathname === path) return;
+    window.history.pushState({}, "", path);
+    setRoute(routeFromPath(path));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function onInternalLink(event: React.MouseEvent<HTMLAnchorElement>): void {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = event.currentTarget;
+    if (target.target && target.target !== "_self") return;
+    const url = new URL(target.href, window.location.href);
+    if (url.origin !== window.location.origin || !url.pathname.startsWith("/music")) return;
+    event.preventDefault();
+    navigate(url.pathname);
+  }
+
+  async function chooseTrack(item: PlaybackItem): Promise<void> {
     playbackController.current?.abort();
     const controller = new AbortController();
     playbackController.current = controller;
-    setCurrentTrack(track);
-    setPlaybackState("resolving");
-    setPlaybackMessage("Préparation du flux audio…");
+    const audio = audioRef.current;
+    audio?.pause();
+    setCurrentItem(item);
+    setPlaybackState(item.kind === "youtube" ? "resolving" : "ready");
+    setPlaybackMessage(item.kind === "youtube" ? "Préparation du flux audio…" : "Ouverture du fichier local…");
     setPosition(0);
     setDuration(0);
 
     try {
-      const { resolveMusicStream } = await import("./youtube/musicPlayback");
-      const url = await resolveMusicStream(track, controller.signal);
+      let url: string;
+      if (item.kind === "youtube") {
+        const { resolveMusicStream } = await import("./youtube/musicPlayback");
+        url = await resolveMusicStream(item.track, controller.signal);
+      } else {
+        url = new URL(item.file.audio_url, window.location.href).toString();
+      }
       if (controller.signal.aborted) return;
-      const audio = audioRef.current;
       if (!audio) throw new Error("Le lecteur audio n’est pas disponible.");
-      audio.pause();
       audio.src = url;
       audio.load();
       setPlaybackState("ready");
-      setPlaybackMessage("Flux prêt — appuie sur Lecture.");
+      setPlaybackMessage(item.kind === "local" ? "Fichier local prêt à la lecture." : "Flux prêt — appuie sur Lecture.");
       try {
         await audio.play();
       } catch {
@@ -181,16 +299,16 @@ export default function MusicApp() {
     } catch (error) {
       if (controller.signal.aborted) return;
       setPlaybackState("error");
-      setPlaybackMessage(error instanceof Error ? error.message : "Impossible de résoudre le flux audio.");
+      setPlaybackMessage(error instanceof Error ? error.message : "Impossible de préparer la lecture.");
     }
   }
 
   async function togglePlayback(): Promise<void> {
     const audio = audioRef.current;
-    if (!audio || !currentTrack || playbackState === "resolving") return;
+    if (!audio || !currentItem || playbackState === "resolving") return;
     if (audio.paused) {
       if (!audio.src) {
-        await chooseTrack(currentTrack);
+        await chooseTrack(currentItem);
         return;
       }
       try {
@@ -229,88 +347,100 @@ export default function MusicApp() {
     setSeekDraft(null);
   }
 
-  function markFavoriteBusy(trackId: string, busy: boolean): void {
+  function markFavoriteBusy(uiId: string, busy: boolean): void {
     setFavoriteBusyIds((current) => {
       const next = new Set(current);
-      if (busy) next.add(trackId);
-      else next.delete(trackId);
+      if (busy) next.add(uiId);
+      else next.delete(uiId);
       return next;
     });
   }
 
-  async function toggleFavorite(track: MusicTrack): Promise<void> {
-    if (favoritesLoading || favoriteBusyIds.has(track.id)) return;
-    const existing = favorites.find((favorite) => favorite.track_id === track.id);
-    markFavoriteBusy(track.id, true);
+  async function toggleFavorite(item: PlaybackItem): Promise<void> {
+    if (favoritesLoading || favoriteBusyIds.has(item.uiId)) return;
+    const isFavorite = item.kind === "youtube"
+      ? youtubeFavorites.some((favorite) => favorite.track_id === item.track.id)
+      : localFavoriteFiles.includes(item.file.filename);
+    markFavoriteBusy(item.uiId, true);
     setFavoriteActionError("");
     try {
-      if (existing) {
-        await removeMusicFavorite(track.id);
-        setFavorites((items) => items.filter((favorite) => favorite.track_id !== track.id));
-      } else {
-        await addMusicFavorite({
-          source: "youtube",
-          track_id: track.id,
-          title: track.title,
-          artist: artistLine(track),
-          cover_url: track.cover.url,
-          duration_ms: track.durationMs,
-        });
-        setFavorites((items) => [
-          {
+      if (item.kind === "youtube") {
+        if (isFavorite) {
+          await removeMusicFavorite(item.track.id);
+          setYoutubeFavorites((items) => items.filter((favorite) => favorite.track_id !== item.track.id));
+        } else {
+          const record: StoredMusicFavorite = {
             source: "youtube",
-            track_id: track.id,
-            title: track.title,
-            artist: artistLine(track),
-            cover_url: track.cover.url,
-            duration_ms: track.durationMs,
+            track_id: item.track.id,
+            title: item.track.title,
+            artist: artistLine(item.track),
+            cover_url: item.track.cover.url || null,
+            duration_ms: item.track.durationMs,
             created_at: Date.now() / 1000,
-          },
-          ...items.filter((favorite) => favorite.track_id !== track.id),
-        ]);
+          };
+          await addMusicFavorite({
+            source: "youtube",
+            track_id: record.track_id,
+            title: record.title,
+            artist: record.artist,
+            cover_url: record.cover_url ?? "",
+            duration_ms: record.duration_ms ?? 0,
+          });
+          setYoutubeFavorites((items) => [record, ...items.filter((favorite) => favorite.track_id !== item.track.id)]);
+        }
+      } else if (isFavorite) {
+        await removeLocalMusicFavorite(item.file.filename);
+        setLocalFavoriteFiles((items) => items.filter((filename) => filename !== item.file.filename));
+      } else {
+        await addLocalMusicFavorite(item.file.filename);
+        setLocalFavoriteFiles((items) => [item.file.filename, ...items.filter((filename) => filename !== item.file.filename)]);
       }
       setFavoritesError("");
     } catch (error) {
       setFavoriteActionError(error instanceof Error ? error.message : "La modification du favori a échoué.");
     } finally {
-      markFavoriteBusy(track.id, false);
+      markFavoriteBusy(item.uiId, false);
     }
   }
 
-  function renderTrackRows(items: MusicTrack[], listKind: "search" | "favorites") {
+  function renderTrackRows(items: PlaybackItem[], listKind: string) {
     return (
       <div className="track-list">
-        {items.map((track, index) => {
-          const isFavorite = favorites.some((favorite) => favorite.track_id === track.id);
-          const busy = favoriteBusyIds.has(track.id);
+        {items.map((item, index) => {
+          const isFavorite = item.kind === "youtube"
+            ? youtubeFavorites.some((favorite) => favorite.track_id === item.track.id)
+            : localFavoriteFiles.includes(item.file.filename);
+          const busy = favoriteBusyIds.has(item.uiId);
           const disabled = busy || favoritesLoading;
+          const cover = itemCover(item);
+          const artist = itemArtist(item);
           return (
-            <article className={`track-row ${currentTrack?.id === track.id ? "is-current" : ""}`} key={`${listKind}-${track.id}`}>
+            <article className={`track-row ${currentItem?.uiId === item.uiId ? "is-current" : ""}`} key={`${listKind}-${item.uiId}`}>
               <span className="track-index">{String(index + 1).padStart(2, "0")}</span>
               <div className="cover-wrap">
-                {track.cover.url && <img src={track.cover.url} alt="" loading="lazy" />}
-                <button type="button" className="cover-play" onClick={() => void chooseTrack(track)} aria-label={`Lire ${track.title}`}>
-                  {currentTrack?.id === track.id && playbackState === "playing" ? "Ⅱ" : "▶"}
+                {cover && <img src={cover} alt="" loading="lazy" />}
+                <button type="button" className="cover-play" onClick={() => void chooseTrack(item)} aria-label={`Lire ${itemTitle(item)}`}>
+                  {currentItem?.uiId === item.uiId && playbackState === "playing" ? "Ⅱ" : "▶"}
                 </button>
               </div>
               <div className="track-copy">
-                <strong title={track.title}>{track.title}</strong>
-                <span title={artistLine(track)}>{artistLine(track)}{track.explicit ? <b className="explicit-tag">E</b> : null}</span>
+                <strong title={itemTitle(item)}>{itemTitle(item)}</strong>
+                <span title={artist}>{artist}{item.kind === "local" ? <b className="source-tag">LOCAL</b> : item.track.explicit ? <b className="explicit-tag">E</b> : null}</span>
               </div>
-              <span className="track-duration">{track.durationMs ? formatTime(track.durationMs / 1000) : "—"}</span>
+              <span className="track-duration">{itemDuration(item) ? formatTime(itemDuration(item) / 1000) : "—"}</span>
               <div className="track-actions">
                 <button
                   type="button"
                   className={`favorite-toggle ${isFavorite ? "is-favorite" : ""}`}
-                  onClick={() => void toggleFavorite(track)}
+                  onClick={() => void toggleFavorite(item)}
                   disabled={disabled}
-                  aria-label={`${isFavorite ? "Retirer des" : "Ajouter aux"} favoris : ${track.title}`}
+                  aria-label={`${isFavorite ? "Retirer des" : "Ajouter aux"} favoris : ${itemTitle(item)}`}
                   aria-pressed={isFavorite}
                   title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
                 >
                   {disabled ? <i className="spinner" aria-hidden="true" /> : isFavorite ? "★" : "☆"}
                 </button>
-                <button type="button" className="row-play" onClick={() => void chooseTrack(track)} aria-label={`Écouter ${track.title}`}>Lire</button>
+                <button type="button" className="row-play" onClick={() => void chooseTrack(item)} aria-label={`Écouter ${itemTitle(item)}`}>Lire</button>
               </div>
             </article>
           );
@@ -322,124 +452,114 @@ export default function MusicApp() {
   const isPlaying = playbackState === "playing";
   const displayedPosition = seekDraft ?? position;
   const canSeek = duration > 0 && Boolean(audioRef.current?.seekable.length);
-  const favoriteTracks = favorites.map(favoriteToTrack);
+  const favoriteItems: PlaybackItem[] = [
+    ...youtubeFavorites.map((favorite) => youtubeItem(favoriteToTrack(favorite))),
+    ...library.filter((file) => localFavoriteFiles.includes(file.filename)).map(localItem),
+  ];
+  const recentLocalItems = [...library].sort((a, b) => b.mtime - a.mtime).slice(0, 5).map(localItem);
+  const filteredLibrary = library.filter((file) => {
+    const needle = libraryFilter.trim().toLocaleLowerCase();
+    return !needle || `${file.title} ${file.artist} ${file.filename}`.toLocaleLowerCase().includes(needle);
+  }).map(localItem);
+  const headings: Record<MusicRoute, { eyebrow: string; lead: string; emphasis: string; copy: string }> = {
+    home: { eyebrow: "VOTRE MUSIQUE", lead: "La musique,", emphasis: "sans détour.", copy: "Retrouve ta collection locale ou pars à la découverte de nouveaux titres." },
+    stream: { eyebrow: "DÉCOUVRIR · ÉCOUTER", lead: "À écouter,", emphasis: "en streaming.", copy: "Recherche des titres YouTube Music et lance l’écoute directement." },
+    library: { eyebrow: "COLLECTION LOCALE", lead: "Ta bibliothèque,", emphasis: "à portée.", copy: "Parcours et écoute les fichiers audio déjà présents dans DowFlow." },
+    favorites: { eyebrow: "VOTRE SÉLECTION", lead: "Tes favoris,", emphasis: "réunis.", copy: "Tes titres YouTube Music et tes fichiers locaux préférés, au même endroit." },
+  };
+  const heading = headings[route];
 
   return (
     <div className="music-app">
       <header className="topbar">
-        <a className="brand" href="/music" aria-label="Retour à DowFlow Music">
+        <a className="brand" href="/music" onClick={onInternalLink} aria-label="Retour à DowFlow Music">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span><strong>DowFlow</strong><small>Music</small></span>
         </a>
         <div className="topbar-right">
           <span className={`connection-pill ${electronReady ? "is-ready" : "is-warning"}`}>
-            <i />{electronReady ? "Electron connecté" : "Shell Electron requis"}
+            <i />{electronReady ? "Electron connecté" : "Shell Electron requis pour YouTube"}
           </span>
-          <a className="back-link" href="/music">Retour à Music</a>
         </div>
       </header>
 
       <main className="content">
-        <section className="intro">
-          <p className="eyebrow">DÉCOUVRIR · ÉCOUTER</p>
-          <h1>La musique, <em>sans détour.</em></h1>
-          <p className="intro-copy">Cherche un titre et lance l’écoute directement. Pas besoin de télécharger avant de lire.</p>
-          <div className="music-tabs" role="group" aria-label="Vues de la bibliothèque musicale">
-            <button type="button" id="music-tab-search" aria-pressed={view === "search"} aria-controls="music-panel" className={view === "search" ? "is-active" : ""} onClick={() => setView("search")}>Recherche</button>
-            <button type="button" id="music-tab-favorites" aria-pressed={view === "favorites"} aria-controls="music-panel" className={view === "favorites" ? "is-active" : ""} onClick={() => setView("favorites")}>Favoris <span>{favorites.length}</span></button>
-          </div>
-          {view === "search" && <>
-          <form className="search-box" onSubmit={(event) => event.preventDefault()} role="search">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Titre, artiste…"
-              aria-label="Rechercher un titre ou un artiste"
-              autoComplete="off"
-            />
-            {query && <button className="clear-search" type="button" onClick={() => setQuery("")} aria-label="Effacer la recherche">×</button>}
-            <span className="search-hint">Recherche directe</span>
-          </form>
-          {!electronReady && <div className="notice">La recherche peut dépendre de la configuration réseau. La lecture nécessite l’application DowFlow sous Electron.</div>}
+        <section className={`intro ${route === "home" ? "intro-home" : ""}`}>
+          <p className="eyebrow">{heading.eyebrow}</p>
+          <h1>{heading.lead} <em>{heading.emphasis}</em></h1>
+          <p className="intro-copy">{heading.copy}</p>
+          <nav className="music-tabs" aria-label="Sections Music">
+            <a href="/music" onClick={onInternalLink} aria-current={route === "home" ? "page" : undefined} className={route === "home" ? "is-active" : ""}>Accueil</a>
+            <a href="/music/stream" onClick={onInternalLink} aria-current={route === "stream" ? "page" : undefined} className={route === "stream" ? "is-active" : ""}>Streaming</a>
+            <a href="/music/explore" onClick={onInternalLink} aria-current={route === "library" ? "page" : undefined} className={route === "library" ? "is-active" : ""}>Bibliothèque</a>
+            <a href="/music/liked" onClick={onInternalLink} aria-current={route === "favorites" ? "page" : undefined} className={route === "favorites" ? "is-active" : ""}>Favoris <span>{youtubeFavorites.length + localFavoriteFiles.length}</span></a>
+          </nav>
+          {route === "stream" && <>
+            <form className="search-box" onSubmit={(event) => event.preventDefault()} role="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
+              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Titre, artiste…" aria-label="Rechercher un titre ou un artiste" autoComplete="off" />
+              {query && <button className="clear-search" type="button" onClick={() => setQuery("")} aria-label="Effacer la recherche">×</button>}
+              <span className="search-hint">Recherche YouTube Music</span>
+            </form>
+            {!electronReady && <div className="notice">La lecture en streaming nécessite le shell Electron DowFlow. Les titres de la bibliothèque locale se lisent directement dans le navigateur.</div>}
           </>}
         </section>
 
-        <section className="results-section" id="music-panel" aria-label={view === "search" ? "Résultats de recherche" : "Favoris"} aria-live="polite">
-          {view === "search" ? <>
-          <div className="results-heading">
-            <div>
-              <p className="eyebrow">CATALOGUE</p>
-              <h2>{query.trim().length >= 2 ? "Résultats" : "À vous de choisir"}</h2>
-            </div>
+        {route === "home" && <section className="results-section" aria-label="Accueil Music">
+          <div className="home-shortcuts">
+            <a href="/music/stream" onClick={onInternalLink}><span>01</span><strong>Découvrir en streaming</strong><small>Recherche YouTube Music</small><b aria-hidden="true">↗</b></a>
+            <a href="/music/explore" onClick={onInternalLink}><span>02</span><strong>Ouvrir la bibliothèque</strong><small>{library.length} fichier{library.length === 1 ? "" : "s"} local{library.length === 1 ? "" : "aux"}</small><b aria-hidden="true">↗</b></a>
+          </div>
+          <div className="results-heading home-heading"><div><p className="eyebrow">AJOUTS RÉCENTS</p><h2>Dans votre collection</h2></div><a className="section-link" href="/music/explore" onClick={onInternalLink}>Toute la bibliothèque <span>→</span></a></div>
+          {libraryLoading && <p className="loading-label"><i className="spinner" />Chargement de la bibliothèque…</p>}
+          {libraryError && <div className="message-state is-error" role="alert"><strong>La bibliothèque locale n’est pas disponible.</strong><p>{libraryError}</p><button type="button" className="retry-favorites" onClick={() => void loadLibrary()}>Réessayer</button></div>}
+          {!libraryLoading && !libraryError && recentLocalItems.length === 0 && <div className="empty-state compact"><strong>Aucun fichier musical local</strong><p>Les fichiers disponibles dans DowFlow apparaîtront ici.</p></div>}
+          {recentLocalItems.length > 0 && renderTrackRows(recentLocalItems, "home-recent")}
+        </section>}
+
+        {route === "stream" && <section className="results-section" id="music-panel" aria-label="Résultats de recherche" aria-live="polite">
+          <div className="results-heading"><div><p className="eyebrow">YOUTUBE MUSIC</p><h2>{query.trim().length >= 2 ? "Résultats" : "À vous de choisir"}</h2></div>
             {searchState === "loading" && <span className="loading-label"><i className="spinner" />Recherche…</span>}
             {searchState === "done" && tracks.length > 0 && <span className="result-count">{tracks.length} titres</span>}
           </div>
-
           {searchState === "idle" && <div className="empty-state"><span className="empty-orbit"><i /><i /><i /></span><strong>Une recherche, et c’est parti.</strong><p>Saisis au moins deux caractères pour trouver des titres.</p></div>}
           {searchState === "error" && <div className="message-state is-error"><strong>La recherche n’a pas abouti.</strong><p>{searchError}</p></div>}
           {searchState === "done" && tracks.length === 0 && <div className="empty-state compact"><strong>Aucun titre trouvé</strong><p>Essaie avec un autre titre ou le nom de l’artiste.</p></div>}
-
-          {tracks.length > 0 && renderTrackRows(tracks, "search")}
-          </> : <>
-            <div className="results-heading">
-              <div>
-                <p className="eyebrow">VOTRE BIBLIOTHÈQUE</p>
-                <h2>Favoris</h2>
-              </div>
-              <div className="favorites-heading-actions">
-                {favoritesLoading && <span className="loading-label"><i className="spinner" />Chargement…</span>}
-                {!favoritesLoading && <button type="button" className="refresh-favorites" onClick={() => void loadFavorites()} disabled={favoritesLoading}>Actualiser</button>}
-              </div>
-            </div>
-            {favoritesError && <div className="message-state is-error" role="alert"><strong>Les favoris n’ont pas pu être chargés.</strong><p>{favoritesError}</p><button type="button" className="retry-favorites" onClick={() => void loadFavorites()} disabled={favoritesLoading}>Réessayer</button></div>}
-            {!favoritesError && !favoritesLoading && favorites.length === 0 && <div className="empty-state compact"><strong>Aucun favori pour le moment</strong><p>Ajoute des titres YouTube depuis les résultats de recherche.</p></div>}
-            {!favoritesError && favoriteTracks.length > 0 && renderTrackRows(favoriteTracks, "favorites")}
-          </>}
+          {tracks.length > 0 && renderTrackRows(tracks.map(youtubeItem), "stream")}
           {favoriteActionError && <p className="api-action-error" role="alert">Action sur le favori impossible : {favoriteActionError}</p>}
-        </section>
+        </section>}
+
+        {route === "library" && <section className="results-section" aria-label="Bibliothèque locale">
+          <div className="results-heading"><div><p className="eyebrow">FICHIERS DOWFLOW</p><h2>Bibliothèque</h2></div><div className="favorites-heading-actions"><span className="result-count">{library.length} fichier{library.length === 1 ? "" : "s"}</span><button type="button" className="refresh-favorites" onClick={() => void loadLibrary()} disabled={libraryLoading}>{libraryLoading ? <i className="spinner" /> : "Actualiser"}</button></div></div>
+          <div className="library-tools"><label className="library-filter"><span className="visually-hidden">Filtrer la bibliothèque</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg><input type="search" value={libraryFilter} onChange={(event) => setLibraryFilter(event.target.value)} placeholder="Filtrer par titre ou artiste…" /></label><a className="legacy-link" href="/music/explore/legacy">Ouvrir l’ancien explorateur et ses téléchargements <span>↗</span></a></div>
+          <p className="legacy-note">L’ancien explorateur s’ouvre en dehors de ce lecteur. La lecture en cours ne survit pas à cette navigation.</p>
+          {libraryLoading && <p className="loading-label"><i className="spinner" />Chargement de la bibliothèque…</p>}
+          {libraryError && <div className="message-state is-error" role="alert"><strong>La bibliothèque n’a pas pu être chargée.</strong><p>{libraryError}</p><button type="button" className="retry-favorites" onClick={() => void loadLibrary()} disabled={libraryLoading}>Réessayer</button></div>}
+          {!libraryLoading && !libraryError && filteredLibrary.length === 0 && <div className="empty-state compact"><strong>{library.length ? "Aucun résultat" : "La bibliothèque est vide"}</strong><p>{library.length ? "Essaie un autre titre ou artiste." : "Les fichiers audio locaux apparaîtront ici lorsqu’ils seront disponibles."}</p></div>}
+          {!libraryError && filteredLibrary.length > 0 && renderTrackRows(filteredLibrary, "library")}
+          {favoriteActionError && <p className="api-action-error" role="alert">Action sur le favori impossible : {favoriteActionError}</p>}
+        </section>}
+
+        {route === "favorites" && <section className="results-section" aria-label="Favoris Music">
+          <div className="results-heading"><div><p className="eyebrow">YOUTUBE + LOCAL</p><h2>Favoris</h2></div><div className="favorites-heading-actions">{favoritesLoading && <span className="loading-label"><i className="spinner" />Chargement…</span>}{!favoritesLoading && <button type="button" className="refresh-favorites" onClick={() => { void loadFavorites(); void loadLibrary(); }}>Actualiser</button>}</div></div>
+          {favoritesError && <div className="message-state is-error" role="alert"><strong>Une source de favoris n’a pas pu être chargée.</strong><p>{favoritesError}</p><button type="button" className="retry-favorites" onClick={() => { void loadFavorites(); void loadLibrary(); }} disabled={favoritesLoading}>Réessayer</button></div>}
+          {libraryError && <p className="inline-warning" role="status">La bibliothèque locale n’a pas pu être résolue : {libraryError}</p>}
+          {!favoritesError && !favoritesLoading && favoriteItems.length === 0 && <div className="empty-state compact"><strong>Aucun favori pour le moment</strong><p>Ajoute des titres depuis le streaming ou la bibliothèque locale.</p></div>}
+          {favoriteItems.length > 0 && renderTrackRows(favoriteItems, "favorites")}
+          {favoriteActionError && <p className="api-action-error" role="alert">Action sur le favori impossible : {favoriteActionError}</p>}
+        </section>}
       </main>
 
       <footer className="player-bar">
         <div className="now-playing">
-          {currentTrack?.cover.url ? <img className="player-cover" src={currentTrack.cover.url} alt="" /> : <div className="player-cover placeholder-cover"><span>DF</span></div>}
-          <div className="now-copy">
-            <strong title={currentTrack?.title}>{currentTrack?.title ?? "Aucun titre sélectionné"}</strong>
-            <span title={currentTrack ? artistLine(currentTrack) : undefined}>{currentTrack ? artistLine(currentTrack) : "Choisis un résultat pour commencer"}</span>
-          </div>
+          {currentItem && itemCover(currentItem) ? <img className="player-cover" src={itemCover(currentItem)} alt="" /> : <div className="player-cover placeholder-cover"><span>DF</span></div>}
+          <div className="now-copy"><strong title={currentItem ? itemTitle(currentItem) : undefined}>{currentItem ? itemTitle(currentItem) : "Aucun titre sélectionné"}</strong><span title={currentItem ? itemArtist(currentItem) : undefined}>{currentItem ? itemArtist(currentItem) : "Choisis un résultat pour commencer"}</span></div>
         </div>
         <div className="player-center">
-          <div className="player-controls">
-            <button type="button" className="control-button play-toggle" onClick={() => void togglePlayback()} disabled={!currentTrack || playbackState === "resolving"} aria-label={isPlaying ? "Mettre en pause" : "Lire"}>
-              {playbackState === "resolving" ? <i className="spinner dark" /> : isPlaying ? "Ⅱ" : "▶"}
-            </button>
-          </div>
-          <div className="timeline">
-            <span>{formatTime(displayedPosition)}</span>
-            <input
-              type="range"
-              min="0"
-              max={duration || 0}
-              step="0.25"
-              value={Math.min(displayedPosition, duration || 0)}
-              disabled={!canSeek}
-              aria-label="Position de lecture"
-              onChange={(event) => setSeekDraft(Number(event.target.value))}
-              onPointerUp={commitSeek}
-              onKeyUp={commitSeek}
-            />
-            <span>{formatTime(duration)}</span>
-          </div>
+          <div className="player-controls"><button type="button" className="control-button play-toggle" onClick={() => void togglePlayback()} disabled={!currentItem || playbackState === "resolving"} aria-label={isPlaying ? "Mettre en pause" : "Lire"}>{playbackState === "resolving" ? <i className="spinner dark" /> : isPlaying ? "Ⅱ" : "▶"}</button></div>
+          <div className="timeline"><span>{formatTime(displayedPosition)}</span><input type="range" min="0" max={duration || 0} step="0.25" value={Math.min(displayedPosition, duration || 0)} disabled={!canSeek} aria-label="Position de lecture" onChange={(event) => setSeekDraft(Number(event.target.value))} onPointerUp={commitSeek} onKeyUp={commitSeek} /><span>{formatTime(duration)}</span></div>
         </div>
-        <div className="player-status">
-          <span className={`status-dot ${playbackState}`} />
-          <p title={playbackMessage}>{playbackMessage}</p>
-          <label className="volume-control" aria-label="Volume">
-            <span>Vol.</span>
-            <input type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
-          </label>
-        </div>
+        <div className="player-status"><span className={`status-dot ${playbackState}`} /><p title={playbackMessage}>{playbackMessage}</p><label className="volume-control" aria-label="Volume"><span>Vol.</span><input type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} /></label></div>
       </footer>
       <audio ref={audioRef} preload="metadata" crossOrigin="anonymous" />
     </div>

@@ -455,7 +455,23 @@ class LocalVideoApiTests(unittest.TestCase):
 
         music_response = client.get("/music/explore")
         self.assertEqual(music_response.status_code, 200)
-        self.assertIn(b'data-export-scope="music"', music_response.data)
+        self.assertIn(b'id="root"', music_response.data)
+        self.assertIn(b"DowFlow Music", music_response.data)
+        music_response.close()
+
+        legacy_music_response = client.get("/music/explore/legacy")
+        self.assertEqual(legacy_music_response.status_code, 200)
+        self.assertIn(b'data-export-scope="music"', legacy_music_response.data)
+        legacy_music_response.close()
+
+        music_routes = (
+            "/music", "/music/stream", "/music/explore", "/music/liked",
+            "/music/explore/legacy", "/music/liked/legacy",
+        )
+        for route in music_routes:
+            with self.subTest(route=route):
+                self.assertTrue(app_module._scope_allows_path("music", route))
+        self.assertFalse(app_module._scope_allows_path("music", "/music/out-of-scope"))
 
         category_response = client.get("/film")
         self.assertEqual(category_response.status_code, 200)

@@ -102,6 +102,18 @@ print(json.dumps({
         self.assertIn('path.join(process.resourcesPath, "static", "dowflow.ico")', main)
         self.assertIn("app.isPackaged ? 120_000 : 20_000", main)
 
+    def test_windows_validation_is_manual_pinned_and_does_not_upload_installer(self):
+        workflow = (PROJECT_ROOT / ".github" / "workflows" / "build-electron-windows.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("runs-on: windows-latest", workflow)
+        self.assertIn("pnpm --dir desktop/electron package:win", workflow)
+        self.assertIn("python -m unittest discover -v", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertNotIn("upload-artifact", workflow)
+        self.assertRegex(workflow, r"actions/checkout@[0-9a-f]{40}")
+        self.assertRegex(workflow, r"actions/setup-python@[0-9a-f]{40}")
+        self.assertRegex(workflow, r"actions/setup-node@[0-9a-f]{40}")
+
 
 if __name__ == "__main__":
     unittest.main()

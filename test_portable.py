@@ -548,7 +548,7 @@ class LocalVideoApiTests(unittest.TestCase):
                     progress_callback=progress_events.append,
                 )
 
-            self.assertEqual(result, expected)
+            self.assertEqual(result, expected.resolve())
             self.assertFalse((root / "build" / "app_scope.json").exists())
             self.assertEqual(progress_events[0]["percent"], 1)
             self.assertEqual(progress_events[-1]["percent"], 100)

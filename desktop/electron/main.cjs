@@ -9,6 +9,23 @@ const { PoTokenService } = require("./youtube/potoken-service.cjs");
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const STARTUP_TIMEOUT_MS = 20_000;
 const HEALTH_INTERVAL_MS = 250;
+const MUSIC_CORS_HEADERS = new Set([
+  "access-control-allow-origin",
+  "access-control-allow-headers",
+  "access-control-allow-methods",
+  "access-control-allow-credentials",
+  "access-control-expose-headers",
+  "access-control-max-age",
+]);
+const MUSIC_CORS_FILTER = {
+  urls: [
+    "https://*.youtube.com/*",
+    "https://*.googlevideo.com/*",
+    "https://*.ytimg.com/*",
+    "https://*.ggpht.com/*",
+    "https://*.googleusercontent.com/*",
+  ],
+};
 
 let backendProcess = null;
 let mainWindow = null;
@@ -110,6 +127,40 @@ function installLocalAuthHeader(origin, token) {
   );
 }
 
+function installMusicCors(origin) {
+  session.defaultSession.webRequest.onHeadersReceived(
+    MUSIC_CORS_FILTER,
+    (details, callback) => {
+      let requestOrigin = "";
+      try {
+        requestOrigin = new URL(details.initiator || details.referrer).origin;
+      } catch {
+        // Requests without a known renderer origin keep the upstream headers.
+      }
+      if (requestOrigin !== origin) {
+        callback({ responseHeaders: details.responseHeaders });
+        return;
+      }
+
+      const responseHeaders = {};
+      for (const [name, values] of Object.entries(details.responseHeaders || {})) {
+        if (!MUSIC_CORS_HEADERS.has(name.toLowerCase())) responseHeaders[name] = values;
+      }
+      responseHeaders["access-control-allow-origin"] = [origin];
+      responseHeaders["access-control-allow-headers"] = ["*, authorization"];
+      responseHeaders["access-control-allow-methods"] = ["GET, HEAD, POST, OPTIONS"];
+      responseHeaders["access-control-expose-headers"] = ["*"];
+      responseHeaders["access-control-max-age"] = ["600"];
+
+      if (details.method === "OPTIONS") {
+        callback({ responseHeaders, statusLine: "HTTP/1.1 200 OK" });
+      } else {
+        callback({ responseHeaders });
+      }
+    },
+  );
+}
+
 async function waitForBackend(origin, token, child) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   let lastError = "No health-check response yet.";
@@ -198,6 +249,7 @@ async function startDesktop() {
   backendOrigin = `http://127.0.0.1:${port}`;
   desktopToken = randomBytes(32).toString("hex");
   installLocalAuthHeader(backendOrigin, desktopToken);
+  installMusicCors(backendOrigin);
   backendProcess = startBackend(port, desktopToken);
   await waitForBackend(backendOrigin, desktopToken, backendProcess);
   console.log(`[DowFlow Electron] Flask is ready at ${backendOrigin}`);

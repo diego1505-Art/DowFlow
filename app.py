@@ -100,7 +100,7 @@ def _scope_allows_path(scope: str, path: str) -> bool:
             "/upload-local", "/url-options", "/expand-url", "/fetch-episodes", "/api/local-videos", "/stats",
         } or path.startswith("/jobs/")
     if scope == "music":
-        return path in {"/music", "/music/explore", "/music/liked"} or path.startswith("/api/music/")
+        return path in {"/music", "/music/explore", "/music/liked", "/music/stream"} or path.startswith("/api/music/")
     return path == f"/{scope}"
 
 
@@ -257,6 +257,15 @@ def video_page():
 def music_page():
     """Music home page (player, themes, and recent tracks)."""
     return render_template("music.html", has_ffmpeg=has_ffmpeg())
+
+
+@app.route("/music/stream")
+def music_stream_page():
+    """Serve the React streaming prototype built into the static bundle."""
+    stream_ui = Path(app.static_folder or "static") / "music-stream"
+    if not (stream_ui / "index.html").is_file():
+        abort(503, description="The Music streaming interface has not been built yet.")
+    return send_from_directory(stream_ui, "index.html")
 
 
 @app.route("/music/explore")

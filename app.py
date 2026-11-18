@@ -107,7 +107,7 @@ def _scope_allows_path(scope: str, path: str) -> bool:
         return path in {
             "/music", "/music/stream", "/music/explore", "/music/liked",
             "/music/explore/legacy", "/music/liked/legacy",
-        } or path.startswith("/api/music/")
+        } or path.startswith(("/api/music/", "/jobs/"))
     return path == f"/{scope}"
 
 

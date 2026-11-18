@@ -76,7 +76,10 @@ class MusicStreamUiRouteTests(unittest.TestCase):
         for route in allowed_routes:
             with self.subTest(route=route):
                 self.assertTrue(app_module._scope_allows_path("music", route))
+        self.assertTrue(app_module._scope_allows_path("music", "/jobs/job-123"))
+        self.assertFalse(app_module._scope_allows_path("music", "/jobs"))
         self.assertFalse(app_module._scope_allows_path("music", "/music/not-a-route"))
+        self.assertFalse(app_module._scope_allows_path("music", "/history"))
 
 
 if __name__ == "__main__":

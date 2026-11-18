@@ -3,16 +3,23 @@ import {
   addLocalMusicFavorite,
   addMusicFavorite,
   fetchLocalMusicFavorites,
+  fetchMusicDownloadJob,
   fetchMusicFavorites,
   fetchMusicLibrary,
   removeLocalMusicFavorite,
   removeMusicFavorite,
+  startMusicDownload,
 } from "./musicApi";
 import type { LocalMusicFile, StoredMusicFavorite } from "./musicApi";
 import { searchMusicTracks } from "./youtube/musicSearch";
 import type { MusicTrack } from "./types";
 
 type MusicRoute = "home" | "stream" | "library" | "favorites";
+type DownloadUiState =
+  | { status: "queued"; message?: string }
+  | { status: "progress"; progress: number | null; message?: string }
+  | { status: "done"; message: string }
+  | { status: "error"; message: string };
 type PlaybackItem =
   | { kind: "youtube"; uiId: string; track: MusicTrack }
   | { kind: "local"; uiId: string; file: LocalMusicFile };
@@ -28,6 +35,22 @@ function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
   const whole = Math.floor(seconds);
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+function waitForNextPoll(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const finish = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = window.setTimeout(finish, 1200);
+    signal.addEventListener("abort", finish, { once: true });
+  });
 }
 
 function artistLine(track: MusicTrack): string {
@@ -92,6 +115,7 @@ export default function MusicApp() {
   const [favoritesError, setFavoritesError] = useState("");
   const [favoriteBusyIds, setFavoriteBusyIds] = useState<Set<string>>(() => new Set());
   const [favoriteActionError, setFavoriteActionError] = useState("");
+  const [downloadStates, setDownloadStates] = useState<Record<string, DownloadUiState>>({});
   const [currentItem, setCurrentItem] = useState<PlaybackItem | null>(null);
   const [playbackState, setPlaybackState] = useState<"idle" | "resolving" | "ready" | "playing" | "paused" | "error">("idle");
   const [playbackMessage, setPlaybackMessage] = useState("Choisis un titre pour commencer.");
@@ -103,6 +127,9 @@ export default function MusicApp() {
   const searchController = useRef<AbortController | null>(null);
   const libraryController = useRef<AbortController | null>(null);
   const playbackController = useRef<AbortController | null>(null);
+  const downloadControllers = useRef(new Map<string, AbortController>());
+  const activeDownloadIds = useRef(new Set<string>());
+  const mountedRef = useRef(true);
   const electronReady = Boolean(window.dowflow?.youtube?.mintPoToken);
 
   const loadLibrary = useCallback(async () => {
@@ -242,10 +269,16 @@ export default function MusicApp() {
     };
   }, [volume]);
 
-  useEffect(() => () => {
-    searchController.current?.abort();
-    libraryController.current?.abort();
-    playbackController.current?.abort();
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      searchController.current?.abort();
+      libraryController.current?.abort();
+      playbackController.current?.abort();
+      for (const controller of downloadControllers.current.values()) controller.abort();
+      downloadControllers.current.clear();
+    };
   }, []);
 
   function navigate(path: string): void {
@@ -403,6 +436,66 @@ export default function MusicApp() {
     }
   }
 
+  async function downloadTrack(track: MusicTrack): Promise<void> {
+    const trackId = track.id;
+    if (activeDownloadIds.current.has(trackId)) return;
+    activeDownloadIds.current.add(trackId);
+    setDownloadStates((current) => ({ ...current, [trackId]: { status: "queued", message: "Mise en file…" } }));
+    let controller: AbortController | null = null;
+    try {
+      const started = await startMusicDownload({ id: track.id, title: track.title, artist: artistLine(track) });
+      if (!mountedRef.current) return;
+      controller = new AbortController();
+      downloadControllers.current.set(trackId, controller);
+      const pollDeadline = Date.now() + 60 * 60 * 1000;
+      while (!controller.signal.aborted) {
+        if (Date.now() >= pollDeadline) throw new Error("Le suivi du téléchargement a dépassé une heure.");
+        const job = await fetchMusicDownloadJob(started.job_id, controller.signal);
+        if (controller.signal.aborted || !mountedRef.current) return;
+        const progress = typeof job.progress === "number" && Number.isFinite(job.progress)
+          ? Math.max(0, Math.min(100, job.progress))
+          : null;
+        if (job.status === "success") {
+          setDownloadStates((current) => ({
+            ...current,
+            [trackId]: { status: "done", message: job.message || "Disponible dans la bibliothèque locale." },
+          }));
+          void loadLibrary();
+          return;
+        }
+        if (job.status === "failed" || job.status === "skipped") {
+          setDownloadStates((current) => ({
+            ...current,
+            [trackId]: { status: "error", message: job.error || job.message || "Le téléchargement n’a pas abouti." },
+          }));
+          return;
+        }
+        setDownloadStates((current) => ({
+          ...current,
+          [trackId]: { status: "progress", progress, message: job.message || undefined },
+        }));
+        await waitForNextPoll(controller.signal);
+      }
+    } catch (error) {
+      if (controller?.signal.aborted || !mountedRef.current) return;
+      const message = error instanceof Error ? error.message : "Le téléchargement a échoué.";
+      setDownloadStates((current) => ({
+        ...current,
+        [trackId]: {
+          status: "error",
+          message: message.includes("Choose a download folder first.")
+            ? "Choisis d’abord un dossier de téléchargement dans DowFlow."
+            : message,
+        },
+      }));
+    } finally {
+      if (controller && downloadControllers.current.get(trackId) === controller) {
+        downloadControllers.current.delete(trackId);
+      }
+      activeDownloadIds.current.delete(trackId);
+    }
+  }
+
   function renderTrackRows(items: PlaybackItem[], listKind: string) {
     return (
       <div className="track-list">
@@ -412,6 +505,9 @@ export default function MusicApp() {
             : localFavoriteFiles.includes(item.file.filename);
           const busy = favoriteBusyIds.has(item.uiId);
           const disabled = busy || favoritesLoading;
+          const download = item.kind === "youtube" ? downloadStates[item.track.id] : undefined;
+          const downloadBusy = download?.status === "queued" || download?.status === "progress";
+          const downloadLabel = download?.status === "done" ? "Retélécharger" : download?.status === "error" ? "Réessayer le téléchargement" : "Télécharger en MP3";
           const cover = itemCover(item);
           const artist = itemArtist(item);
           return (
@@ -426,9 +522,25 @@ export default function MusicApp() {
               <div className="track-copy">
                 <strong title={itemTitle(item)}>{itemTitle(item)}</strong>
                 <span title={artist}>{artist}{item.kind === "local" ? <b className="source-tag">LOCAL</b> : item.track.explicit ? <b className="explicit-tag">E</b> : null}</span>
+                {download && <span className={`track-download-status is-${download.status}`} role={download.status === "error" ? "alert" : "status"}>
+                  {download.status === "queued" ? download.message || "En attente…"
+                    : download.status === "progress" ? `${download.progress === null ? "Téléchargement…" : `${Math.floor(download.progress)}%`}${download.message ? ` — ${download.message}` : ""}`
+                      : download.status === "done" ? download.message
+                        : `Échec : ${download.message}`}
+                </span>}
               </div>
               <span className="track-duration">{itemDuration(item) ? formatTime(itemDuration(item) / 1000) : "—"}</span>
               <div className="track-actions">
+                {item.kind === "youtube" && <button
+                  type="button"
+                  className={`download-toggle ${download?.status === "done" ? "is-done" : ""} ${download?.status === "error" ? "is-error" : ""}`}
+                  onClick={() => void downloadTrack(item.track)}
+                  disabled={downloadBusy}
+                  aria-label={`${downloadBusy ? "Téléchargement en cours" : downloadLabel} : ${itemTitle(item)}`}
+                  title={downloadBusy ? "Téléchargement en cours" : downloadLabel}
+                >
+                  {downloadBusy ? <i className="spinner" aria-hidden="true" /> : download?.status === "done" ? "↻" : download?.status === "error" ? "↻" : "↓"}
+                </button>}
                 <button
                   type="button"
                   className={`favorite-toggle ${isFavorite ? "is-favorite" : ""}`}
@@ -502,6 +614,7 @@ export default function MusicApp() {
               <span className="search-hint">Recherche YouTube Music</span>
             </form>
             {!electronReady && <div className="notice">La lecture en streaming nécessite le shell Electron DowFlow. Les titres de la bibliothèque locale se lisent directement dans le navigateur.</div>}
+            <p className="download-note">Télécharge uniquement les pistes que tu as le droit de conserver.</p>
           </>}
         </section>
 

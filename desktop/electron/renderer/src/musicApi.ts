@@ -29,6 +29,28 @@ export interface LocalMusicFile {
   mtime: number;
 }
 
+export interface StartMusicDownload {
+  id: string;
+  title: string;
+  artist: string;
+}
+
+export interface StartedMusicDownload {
+  success: true;
+  async: true;
+  job_id: string;
+}
+
+export type MusicDownloadJobStatus = "queued" | "running" | "success" | "failed" | "skipped" | (string & {});
+
+export interface MusicDownloadJob {
+  status: MusicDownloadJobStatus;
+  progress?: number | null;
+  message?: string | null;
+  error?: string | null;
+  result?: unknown;
+}
+
 interface FavoritesResponse {
   success: boolean;
   items?: StoredMusicFavorite[];
@@ -49,8 +71,20 @@ interface LocalFavoritesResponse {
   items?: string[];
 }
 
+interface StartMusicDownloadResponse {
+  success: boolean;
+  async?: boolean;
+  job_id?: string;
+}
+
+interface MusicDownloadJobResponse {
+  success: boolean;
+  job?: MusicDownloadJob;
+}
+
 const STREAM_FAVORITES_URL = "/api/music/stream/favorites";
 const LOCAL_FAVORITES_URL = "/api/music/favorites";
+const MUSIC_DOWNLOAD_URL = "/api/music/download";
 
 async function responseError(response: Response): Promise<Error> {
   let detail = "";
@@ -75,6 +109,38 @@ async function readJson<T>(response: Response, label: string): Promise<T> {
   } catch {
     throw new Error(`La réponse de l’API ${label} est invalide (JSON attendu).`);
   }
+}
+
+export async function startMusicDownload(track: StartMusicDownload): Promise<StartedMusicDownload> {
+  const response = await fetch(MUSIC_DOWNLOAD_URL, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: `https://www.youtube.com/watch?v=${encodeURIComponent(track.id)}`,
+      title: track.title,
+      artist: track.artist,
+      audio_format: "mp3",
+      with_cover: true,
+    }),
+  });
+  const body = await readJson<StartMusicDownloadResponse>(response, "téléchargement Music");
+  if (body.success !== true || body.async !== true || typeof body.job_id !== "string" || !body.job_id) {
+    throw new Error("La réponse de démarrage du téléchargement Music est invalide.");
+  }
+  return { success: true, async: true, job_id: body.job_id };
+}
+
+export async function fetchMusicDownloadJob(jobId: string, signal?: AbortSignal): Promise<MusicDownloadJob> {
+  const response = await fetch(`/jobs/${encodeURIComponent(jobId)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    signal,
+  });
+  const body = await readJson<MusicDownloadJobResponse>(response, "état du téléchargement Music");
+  if (body.success !== true || !body.job || typeof body.job.status !== "string") {
+    throw new Error("La réponse de suivi du téléchargement Music est invalide.");
+  }
+  return body.job;
 }
 
 export async function fetchMusicLibrary(signal?: AbortSignal): Promise<LocalMusicFile[]> {

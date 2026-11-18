@@ -6,6 +6,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { PoTokenService } = require("./youtube/potoken-service.cjs");
 
+const APP_NAME = "DowFlow";
+const WINDOWS_APP_ID = "DowFlow.DowFlow";
+app.setName(APP_NAME);
+if (process.platform === "win32") app.setAppUserModelId(WINDOWS_APP_ID);
+
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const STARTUP_TIMEOUT_MS = 20_000;
 const HEALTH_INTERVAL_MS = 250;
@@ -203,7 +208,7 @@ function isTrustedBackendUrl(candidate) {
 async function createMainWindow() {
   const iconPath = path.join(PROJECT_ROOT, "static", "dowflow.ico");
   const options = {
-    title: "DowFlow",
+    title: APP_NAME,
     width: 1280,
     height: 860,
     minWidth: 900,

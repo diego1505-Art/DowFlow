@@ -1,0 +1,28 @@
+name: Close unanswered issues
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v11
+        with:
+          only-labels: needs-info
+          days-before-stale: 14
+          days-before-close: 7
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          stale-issue-label: stale
+          stale-issue-message: >
+            This issue is waiting for more information and hasn't had a reply in two weeks.
+            It will be closed in a week unless there's an update.
+          close-issue-message: >
+            Closing because the information we asked for didn't come in. If this still
+            happens on the latest version, open a new issue with the details.

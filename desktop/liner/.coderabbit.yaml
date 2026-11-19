@@ -1,0 +1,31 @@
+language: en-US
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!pnpm-lock.yaml"
+    - "!electron/signer.ts"
+    - "!src/assets/animations/**"
+  path_instructions:
+    - path: "**/*.{ts,tsx}"
+      instructions: |
+        Enforce the project rules from AGENTS.md:
+        - No comments of any kind in code (no //, /* */, JSDoc). Flag every one.
+        - No file over 150 lines. Suggest splitting into components, hooks or utilities.
+        - No `any`, no `as unknown as`, every React component has typed props.
+        - Conditional class names go through `cn()`; no raw hex colours or inline styles in feature code.
+        - Feature-Sliced Design: imports only point down (app → widgets → features → entities → shared), and other slices are imported only through their index.ts.
+    - path: "src/languages/locales/*.json"
+      instructions: |
+        Check that every key exists in en.json, `{placeholders}` match the English string,
+        and plural keys use the forms the language needs (see docs/I18N.md).
+    - path: "{src/shared/api,electron}/**"
+      instructions: |
+        Flag any new data sent off the device and ask for docs/PRIVACY.md to be updated.
+chat:
+  auto_reply: true

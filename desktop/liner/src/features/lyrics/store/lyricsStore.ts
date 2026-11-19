@@ -1,0 +1,316 @@
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { debouncedStorage } from "@/shared/utils/storage";
+import {
+  parseRawLyrics,
+  applyLyricsOffset,
+  type SyncedLine,
+} from "../engine/lyricsParser";
+import type { Lyric } from "@braccato/parsers";
+import { hasUsableLyrics } from "./lyricsCache";
+import type {
+  LyricsCandidate,
+  LyricsSyncLevel,
+} from "@/shared/contracts/lyrics";
+
+export interface LyricsProviderOption {
+  provider: string;
+  syncLevel: LyricsSyncLevel;
+  quality: number;
+  candidate: LyricsCandidate;
+}
+
+export function hasSyncedLyricsSources(
+  availableProviders: LyricsProviderOption[] = [],
+  braccatoLyrics: Lyric[] = [],
+  rawFormat: string | null = null,
+): boolean {
+  if (
+    availableProviders.some(
+      (p) =>
+        (p.syncLevel && p.syncLevel !== "plain") ||
+        (p.candidate?.syncLevel && p.candidate.syncLevel !== "plain") ||
+        (p.candidate?.lyrics?.format &&
+          p.candidate.lyrics.format !== "plain") ||
+        (p.candidate?.contentKind && p.candidate.contentKind !== "plain") ||
+        (p.candidate?.syncHint && p.candidate.syncHint !== "plain"),
+    )
+  ) {
+    return true;
+  }
+  if (
+    braccatoLyrics.some(
+      (l) => (l.startTimeMs ?? 0) > 0 || (l.durationMs ?? 0) > 0,
+    )
+  ) {
+    return true;
+  }
+  if (rawFormat !== null && rawFormat !== "plain") {
+    return true;
+  }
+  return false;
+}
+
+export function withUsableLyrics(
+  providers: LyricsProviderOption[],
+): LyricsProviderOption[] {
+  return providers.filter((p) => hasUsableLyrics(p.candidate));
+}
+
+export interface LyricsState {
+  lyricsLoading: boolean;
+  lyricsError: string | null;
+  rawLyrics: string | null;
+  rawFormat: string | null;
+  baseBraccatoLyrics: Lyric[];
+  baseSyncedLines: SyncedLine[];
+  braccatoLyrics: Lyric[];
+  syncedLines: SyncedLine[];
+  plainLyrics: string | null;
+  // the server says the track has no words, shown instead of "no lyrics"
+  instrumental: boolean;
+  lyricsQuality: number;
+  currentLyricsTrackId: string | null;
+  activeProvider: string | null;
+  availableProviders: LyricsProviderOption[];
+  offsetMs: number;
+  trackOffsets: Record<string, number>;
+  activeLineIndex: number | null;
+
+  setLyricsState: (
+    state: Partial<
+      Omit<
+        LyricsState,
+        | "setLyricsState"
+        | "reset"
+        | "selectProvider"
+        | "setOffset"
+        | "adjustOffset"
+        | "resetOffset"
+        | "setActiveLineIndex"
+      >
+    >,
+  ) => void;
+  setActiveLineIndex: (index: number | null) => void;
+  selectProvider: (providerName: string) => void;
+  setOffset: (offsetMs: number) => void;
+  adjustOffset: (deltaMs: number) => void;
+  resetOffset: () => void;
+  reset: () => void;
+}
+
+const LYRICS_SESSION_STORAGE_KEY = "liner_lyrics_session_v1";
+
+export const useLyricsStore = create<LyricsState>()(
+  persist(
+    (set, get) => ({
+      lyricsLoading: false,
+      lyricsError: null,
+      rawLyrics: null,
+      rawFormat: null,
+      baseBraccatoLyrics: [],
+      baseSyncedLines: [],
+      braccatoLyrics: [],
+      syncedLines: [],
+      plainLyrics: null,
+      instrumental: false,
+      lyricsQuality: 0,
+      currentLyricsTrackId: null,
+      activeProvider: null,
+      availableProviders: [],
+      offsetMs: 0,
+      trackOffsets: {},
+      activeLineIndex: null,
+
+      setActiveLineIndex: (index) => {
+        if (get().activeLineIndex === index) return;
+        set({ activeLineIndex: index });
+      },
+
+      setLyricsState: (state) => {
+        const current = get();
+        const nextTrackId =
+          state.currentLyricsTrackId !== undefined
+            ? state.currentLyricsTrackId
+            : current.currentLyricsTrackId;
+        const isNewTrack =
+          state.currentLyricsTrackId !== undefined &&
+          state.currentLyricsTrackId !== current.currentLyricsTrackId;
+
+        const offset =
+          state.offsetMs !== undefined
+            ? state.offsetMs
+            : isNewTrack
+              ? nextTrackId && current.trackOffsets?.[nextTrackId]
+                ? current.trackOffsets[nextTrackId]
+                : 0
+              : current.offsetMs;
+
+        let baseBraccato =
+          state.baseBraccatoLyrics ??
+          state.braccatoLyrics ??
+          (isNewTrack ? [] : current.baseBraccatoLyrics);
+        let baseSynced =
+          state.baseSyncedLines ??
+          state.syncedLines ??
+          (isNewTrack ? [] : current.baseSyncedLines);
+
+        const adjusted = applyLyricsOffset(
+          { braccatoLyrics: baseBraccato, syncedLines: baseSynced },
+          offset,
+        );
+
+        set({
+          ...state,
+          ...(state.availableProviders
+            ? { availableProviders: withUsableLyrics(state.availableProviders) }
+            : {}),
+          // a new track or any words clear an instrumental answer unless it is set again
+          instrumental:
+            state.instrumental ??
+            (isNewTrack || state.rawLyrics ? false : current.instrumental),
+          offsetMs: offset,
+          baseBraccatoLyrics: baseBraccato,
+          baseSyncedLines: baseSynced,
+          braccatoLyrics: adjusted.braccatoLyrics,
+          syncedLines: adjusted.syncedLines,
+        });
+
+        const next = get();
+        const activeIsListed = next.availableProviders.some(
+          (p) => p.provider === next.activeProvider,
+        );
+        if (
+          next.braccatoLyrics.length === 0 &&
+          next.availableProviders.length > 0 &&
+          !activeIsListed
+        ) {
+          next.selectProvider(next.availableProviders[0].provider);
+        }
+      },
+
+      selectProvider: (providerName: string) => {
+        const { availableProviders, offsetMs } = get();
+        const option = availableProviders.find(
+          (p) => p.provider === providerName,
+        );
+        if (!option || !hasUsableLyrics(option.candidate)) return;
+
+        try {
+          const parsed = parseRawLyrics(
+            option.candidate.lyrics.content,
+            option.candidate.lyrics.format,
+          );
+
+          const adjusted = applyLyricsOffset(
+            {
+              braccatoLyrics: parsed.braccatoLyrics,
+              syncedLines: parsed.syncedLines,
+            },
+            offsetMs,
+          );
+
+          set({
+            activeProvider: option.provider,
+            rawLyrics: option.candidate.lyrics.content,
+            rawFormat: option.candidate.lyrics.format,
+            baseBraccatoLyrics: parsed.braccatoLyrics,
+            baseSyncedLines: parsed.syncedLines,
+            braccatoLyrics: adjusted.braccatoLyrics,
+            syncedLines: adjusted.syncedLines,
+            plainLyrics: parsed.plainLyrics,
+            lyricsQuality: option.quality,
+          });
+        } catch {
+          set({
+            activeProvider: option.provider,
+            rawLyrics: option.candidate.lyrics.content,
+            rawFormat: option.candidate.lyrics.format,
+            baseBraccatoLyrics: [],
+            baseSyncedLines: [],
+            braccatoLyrics: [],
+            syncedLines: [],
+            plainLyrics: option.candidate.lyrics.content,
+            lyricsQuality: option.quality,
+          });
+        }
+      },
+
+      setOffset: (offsetMs: number) => {
+        const {
+          baseBraccatoLyrics,
+          baseSyncedLines,
+          currentLyricsTrackId,
+          trackOffsets,
+        } = get();
+
+        const adjusted = applyLyricsOffset(
+          { braccatoLyrics: baseBraccatoLyrics, syncedLines: baseSyncedLines },
+          offsetMs,
+        );
+
+        const updatedTrackOffsets = { ...trackOffsets };
+        if (currentLyricsTrackId) {
+          if (offsetMs === 0) {
+            delete updatedTrackOffsets[currentLyricsTrackId];
+          } else {
+            updatedTrackOffsets[currentLyricsTrackId] = offsetMs;
+          }
+        }
+
+        set({
+          offsetMs,
+          braccatoLyrics: adjusted.braccatoLyrics,
+          syncedLines: adjusted.syncedLines,
+          trackOffsets: updatedTrackOffsets,
+        });
+      },
+
+      adjustOffset: (deltaMs: number) => {
+        const { offsetMs, setOffset } = get();
+        setOffset(offsetMs + deltaMs);
+      },
+
+      resetOffset: () => {
+        get().setOffset(0);
+      },
+
+      reset: () =>
+        set({
+          lyricsLoading: false,
+          lyricsError: null,
+          rawLyrics: null,
+          rawFormat: null,
+          baseBraccatoLyrics: [],
+          baseSyncedLines: [],
+          braccatoLyrics: [],
+          syncedLines: [],
+          plainLyrics: null,
+          instrumental: false,
+          lyricsQuality: 0,
+          currentLyricsTrackId: null,
+          activeProvider: null,
+          availableProviders: [],
+          offsetMs: 0,
+          activeLineIndex: null,
+        }),
+    }),
+    {
+      name: LYRICS_SESSION_STORAGE_KEY,
+      storage: createJSONStorage(() => debouncedStorage),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.lyricsLoading = false;
+          state.lyricsError = null;
+          if (!state.trackOffsets) {
+            state.trackOffsets = {};
+          }
+        }
+      },
+      partialize: (state) => ({
+        currentLyricsTrackId: state.currentLyricsTrackId,
+        trackOffsets: state.trackOffsets,
+      }),
+    },
+  ),
+);

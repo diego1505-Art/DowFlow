@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" class="antialiased bg-transparent" suppresshydrationwarning>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Liner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Montserrat:wght@100..900&family=Roboto+Flex:GRAD,XOPQ,XTRA,YOPQ,YTAS,YTDE,YTFI,YTLC,YTUC,opsz,wdth,wght@-200..150,27..175,323..603,25..135,649..854,-305..-98,560..788,416..570,528..760,8..144,25..151,100..1000&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --font-inter: "Inter Variable", "Inter", sans-serif;
+        /* bundled SF Pro (src/assets/fonts) on every OS, the macOS system
+           font and Inter only while it loads */
+        --font-sf:
+          "SF Pro", -apple-system, BlinkMacSystemFont, var(--font-inter);
+        --font-geist-mono: "Geist Mono", monospace;
+        --font-roboto-flex: "Roboto Flex", sans-serif;
+        --font-montserrat-family: "Montserrat", sans-serif;
+      }
+      html.app-window #root:empty {
+        background: #e4e4e7;
+        border-radius: 18px;
+      }
+      html.app-window[data-theme="dark"] #root:empty {
+        background: #000000;
+      }
+    </style>
+  </head>
+  <body class="h-full w-full bg-transparent overflow-hidden p-1">
+    <div id="root" class="h-full w-full"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

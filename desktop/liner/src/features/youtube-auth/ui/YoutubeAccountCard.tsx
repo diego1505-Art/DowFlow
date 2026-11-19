@@ -1,0 +1,75 @@
+import { useState } from "react";
+import { YoutubeFill } from "@mingcute/react";
+import { useTranslation } from "@/languages";
+import { cn } from "@/shared/lib";
+import {
+  AccountCard,
+  ConfirmPill,
+  accountCardActionClassName,
+} from "@/shared/ui";
+import { AppImage } from "@/features/covers";
+import { signOutYoutube } from "@/shared/youtube";
+import { useYoutubeAccount } from "../hooks/useYoutubeAccount";
+import { useYoutubeSignInStore } from "../store/youtubeSignInStore";
+import YoutubeAccountSwitcher from "./YoutubeAccountSwitcher";
+
+export default function YoutubeAccountCard() {
+  const { t } = useTranslation();
+  const { signedIn, account, accounts, loading } = useYoutubeAccount();
+  const showSignIn = useYoutubeSignInStore((state) => state.show);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const signOut = () => {
+    setSigningOut(true);
+    void signOutYoutube().finally(() => setSigningOut(false));
+  };
+
+  const title = signedIn
+    ? (account?.name ?? "")
+    : t("settings.youtube.signed_out_title") || "Not signed in";
+  const subtitle = signedIn
+    ? (account?.email ?? account?.handle ?? "")
+    : t("settings.youtube.signed_out_description") ||
+      "Sign in to keep YouTube playback working";
+
+  return (
+    <AccountCard
+      media={
+        account?.photoUrl ? (
+          <AppImage src={account.photoUrl} alt="" fill />
+        ) : undefined
+      }
+      placeholderIcon={<YoutubeFill size={18} />}
+      title={title}
+      titleAccessory={
+        signedIn && accounts.length > 1 ? (
+          <YoutubeAccountSwitcher accounts={accounts} />
+        ) : undefined
+      }
+      subtitle={subtitle}
+      loading={loading}
+      action={
+        signedIn ? (
+          <ConfirmPill
+            label={t("settings.youtube.sign_out") || "Sign out"}
+            actionLabel={t("settings.youtube.sign_out") || "Sign out"}
+            confirmLabel={t("common.confirm") || "Confirm"}
+            onConfirm={signOut}
+            disabled={signingOut}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => showSignIn("manual")}
+            className={cn(
+              accountCardActionClassName,
+              "bg-text-primary/85 text-bg-primary hover:bg-text-primary",
+            )}
+          >
+            {t("settings.youtube.sign_in") || "Sign in"}
+          </button>
+        )
+      }
+    />
+  );
+}

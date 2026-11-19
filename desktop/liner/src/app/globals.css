@@ -1,0 +1,605 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter/opsz.css";
+@import "@fontsource-variable/inter/opsz-italic.css";
+
+/* SF Pro variable cut to Latin, Cyrillic and punctuation, width pinned to
+   100; weight 1-1000 and optical size 17-28 stay, so text sizes get the Text
+   design and large headings the Display one, as on macOS */
+@font-face {
+  font-family: "SF Pro";
+  src: url("../assets/fonts/SF-Pro.woff2") format("woff2");
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
+:root {
+  --login-backdrop: #141417;
+  --login-glow: #4b5272;
+  --login-glow-secondary: #3f4560;
+  --bg-canvas: #e4e4e7;
+  --bg-surface: #ffffff;
+  --bg-primary: #f5f5f7;
+  --bg-elevated: #e6e6eb;
+  --bg-panel: #dedee3;
+  --bg-overlay: rgba(245, 245, 247, 0.96);
+  --bg-toolbox: rgba(0, 0, 0, 0.04);
+  --bg-toolbox-active: rgba(0, 0, 0, 0.08);
+  --bg-glass: rgba(255, 255, 255, 0.55);
+  --border-toolbox-divider: rgba(0, 0, 0, 0.1);
+
+  --border-primary: #e4e4e7;
+  --border-secondary: #d4d4d8;
+  --border-tertiary: #a1a1aa;
+  --border-white-alpha-14: rgba(0, 0, 0, 0.06);
+  --border-white-alpha-33: rgba(0, 0, 0, 0.14);
+
+  --text-primary: #18181b;
+  --text-secondary: rgba(0, 0, 0, 0.65);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+
+  --accent-primary: #ff3b3b;
+  --accent-secondary: #ff5c5c;
+  --accent-tertiary: #ff7d7d;
+  --accent-warning: #d97706;
+
+  --btn-primary-bg: #18181b;
+  --btn-primary-text: #ffffff;
+
+  /* design tokens, see docs/DESIGN.md */
+  --fill-subtle: rgba(0, 0, 0, 0.03);
+  --fill: rgba(0, 0, 0, 0.05);
+  --fill-hover: rgba(0, 0, 0, 0.08);
+  --fill-strong: rgba(0, 0, 0, 0.1);
+  --surface-glass: rgba(245, 245, 247, 0.92);
+
+  --radius-xs: 4px;
+  --radius-lg: 10px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
+}
+
+:root[data-theme="light"],
+:root.light {
+  --bg-canvas: #e4e4e7;
+  --bg-surface: #ffffff;
+  --bg-primary: #f5f5f7;
+  --bg-elevated: #e6e6eb;
+  --bg-panel: #dedee3;
+  --bg-overlay: rgba(245, 245, 247, 0.96);
+  --bg-toolbox: rgba(0, 0, 0, 0.04);
+  --bg-toolbox-active: rgba(0, 0, 0, 0.08);
+  --bg-glass: rgba(255, 255, 255, 0.55);
+  --border-toolbox-divider: rgba(0, 0, 0, 0.1);
+
+  --border-primary: #e4e4e7;
+  --border-secondary: #d4d4d8;
+  --border-tertiary: #a1a1aa;
+  --border-white-alpha-14: rgba(0, 0, 0, 0.06);
+  --border-white-alpha-33: rgba(0, 0, 0, 0.14);
+
+  --text-primary: #18181b;
+  --text-secondary: rgba(0, 0, 0, 0.65);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+
+  --accent-primary: #ff3b3b;
+  --accent-secondary: #ff5c5c;
+  --accent-tertiary: #ff7d7d;
+  --accent-warning: #d97706;
+
+  --btn-primary-bg: #18181b;
+  --btn-primary-text: #ffffff;
+
+  /* design tokens, see docs/DESIGN.md */
+  --fill-subtle: rgba(0, 0, 0, 0.03);
+  --fill: rgba(0, 0, 0, 0.05);
+  --fill-hover: rgba(0, 0, 0, 0.08);
+  --fill-strong: rgba(0, 0, 0, 0.1);
+  --surface-glass: rgba(245, 245, 247, 0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not(.light) {
+    --bg-canvas: #000000;
+    --bg-surface: #0a0a0a;
+    --bg-primary: #0a0a0a;
+    --bg-elevated: #141414;
+    --bg-panel: #1a1a1a;
+    --bg-overlay: rgba(10, 10, 10, 0.96);
+    --bg-toolbox: rgba(255, 255, 255, 0.04);
+    --bg-toolbox-active: rgba(255, 255, 255, 0.09);
+    --bg-glass: rgba(70, 70, 70, 0.2);
+    --border-toolbox-divider: rgba(255, 255, 255, 0.1);
+
+    --border-primary: #1a1a1a;
+    --border-secondary: #1d1f23;
+    --border-tertiary: #1e2024;
+    --border-white-alpha-14: rgba(
+      255,
+      255,
+      255,
+      0.08
+    ); /* #FFFFFF14 mapping approximated to rgba */
+    --border-white-alpha-33: rgba(255, 255, 255, 0.2); /* #FFFFFF33 */
+
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-tertiary: rgba(255, 255, 255, 0.45);
+
+    --accent-primary: #ff4d4d;
+    --accent-secondary: #ff8a8a;
+    --accent-tertiary: #ff9b9b;
+    --accent-warning: #ffde9e;
+
+    --btn-primary-bg: #d9d9dd;
+    --btn-primary-text: #000000;
+
+    --fill-subtle: rgba(255, 255, 255, 0.04);
+    --fill: rgba(255, 255, 255, 0.07);
+    --fill-hover: rgba(255, 255, 255, 0.1);
+    --fill-strong: rgba(255, 255, 255, 0.14);
+    --surface-glass: rgba(22, 22, 24, 0.9);
+  }
+}
+
+:root[data-theme="dark"],
+:root.dark,
+[data-theme="dark"],
+.dark {
+  --bg-canvas: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-primary: #0a0a0a;
+  --bg-elevated: #141414;
+  --bg-panel: #1a1a1a;
+  --bg-overlay: rgba(10, 10, 10, 0.96);
+  --bg-toolbox: rgba(255, 255, 255, 0.04);
+  --bg-toolbox-active: rgba(255, 255, 255, 0.09);
+  --bg-glass: rgba(70, 70, 70, 0.2);
+  --border-toolbox-divider: rgba(255, 255, 255, 0.1);
+
+  --border-primary: #1a1a1a;
+  --border-secondary: #1d1f23;
+  --border-tertiary: #1e2024;
+  --border-white-alpha-14: rgba(255, 255, 255, 0.08);
+  --border-white-alpha-33: rgba(255, 255, 255, 0.2);
+
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-tertiary: rgba(255, 255, 255, 0.45);
+
+  --accent-primary: #ff4d4d;
+  --accent-secondary: #ff8a8a;
+  --accent-tertiary: #ff9b9b;
+  --accent-warning: #ffde9e;
+
+  --btn-primary-bg: #d9d9dd;
+  --btn-primary-text: #000000;
+
+  --fill-subtle: rgba(255, 255, 255, 0.04);
+  --fill: rgba(255, 255, 255, 0.07);
+  --fill-hover: rgba(255, 255, 255, 0.1);
+  --fill-strong: rgba(255, 255, 255, 0.14);
+  --surface-glass: rgba(22, 22, 24, 0.9);
+}
+
+@theme inline {
+  --color-bg-canvas: var(--bg-canvas);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-panel: var(--bg-panel);
+  --color-bg-overlay: var(--bg-overlay);
+  --color-bg-toolbox: var(--bg-toolbox);
+  --color-bg-toolbox-active: var(--bg-toolbox-active);
+  --color-bg-glass: var(--bg-glass);
+  --color-border-toolbox-divider: var(--border-toolbox-divider);
+
+  --color-border-primary: var(--border-primary);
+  --color-border-secondary: var(--border-secondary);
+  --color-border-tertiary: var(--border-tertiary);
+  --color-border-alpha-14: var(--border-white-alpha-14);
+  --color-border-alpha-33: var(--border-white-alpha-33);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-tertiary: var(--accent-tertiary);
+  --color-accent-warning: var(--accent-warning);
+
+  --color-btn-primary-bg: var(--btn-primary-bg);
+  --color-btn-primary-text: var(--btn-primary-text);
+
+  --color-fill-subtle: var(--fill-subtle);
+  --color-fill: var(--fill);
+  --color-fill-hover: var(--fill-hover);
+  --color-fill-strong: var(--fill-strong);
+  --color-surface-glass: var(--surface-glass);
+
+  --color-login-backdrop: var(--login-backdrop);
+  --color-login-glow: var(--login-glow);
+  --color-login-glow-secondary: var(--login-glow-secondary);
+
+  /* legacy steps still in use; new code takes control / item / panel */
+  --radius-xs: var(--radius-xs);
+  --radius-lg: var(--radius-lg);
+  --radius-2xl: var(--radius-2xl);
+  --radius-3xl: var(--radius-3xl);
+  --radius-control: 8px;
+  --radius-item: 12px;
+  --radius-panel: 20px;
+
+  --text-caption: 12px;
+  --text-body: 13px;
+  --text-label: 14px;
+  --text-title: 15px;
+  --text-heading: 18px;
+
+  --font-sans: var(--font-sf);
+  --font-mono: var(--font-geist-mono);
+  --font-montserrat: var(--font-montserrat-family);
+}
+
+.font-roboto-flex-heading {
+  font-family: var(--font-sf);
+  font-weight: 700;
+}
+
+html,
+body {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  /* no faux bold or italic when a weight is missing */
+  font-synthesis: none;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+* {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+}
+
+/* Hide Edge / IE / Chromium native password reveal button and clear button */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* linux window drag (useWindowDrag): the compositor moves the window, so the
+   drag areas are app-region boxes. later no-drag boxes win over earlier drag
+   ones, and pointer-events-none boxes are skipped like the js hit test does. */
+.native-window-drag #window-drag-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  -webkit-app-region: drag;
+}
+
+.native-window-drag [data-window-drag]:not(.pointer-events-none) {
+  -webkit-app-region: drag;
+}
+
+.native-window-drag
+  :is(
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    label,
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    [role="slider"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"],
+    [role="option"],
+    [data-no-window-drag],
+    .no-drag,
+    [data-dialog-container],
+    [data-dropdown-menu]
+  ):not(.pointer-events-none) {
+  -webkit-app-region: no-drag;
+}
+
+/* route change: a short rise and fade on the standard curve (docs/DESIGN.md).
+   No blur: a filter on the page would switch off the glass inside it while
+   the animation runs. Kept pages replay it when Activity shows them again,
+   since leaving display: none restarts CSS animations. */
+.page-transition {
+  animation: page-enter 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top center;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  width: 100%;
+}
+
+/* kept pages (home, library) get only the animation, no lasting transform,
+   so nothing inside them changes containing block */
+.page-transition-kept {
+  animation: page-enter 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  height: 100%;
+  width: 100%;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .page-transition-kept {
+    animation-duration: 1ms;
+  }
+}
+
+.app-shell-enter > * {
+  animation: app-shell-enter 200ms ease-out;
+}
+
+@keyframes app-shell-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.theme-logo {
+  filter: invert(1) !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-logo {
+    filter: none !important;
+  }
+}
+:root[data-theme="dark"] .theme-logo {
+  filter: none !important;
+}
+
+.apple-glass-pill,
+.apple-glass-action,
+.apple-glass-static,
+.apple-glass-pill-dark {
+  background: var(
+    --glass-pill-bg,
+    linear-gradient(135deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.35) 100%)
+  ) !important;
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(160%) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease !important;
+}
+
+button.apple-glass-pill:hover,
+button.apple-glass-action:hover,
+.apple-glass-action:hover,
+.apple-glass-pill-dark button:hover {
+  background: var(
+    --glass-pill-bg-hover,
+    linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.5) 100%)
+  ) !important;
+  color: #ffffff !important;
+}
+
+.apple-glass-prominent {
+  background: var(--glass-prominent-bg, #ffffff) !important;
+  border: none !important;
+  color: #000000 !important;
+  box-shadow: none !important;
+  transition:
+    background 150ms ease,
+    opacity 150ms ease !important;
+}
+
+.apple-glass-prominent:hover {
+  background: #f0f0f2 !important;
+  color: #000000 !important;
+}
+
+@keyframes lyric-dot {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.lyric-dot-anim {
+  animation: lyric-dot 0.8s ease-in-out infinite;
+}
+
+.lyric-line {
+  --line-scale: 0.96;
+  --line-opacity: 0.35;
+  --line-filter: blur(0.4px);
+  transform: scale(var(--line-scale));
+  opacity: var(--line-opacity);
+  filter: var(--line-filter);
+  transition:
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.32s ease,
+    color 0.32s ease;
+  will-change: transform, opacity, filter;
+  cursor: pointer;
+}
+
+.lyric-line:not(.lyric-line--active):hover {
+  --line-scale: 0.98;
+  --line-opacity: 0.75;
+  --line-filter: blur(0px);
+}
+
+.lyric-line--active {
+  --line-scale: 1.03;
+  --line-opacity: 1;
+  --line-filter: blur(0px);
+  cursor: default;
+}
+
+@keyframes skeleton-breathe {
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.42;
+  }
+}
+
+@keyframes skeleton-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--border-white-alpha-14);
+  animation: skeleton-breathe 2.4s ease-in-out infinite;
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--border-white-alpha-14) 35%,
+    var(--border-white-alpha-33) 50%,
+    var(--border-white-alpha-14) 65%,
+    transparent 100%
+  );
+  animation: skeleton-sweep 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .app-shell-enter > * {
+    animation: none;
+  }
+  .search-popup-enter {
+    animation: none;
+  }
+  .lyric-dot-anim {
+    animation: none;
+    opacity: 0.5;
+  }
+  .skeleton-shimmer {
+    animation: none;
+    opacity: 0.6;
+  }
+  .lyric-line {
+    transition: none;
+  }
+  .skeleton-shimmer::after {
+    animation: none;
+    display: none;
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+body[data-edge-to-edge="true"] {
+  padding: 0 !important;
+}
+
+html[data-hover-reset] [data-window-controls] button:hover {
+  background-color: transparent !important;
+}
+
+@property --lyrics-fog-top {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@property --lyrics-fog-bottom {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+.lyrics-edge-fog {
+  --lyrics-fog-top: 22%;
+  --lyrics-fog-bottom: 26%;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black var(--lyrics-fog-top),
+    black calc(100% - var(--lyrics-fog-bottom)),
+    transparent 100%
+  );
+  transition:
+    --lyrics-fog-top 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    --lyrics-fog-bottom 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lyrics-edge-fog[data-at-top] {
+  --lyrics-fog-top: 0%;
+}
+
+.lyrics-edge-fog[data-at-bottom] {
+  --lyrics-fog-bottom: 0%;
+}

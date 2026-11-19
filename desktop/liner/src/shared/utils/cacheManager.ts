@@ -1,0 +1,666 @@
+import { linerDb } from "@/shared/storage/linerDb";
+import { useLocalLibraryStore } from "@/features/library/local/store/localLibraryStore";
+import { useSavedTracksStore } from "@/features/library/saved/store/savedTracksStore";
+import { useCachedTracksStore } from "@/features/library/cached/store/cachedTracksStore";
+import {
+  audioCache,
+  DEFAULT_AUDIO_CACHE_LIMIT_BYTES,
+  MIN_AUDIO_CACHE_LIMIT_BYTES,
+} from "@/shared/storage/audioCache";
+import { queryCache } from "@/shared/cache/queryCache";
+import {
+  clearPersistedScreenCache,
+  clearScreenCache,
+} from "@/shared/cache/screenCache";
+import { lyricsCache } from "@/features/lyrics";
+import { clearCoverRegistry } from "@/features/covers";
+import { useSearchHistoryStore } from "@/features/search/store/searchHistoryStore";
+import { debouncedStorage } from "@/shared/utils/storage";
+
+export { DEFAULT_AUDIO_CACHE_LIMIT_BYTES, MIN_AUDIO_CACHE_LIMIT_BYTES };
+
+export function getAudioCacheLimitBytes(): number {
+  return audioCache.getLimitBytes();
+}
+
+export async function setAudioCacheLimitBytes(bytes: number): Promise<void> {
+  await audioCache.setLimitBytes(bytes);
+}
+
+const PRESERVED_STORAGE_KEYS = new Set([
+  "liner_access_token",
+  "liner_refresh_token",
+  "liner_auth_session",
+  "liner_locale",
+  "theme",
+]);
+
+export type StorageCategoryId =
+  "covers" | "audio" | "lyrics" | "metadata" | "local" | "liked" | "shared";
+
+export type StorageCategoryGroup = "music" | "cache";
+
+export const LIBRARY_CATEGORY_IDS: ReadonlySet<StorageCategoryId> = new Set([
+  "local",
+  "liked",
+  "shared",
+]);
+
+export interface StorageCategoryItem {
+  id: StorageCategoryId;
+  labelKey: string;
+  bytes: number;
+  count?: number;
+  color: string;
+  group: StorageCategoryGroup;
+}
+
+export interface StorageAnalytics {
+  categories: StorageCategoryItem[];
+  totalBytes: number;
+  musicBytes: number;
+  freeBytes?: number;
+  audioCacheLimitBytes?: number;
+  deviceQuotaBytes?: number;
+  deviceUsageBytes?: number;
+  deviceUsagePercent?: number;
+  cachePath?: string;
+}
+
+/**
+ * Clears cached network responses and cover image caches stored in CacheStorage and localStorage.
+ */
+export async function clearMediaAndCoverCache(): Promise<void> {
+  clearCoverRegistry();
+  await clearStoredCovers();
+}
+
+async function clearStoredCovers(): Promise<void> {
+  if (typeof window !== "undefined" && "caches" in window) {
+    try {
+      const keys = await window.caches.keys();
+      await Promise.all(keys.map((key) => window.caches.delete(key)));
+    } catch {
+      // Best-effort cache cleanup
+    }
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith("liner:playlist-covers") ||
+          key.startsWith("liner:cover:") ||
+          key.startsWith("liner:cache:"))
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
+/**
+ * Clears search query caches and cached catalog lookups.
+ */
+export async function clearSearchAndQueryCache(): Promise<void> {
+  queryCache.clear();
+  clearScreenCache();
+  try {
+    useSearchHistoryStore.getState().clearHistory();
+    debouncedStorage.removeItem("liner_search_history");
+    debouncedStorage.flush();
+  } catch {
+    // Best-effort in non-store environments
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith("liner:search:") ||
+          key.startsWith("liner:query:") ||
+          key.startsWith("liner_search_") ||
+          key.startsWith("search-cache") ||
+          key === "liner_search_history")
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
+/**
+ * Clears temporary application cache while preserving auth and user settings.
+ */
+export async function clearApplicationCacheSafely(): Promise<void> {
+  clearCoverRegistry();
+  try {
+    useSearchHistoryStore.getState().clearHistory();
+    debouncedStorage.removeItem("liner_search_history");
+    debouncedStorage.flush();
+  } catch {}
+
+  await Promise.all([clearMediaAndCoverCache(), clearSearchAndQueryCache()]);
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && !PRESERVED_STORAGE_KEYS.has(key)) {
+        if (
+          key.startsWith("liner:") ||
+          key.startsWith("lyrics-storage") ||
+          key === "player-temp"
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
+// calculates approximate byte size of cover cache in serviceworker
+async function getCoverCacheBytes(): Promise<{ bytes: number; count: number }> {
+  if (typeof window === "undefined" || !("caches" in window)) {
+    return { bytes: 0, count: 0 };
+  }
+  try {
+    const hasCovers = await window.caches.has("liner-covers-v2");
+    if (!hasCovers) return { bytes: 0, count: 0 };
+    const cache = await window.caches.open("liner-covers-v2");
+    const requests = await cache.keys();
+    const count = requests.length;
+    if (count === 0) return { bytes: 0, count: 0 };
+
+    // sample up to 20 entries to avoid main thread jank with large catalogs
+    const sampleLimit = Math.min(count, 20);
+    let sampleBytes = 0;
+    for (let i = 0; i < sampleLimit; i++) {
+      const resp = await cache.match(requests[i]);
+      if (resp) {
+        const cl = resp.headers.get("content-length");
+        if (cl) {
+          sampleBytes += parseInt(cl, 10) || 0;
+        } else {
+          const blob = await resp.clone().blob();
+          sampleBytes += blob.size;
+        }
+      }
+    }
+    const avg = sampleLimit > 0 ? sampleBytes / sampleLimit : 0;
+    const estimated = Math.round(avg * count);
+    return { bytes: estimated, count };
+  } catch {
+    return { bytes: 0, count: 0 };
+  }
+}
+
+// gathers live analytics across indexeddb, caches, localstorage and electron
+export async function getStorageAnalytics(): Promise<StorageAnalytics> {
+  let audioBytes = 0;
+  let coversBytes = 0;
+  let coversCount = 0;
+  let lyricsBytes = 0;
+  let metadataBytes = 0;
+  let cachePath = "";
+
+  // 1. electron disk measurements (if running inside electron app)
+  let electronStats: {
+    cacheSize: number;
+    httpCacheSize: number;
+    codeCacheSize: number;
+    serviceWorkerSize: number;
+    indexedDbSize: number;
+    localStorageSize: number;
+    blobStorageSize: number;
+    cachePath: string;
+  } | null = null;
+
+  if (typeof window !== "undefined" && window.linerElectron?.getCacheStats) {
+    try {
+      electronStats = await window.linerElectron.getCacheStats();
+      if (electronStats.cachePath) {
+        cachePath = electronStats.cachePath;
+      }
+    } catch {}
+  }
+
+  // 2. indexeddb audio tracks & metadata added in linerDb
+  try {
+    const audioTrackBytes = await linerDb.getTotalTrackBytes();
+    const audioBlobBytes = await linerDb.getTotalAudioBytes();
+    audioBytes = audioTrackBytes + audioBlobBytes;
+  } catch {}
+
+  // take the maximum between indexeddb object store iteration and physical disk size
+  // if indexeddb store is empty, ignore residual leveldb engine overhead under 2MB
+  if (electronStats && electronStats.indexedDbSize > 0) {
+    const totalIdbDisk =
+      electronStats.indexedDbSize + (electronStats.blobStorageSize || 0);
+    if (audioBytes > 0) {
+      audioBytes = Math.max(audioBytes, totalIdbDisk);
+    } else if (totalIdbDisk > 2 * 1024 * 1024) {
+      audioBytes = totalIdbDisk;
+    } else {
+      audioBytes = 0;
+    }
+  }
+
+  // 3. serviceworker covers added in cover-sw.js
+  try {
+    const coverStats = await getCoverCacheBytes();
+    coversBytes = coverStats.bytes;
+    coversCount = coverStats.count;
+  } catch {}
+
+  // physical disk size for service worker cache storage (only when covers exist or exceed 1MB)
+  if (electronStats && electronStats.serviceWorkerSize > 0) {
+    if (coversBytes > 0) {
+      coversBytes = Math.max(coversBytes, electronStats.serviceWorkerSize);
+    } else if (electronStats.serviceWorkerSize > 1024 * 1024) {
+      coversBytes = electronStats.serviceWorkerSize;
+    } else {
+      coversBytes = 0;
+    }
+  }
+
+  // 4. lyrics cache added in lyricsCache.ts + linerDb lyrics
+  try {
+    const lBytes = await linerDb.getTotalLyricsBytes();
+    const lStats = lyricsCache.getStats();
+    lyricsBytes = lBytes + lStats.bytes;
+  } catch {}
+
+  // 5. in-memory catalog cache added in queryCache.ts + linerDb artists
+  try {
+    metadataBytes += await linerDb.getTotalArtistBytes();
+  } catch {}
+
+  // 6. localstorage inspection for covers, search and metadata
+  if (typeof window !== "undefined" && window.localStorage) {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      const v = localStorage.getItem(k) || "";
+      const size = (k.length + v.length) * 2;
+      if (
+        k.startsWith("liner:playlist-covers") ||
+        k.startsWith("liner:cover:")
+      ) {
+        coversBytes += size;
+      } else if (
+        k.startsWith("liner:search:") ||
+        k.startsWith("liner:query:") ||
+        k.startsWith("liner_search_") ||
+        k.startsWith("search-cache") ||
+        k === "liner_search_history"
+      ) {
+        metadataBytes += size;
+      } else if (k.startsWith("liner:artist:")) {
+        metadataBytes += size;
+      } else if (
+        k.startsWith("liner_lyrics_") ||
+        k.startsWith("lyrics-storage")
+      ) {
+        if (
+          !k.startsWith("liner_lyrics_v2_item_") &&
+          k !== "liner_lyrics_v2_index" &&
+          !k.startsWith("liner_lyrics_item_") &&
+          k !== "liner_lyrics_lru_index"
+        ) {
+          lyricsBytes += size;
+        }
+      }
+    }
+  }
+
+  let localBytes = 0;
+  let localCount = 0;
+  if (typeof window !== "undefined" && window.linerElectron?.localTracksUsage) {
+    try {
+      const usage = await window.linerElectron.localTracksUsage();
+      localBytes = usage.bytes;
+      localCount = usage.count;
+    } catch {}
+  }
+
+  let likedBytes = 0;
+  let likedCount = 0;
+  let sharedBytes = 0;
+  let sharedCount = 0;
+  let freeBytes: number | undefined;
+  if (typeof window !== "undefined" && window.linerElectron?.savedTracksUsage) {
+    try {
+      const claimedIds = useSavedTracksStore
+        .getState()
+        .records.map((record) => record.trackId);
+      const [usage, claimed] = await Promise.all([
+        window.linerElectron.savedTracksUsage(),
+        claimedIds.length > 0 && window.linerElectron.savedTracksUsageOf
+          ? window.linerElectron.savedTracksUsageOf(claimedIds)
+          : Promise.resolve({ count: 0, bytes: 0 }),
+      ]);
+      likedBytes = claimed.bytes;
+      likedCount = claimed.count;
+      sharedCount = Math.max(0, usage.count - claimed.count);
+      sharedBytes = sharedCount > 0 ? Math.max(0, usage.bytes - likedBytes) : 0;
+      if (usage.freeBytes !== null) freeBytes = usage.freeBytes;
+    } catch {}
+  }
+
+  // 7. device quota estimate
+  let deviceQuotaBytes: number | undefined;
+  let deviceUsageBytes: number | undefined;
+  let deviceUsagePercent: number | undefined;
+
+  if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
+    try {
+      const estimate = await navigator.storage.estimate();
+      deviceQuotaBytes = estimate.quota;
+      deviceUsageBytes = estimate.usage;
+      if (
+        estimate.quota &&
+        estimate.quota > 0 &&
+        estimate.usage !== undefined
+      ) {
+        deviceUsagePercent = Math.min(
+          100,
+          Math.max(0.01, (estimate.usage / estimate.quota) * 100),
+        );
+      }
+    } catch {}
+  }
+
+  const categories: StorageCategoryItem[] = [
+    {
+      id: "covers",
+      labelKey: "settings.storage.categories.covers",
+      bytes: coversBytes,
+      count: coversCount,
+      color: "#06B6D4", // cyan
+      group: "cache",
+    },
+    {
+      id: "audio",
+      labelKey: "settings.storage.categories.audio",
+      bytes: audioBytes,
+      color: "#8B5CF6", // purple
+      group: "cache",
+    },
+    {
+      id: "lyrics",
+      labelKey: "settings.storage.categories.lyrics",
+      bytes: lyricsBytes,
+      color: "#EC4899", // pink
+      group: "cache",
+    },
+    {
+      id: "metadata",
+      labelKey: "settings.storage.categories.metadata",
+      bytes: metadataBytes,
+      color: "#F59E0B", // amber
+      group: "cache",
+    },
+    {
+      id: "local",
+      labelKey: "settings.storage.categories.local",
+      bytes: localBytes,
+      count: localCount,
+      color: "#047857",
+      group: "music",
+    },
+    {
+      id: "liked",
+      labelKey: "settings.storage.categories.liked",
+      bytes: likedBytes,
+      count: likedCount,
+      color: "#34D399",
+      group: "music",
+    },
+    {
+      id: "shared",
+      labelKey: "settings.storage.categories.shared",
+      bytes: sharedBytes,
+      count: sharedCount,
+      color: "#6EE7B7",
+      group: "music",
+    },
+  ];
+
+  const totalBytes = categories
+    .filter((c) => !LIBRARY_CATEGORY_IDS.has(c.id))
+    .reduce((sum, c) => sum + c.bytes, 0);
+
+  const musicBytes = categories
+    .filter((c) => c.group === "music")
+    .reduce((sum, c) => sum + c.bytes, 0);
+
+  return {
+    categories,
+    totalBytes,
+    musicBytes,
+    ...(freeBytes !== undefined ? { freeBytes } : {}),
+    audioCacheLimitBytes: audioCache.getLimitBytes(),
+    deviceQuotaBytes,
+    deviceUsageBytes,
+    deviceUsagePercent,
+    cachePath,
+  };
+}
+
+// clears chosen categories cleanly while maintaining user session
+export async function clearStorageCategories(
+  categoryIds: StorageCategoryId[],
+): Promise<void> {
+  const set = new Set(categoryIds);
+  if (set.has("local")) {
+    await useLocalLibraryStore.getState().removeAll();
+  }
+  const isAllCategories =
+    set.has("audio") &&
+    set.has("covers") &&
+    set.has("lyrics") &&
+    set.has("metadata");
+
+  if (set.has("audio")) {
+    audioCache.invalidate();
+    await linerDb.clearStore("audio");
+    await linerDb.clearStore("tracks");
+    if (isAllCategories) {
+      await linerDb.close();
+    }
+    if (
+      typeof window !== "undefined" &&
+      window.linerElectron?.clearAudioCache
+    ) {
+      await window.linerElectron.clearAudioCache(isAllCategories);
+    }
+  }
+
+  if (set.has("covers")) {
+    await clearStoredCovers();
+    if (
+      typeof window !== "undefined" &&
+      window.linerElectron?.clearCoversCache
+    ) {
+      await window.linerElectron.clearCoversCache();
+    }
+  }
+
+  if (set.has("lyrics")) {
+    lyricsCache.clear();
+    await linerDb.clearStore("lyrics");
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.removeItem("lyrics-storage");
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("liner_lyrics_")) toRemove.push(k);
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k));
+    }
+  }
+
+  if (set.has("metadata")) {
+    await linerDb.clearStore("artists");
+    clearPersistedScreenCache();
+    try {
+      useSearchHistoryStore.getState().clearHistory();
+      debouncedStorage.removeItem("liner_search_history");
+      debouncedStorage.flush();
+    } catch {}
+    if (typeof window !== "undefined" && window.localStorage) {
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (
+          k &&
+          (k.startsWith("liner:artist:") ||
+            k.startsWith("liner:search:") ||
+            k.startsWith("liner:query:") ||
+            k.startsWith("liner_search_") ||
+            k.startsWith("search-cache") ||
+            k === "liner_search_history")
+        ) {
+          toRemove.push(k);
+        }
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k));
+    }
+  }
+
+  if (typeof window !== "undefined" && window.linerElectron?.clearHttpCache) {
+    await window.linerElectron.clearHttpCache();
+  }
+}
+
+export async function removeTrackFromCache(trackId: string): Promise<void> {
+  await useCachedTracksStore.getState().remove(trackId);
+  lyricsCache.delete(trackId);
+  await linerDb.deleteLyrics(trackId);
+  await refreshStorageAnalytics(true).catch(() => null);
+}
+
+export async function openCacheFolder(): Promise<boolean> {
+  if (typeof window !== "undefined" && window.linerElectron?.openCacheFolder) {
+    return window.linerElectron.openCacheFolder();
+  }
+  return false;
+}
+
+export async function openDownloadsFolder(): Promise<boolean> {
+  if (
+    typeof window !== "undefined" &&
+    window.linerElectron?.savedTracksOpenFolder
+  ) {
+    return window.linerElectron.savedTracksOpenFolder();
+  }
+  return false;
+}
+
+// formats raw bytes into clean human readable format
+export function formatStorageBytes(bytes: number): string {
+  if (bytes <= 0 || !Number.isFinite(bytes)) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
+}
+
+const CACHE_ANALYTICS_STORAGE_KEY = "liner_cached_storage_analytics";
+
+function readPersistedAnalytics(): StorageAnalytics | null {
+  if (typeof window === "undefined" || !window.sessionStorage) return null;
+  try {
+    const raw = sessionStorage.getItem(CACHE_ANALYTICS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as StorageAnalytics) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedAnalytics(data: StorageAnalytics): void {
+  if (typeof window === "undefined" || !window.sessionStorage) return;
+  try {
+    sessionStorage.setItem(CACHE_ANALYTICS_STORAGE_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+let cachedStorageAnalytics: StorageAnalytics | null = readPersistedAnalytics();
+let inflightAnalytics: Promise<StorageAnalytics> | null = null;
+const analyticsListeners = new Set<(data: StorageAnalytics) => void>();
+
+export function subscribeStorageAnalytics(
+  listener: (data: StorageAnalytics) => void,
+): () => void {
+  analyticsListeners.add(listener);
+  return () => {
+    analyticsListeners.delete(listener);
+  };
+}
+
+export function forgetStorageAnalytics(): void {
+  cachedStorageAnalytics = null;
+  if (typeof window === "undefined" || !window.sessionStorage) return;
+  try {
+    sessionStorage.removeItem(CACHE_ANALYTICS_STORAGE_KEY);
+  } catch {}
+}
+
+// returns cached analytics synchronously if available
+export function getCachedStorageAnalytics(): StorageAnalytics | null {
+  return cachedStorageAnalytics;
+}
+
+// performs background update of storage analytics
+export async function refreshStorageAnalytics(
+  force = false,
+): Promise<StorageAnalytics> {
+  if (inflightAnalytics) {
+    if (!force) return cachedStorageAnalytics ?? inflightAnalytics;
+    await inflightAnalytics.catch(() => null);
+  }
+  const request = getStorageAnalytics();
+  inflightAnalytics = request;
+  try {
+    const data = await request;
+    cachedStorageAnalytics = data;
+    writePersistedAnalytics(data);
+    for (const listener of analyticsListeners) listener(data);
+    return data;
+  } finally {
+    if (inflightAnalytics === request) {
+      inflightAnalytics = null;
+    }
+  }
+}
+
+export function initBackgroundStorageAnalytics(): void {
+  if (typeof window === "undefined") return;
+
+  // non-blocking initial fetch 1.5s after launch
+  setTimeout(() => {
+    void refreshStorageAnalytics();
+  }, 1500);
+}
+
+// automatically start in browser/electron
+if (typeof window !== "undefined") {
+  initBackgroundStorageAnalytics();
+}

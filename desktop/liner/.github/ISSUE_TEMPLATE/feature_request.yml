@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest something new for Liner
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bigger ideas and open-ended discussions fit better in [Discussions → Ideas](https://github.com/tryliner/desktop/discussions/categories/ideas).
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you suggest
+      options:
+        - label: I searched the open and closed issues and this isn't requested yet.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What you're trying to do and what gets in the way today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, mockups, or how other apps do it.

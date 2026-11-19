@@ -1,0 +1,527 @@
+import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type {
+  AuthRefreshResult,
+  StoredAuthSession,
+} from "./auth-session-store";
+import { startPoTokenWorker } from "./youtube/potoken-preload";
+import type { TvSession as YoutubeTvSession } from "./youtube/tv-session";
+import type { SolveResult as YoutubeSolveResult } from "./youtube/n-solver";
+import type { MainNetResult } from "./netdiag";
+import type { NetProbeResult } from "./netprobe/types";
+import type {
+  LocalImportResult,
+  LocalLibraryUsage,
+  LocalTrackRecord,
+} from "./local-tracks/types";
+import type {
+  SavedLibraryUsage,
+  SavedLyricsState,
+  SavedTrackInput,
+  SavedTrackRecord,
+  SavedTracksPartUsage,
+} from "./saved-tracks/types";
+
+export interface DiscordStatus {
+  connected: boolean;
+  username?: string;
+  avatarUrl?: string;
+  viaArrpc?: boolean;
+}
+
+export interface DeeplinkTarget {
+  type: "artist" | "album" | "playlist" | "track";
+  id: string;
+}
+
+export interface ElectronCacheStats {
+  cacheSize: number;
+  httpCacheSize: number;
+  codeCacheSize: number;
+  serviceWorkerSize: number;
+  indexedDbSize: number;
+  localStorageSize: number;
+  blobStorageSize: number;
+  cachePath: string;
+}
+
+export interface UpdateInfo {
+  version: string;
+  releaseNotes?: string;
+  releaseDate?: string;
+}
+
+export interface UpdateDownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
+export interface WindowState {
+  isMaximized: boolean;
+  isFullScreen: boolean;
+  isVisible?: boolean;
+}
+
+export interface LinerElectronApi {
+  platform: string;
+  isHyprland: boolean;
+  minimize: () => Promise<void>;
+  toggleMaximize: () => Promise<void>;
+  toggleFullScreen: () => Promise<void>;
+  close: () => Promise<void>;
+  isMaximized: () => Promise<boolean>;
+  isFullScreen: () => Promise<boolean>;
+  getRememberWindowBounds: () => Promise<boolean>;
+  setRememberWindowBounds: (enabled: boolean) => Promise<boolean>;
+  onWindowStateChange: (cb: (state: WindowState) => void) => () => void;
+  onWindowRestored?: (cb: () => void) => () => void;
+  onWindowMinimized?: (cb: () => void) => () => void;
+  notePresence?: () => void;
+  dragStart: () => void;
+  dragMove: (deltaX: number, deltaY: number) => void;
+  dragEnd: () => void;
+  signRequest: (input: {
+    method: string;
+    path: string;
+    body?: string | null;
+    timestamp?: number;
+  }) => Promise<{
+    signature?: string;
+    timestamp?: number;
+    nonce?: string;
+    error?: string;
+  }>;
+  signMonitorRequest: (input: {
+    method: string;
+    path: string;
+    body?: string | null;
+    timestamp?: number;
+  }) => Promise<{
+    signature?: string;
+    timestamp?: number;
+    nonce?: string;
+    error?: string;
+  }>;
+  syncServerTime: (dateHeaderOrMs: string | number) => Promise<number>;
+  setEdgeKey?: (key: string | null) => void;
+  getServerTimeOffset: () => Promise<number>;
+  signCoverUrl: (payload: string) => Promise<string>;
+  signRawPayload: (payload: number[] | Uint8Array) => Promise<string>;
+  authSession?: {
+    get: () => StoredAuthSession | null;
+    set: (
+      next: { accessToken: string; refreshToken: string } | null,
+    ) => Promise<StoredAuthSession | null>;
+    refresh: (input: {
+      apiBaseUrl: string;
+      refreshToken?: string;
+    }) => Promise<AuthRefreshResult>;
+    onChange: (cb: (session: StoredAuthSession | null) => void) => () => void;
+  };
+  youtubeAuthSession?: {
+    get: () => StoredAuthSession | null;
+    set: (
+      next: { accessToken: string; refreshToken: string } | null,
+    ) => Promise<StoredAuthSession | null>;
+  };
+  onDeeplink: (cb: (target: DeeplinkTarget) => void) => () => void;
+  diagnoseNetwork: (hosts: string[]) => Promise<MainNetResult>;
+  probeNetwork: () => Promise<NetProbeResult>;
+  openDownloads: (customPath?: string) => Promise<boolean>;
+  openExportFolder: (customPath?: string) => Promise<boolean>;
+  setAppIcon: (
+    dataUrl: string,
+    options?: { isDefault?: boolean },
+  ) => Promise<void>;
+  getAppVersion: () => Promise<string>;
+  getCacheStats: () => Promise<ElectronCacheStats>;
+  openCacheFolder: () => Promise<boolean>;
+  clearCoversCache: () => Promise<boolean>;
+  clearAudioCache: (clearEntireDb?: boolean) => Promise<boolean>;
+  clearHttpCache: () => Promise<boolean>;
+  checkForUpdates: () => Promise<{
+    available: boolean;
+    version?: string;
+    releaseNotes?: string;
+    error?: string;
+  }>;
+  downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
+  quitAndInstall: () => Promise<boolean>;
+  onUpdateAvailable: (cb: (info: UpdateInfo) => void) => () => void;
+  onUpdateDownloadProgress: (
+    cb: (progress: UpdateDownloadProgress) => void,
+  ) => () => void;
+  onUpdateDownloaded: (cb: (info: { version: string }) => void) => () => void;
+  onUpdateError: (cb: (err: { message: string }) => void) => () => void;
+  // OTA Frontend Bundle Updater
+  bundleCheck: () => Promise<{
+    available: boolean;
+    manifest?: any;
+    reason?: string;
+  }>;
+  bundleDownloadAndInstall: (
+    manifest: any,
+  ) => Promise<{ success: boolean; error?: string }>;
+  bundleHotSwap: () => Promise<boolean>;
+  bundleRollback: () => Promise<boolean>;
+  bundleGetStatus: () => Promise<{
+    appVersion: string;
+    bundleVersion: string;
+    isOta: boolean;
+    sha256: string | null;
+    effectivePath: string;
+  }>;
+  onBundleAvailable: (cb: (manifest: any) => void) => () => void;
+  onBundleDownloadProgress: (
+    cb: (progress: {
+      percent: number;
+      transferred: number;
+      total: number;
+    }) => void,
+  ) => () => void;
+  onBundleReady: (cb: (state: any) => void) => () => void;
+  onBundleStamp: (cb: (line: string) => void) => () => void;
+  touchbarUpdateState: (state: any) => void;
+  onTouchBarAction: (cb: (action: any) => void) => () => void;
+  sendTouchBarAction: (action: any) => void;
+  getTouchBarInitialState: () => Promise<any>;
+  onTouchBarRequestSync: (cb: () => void) => () => void;
+  overlayUpdateState: (state: any) => void;
+  overlayReady?: () => void;
+  onOverlayAction: (cb: (action: any) => void) => () => void;
+  sendOverlayAction: (action: any) => void;
+  toggleOverlay: () => Promise<boolean>;
+  isOverlayOpen: () => Promise<boolean>;
+  closeOverlay: () => void;
+  onOverlayState: (cb: (state: any) => void) => () => void;
+  getOverlayInitialState: () => Promise<any>;
+  updateOverlaySettings: (settings: any) => void;
+  pauseOverlayShortcuts: (paused: boolean) => void;
+  getShortcutStatus?: () => Promise<Record<string, string>>;
+  onShortcutStatus?: (
+    cb: (status: Record<string, string>) => void,
+  ) => () => void;
+  onOverlaySettingsChanged: (cb: (settings: any) => void) => () => void;
+  onOverlayVisibility: (cb: (visible: boolean) => void) => () => void;
+  setOverlayAuthenticated?: (authenticated: boolean) => void;
+  discordUpdateState: (state: any) => void;
+  discordUpdateSettings: (settings: any) => void;
+  getDiscordStatus: () => Promise<DiscordStatus>;
+  mintPoToken: (identifier: string) => Promise<string>;
+  youtubeTvSession: () => Promise<YoutubeTvSession>;
+  youtubeSolveN: (
+    playerId: string,
+    values: string[],
+  ) => Promise<YoutubeSolveResult>;
+  localTracksList: () => Promise<LocalTrackRecord[]>;
+  localTracksImport: (paths: string[]) => Promise<LocalImportResult>;
+  localTracksPick: () => Promise<LocalImportResult | null>;
+  localTracksRemove: (ids: string[]) => Promise<void>;
+  localTracksRemoveAll: () => Promise<number>;
+  localTracksUsage: () => Promise<LocalLibraryUsage>;
+  savedTracksList: () => Promise<SavedTrackRecord[]>;
+  savedTracksSave: (input: SavedTrackInput) => Promise<SavedTrackRecord | null>;
+  savedTracksRemove: (trackIds: string[]) => Promise<number>;
+  savedTracksRemoveAll: () => Promise<number>;
+  savedTracksUsage: () => Promise<SavedLibraryUsage>;
+  savedTracksUsageOf: (trackIds: string[]) => Promise<SavedTracksPartUsage>;
+  savedTracksOpenFolder: () => Promise<boolean>;
+  savedTracksGetLyrics: (trackId: string) => Promise<unknown | null>;
+  savedTracksSetLyrics: (
+    trackId: string,
+    state: SavedLyricsState,
+    lyrics?: unknown,
+  ) => Promise<boolean>;
+  pathForFile: (file: File) => string;
+}
+
+const isHyprland = Boolean(
+  process.env.HYPRLAND_INSTANCE_SIGNATURE ||
+  process.env.XDG_CURRENT_DESKTOP?.toLowerCase().includes("hyprland") ||
+  process.env.XDG_SESSION_DESKTOP?.toLowerCase().includes("hyprland"),
+);
+
+const api: LinerElectronApi = {
+  platform: process.platform,
+  isHyprland,
+  minimize: () => ipcRenderer.invoke("window:minimize"),
+  toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
+  toggleFullScreen: () => ipcRenderer.invoke("window:toggle-fullscreen"),
+  close: () => ipcRenderer.invoke("window:close"),
+  isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
+  isFullScreen: () => ipcRenderer.invoke("window:is-fullscreen"),
+  getRememberWindowBounds: () =>
+    ipcRenderer.invoke("window:get-remember-bounds"),
+  setRememberWindowBounds: (enabled) =>
+    ipcRenderer.invoke("window:set-remember-bounds", enabled),
+  onWindowStateChange: (cb) => {
+    const listener = (_event: unknown, state: WindowState) => cb(state);
+    ipcRenderer.on("window:state-changed", listener);
+    return () => {
+      ipcRenderer.removeListener("window:state-changed", listener);
+    };
+  },
+  onWindowRestored: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on("window:restored", listener);
+    return () => {
+      ipcRenderer.removeListener("window:restored", listener);
+    };
+  },
+  onWindowMinimized: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on("window:minimized", listener);
+    return () => {
+      ipcRenderer.removeListener("window:minimized", listener);
+    };
+  },
+  notePresence: () => ipcRenderer.send("window:presence"),
+  dragStart: () => {
+    ipcRenderer.send("window:drag-start");
+  },
+  dragMove: (deltaX: number, deltaY: number) => {
+    ipcRenderer.send("window:drag-move", { deltaX, deltaY });
+  },
+  dragEnd: () => {
+    ipcRenderer.send("window:drag-end");
+  },
+  signRequest: (input) => ipcRenderer.invoke("signer:sign-request", input),
+  signMonitorRequest: (input) =>
+    ipcRenderer.invoke("signer:sign-monitor-request", input),
+  syncServerTime: (dateHeaderOrMs) =>
+    ipcRenderer.invoke("signer:sync-time", dateHeaderOrMs),
+  setEdgeKey: (key) => {
+    ipcRenderer.send("edge:set-key", key);
+  },
+  getServerTimeOffset: () => ipcRenderer.invoke("signer:get-time-offset"),
+  signCoverUrl: (payload) =>
+    ipcRenderer.invoke("signer:sign-cover-url", payload),
+  signRawPayload: (payload) =>
+    ipcRenderer.invoke("signer:sign-raw-payload", payload),
+  authSession: {
+    get: () => ipcRenderer.sendSync("auth:get-session") ?? null,
+    set: (next) => ipcRenderer.invoke("auth:set-session", next),
+    refresh: (input) => ipcRenderer.invoke("auth:refresh", input),
+    onChange: (cb) => {
+      const listener = (_event: unknown, session: StoredAuthSession | null) =>
+        cb(session);
+      ipcRenderer.on("auth:session-changed", listener);
+      return () => {
+        ipcRenderer.removeListener("auth:session-changed", listener);
+      };
+    },
+  },
+  youtubeAuthSession: {
+    get: () => ipcRenderer.sendSync("youtube-auth:get-session") ?? null,
+    set: (next) => ipcRenderer.invoke("youtube-auth:set-session", next),
+  },
+  diagnoseNetwork: (hosts) => ipcRenderer.invoke("net:diagnose", hosts),
+  probeNetwork: () => ipcRenderer.invoke("net:probe"),
+  openDownloads: () => ipcRenderer.invoke("shell:open-downloads"),
+  openExportFolder: () => ipcRenderer.invoke("shell:open-export-folder"),
+  setAppIcon: (dataUrl, options) =>
+    ipcRenderer.invoke("app:set-icon", dataUrl, options),
+  getAppVersion: () => ipcRenderer.invoke("app:get-version"),
+  getCacheStats: () => ipcRenderer.invoke("storage:get-cache-stats"),
+  openCacheFolder: () => ipcRenderer.invoke("shell:open-cache-folder"),
+  clearCoversCache: () => ipcRenderer.invoke("storage:clear-covers-cache"),
+  clearAudioCache: (clearEntireDb?: boolean) =>
+    ipcRenderer.invoke("storage:clear-audio-cache", clearEntireDb),
+  clearHttpCache: () => ipcRenderer.invoke("storage:clear-http-cache"),
+  checkForUpdates: () => ipcRenderer.invoke("updater:check-for-updates"),
+  downloadUpdate: () => ipcRenderer.invoke("updater:download-update"),
+  quitAndInstall: () => ipcRenderer.invoke("updater:quit-and-install"),
+  onUpdateAvailable: (cb) => {
+    const listener = (_event: unknown, info: UpdateInfo) => cb(info);
+    ipcRenderer.on("updater:update-available", listener);
+    return () => {
+      ipcRenderer.removeListener("updater:update-available", listener);
+    };
+  },
+  onUpdateDownloadProgress: (cb) => {
+    const listener = (_event: unknown, progress: UpdateDownloadProgress) =>
+      cb(progress);
+    ipcRenderer.on("updater:download-progress", listener);
+    return () => {
+      ipcRenderer.removeListener("updater:download-progress", listener);
+    };
+  },
+  onUpdateDownloaded: (cb) => {
+    const listener = (_event: unknown, info: { version: string }) => cb(info);
+    ipcRenderer.on("updater:update-downloaded", listener);
+    return () => {
+      ipcRenderer.removeListener("updater:update-downloaded", listener);
+    };
+  },
+  onUpdateError: (cb) => {
+    const listener = (_event: unknown, err: { message: string }) => cb(err);
+    ipcRenderer.on("updater:error", listener);
+    return () => {
+      ipcRenderer.removeListener("updater:error", listener);
+    };
+  },
+  // OTA Frontend Bundle Updater
+  bundleCheck: () => ipcRenderer.invoke("bundle:check"),
+  bundleDownloadAndInstall: (manifest) =>
+    ipcRenderer.invoke("bundle:download-and-install", manifest),
+  bundleHotSwap: () => ipcRenderer.invoke("bundle:hot-swap"),
+  bundleRollback: () => ipcRenderer.invoke("bundle:rollback"),
+  bundleGetStatus: () => ipcRenderer.invoke("bundle:get-status"),
+  onBundleAvailable: (cb) => {
+    const listener = (_event: unknown, manifest: any) => cb(manifest);
+    ipcRenderer.on("bundle:available", listener);
+    return () => {
+      ipcRenderer.removeListener("bundle:available", listener);
+    };
+  },
+  onBundleDownloadProgress: (cb) => {
+    const listener = (_event: unknown, progress: any) => cb(progress);
+    ipcRenderer.on("bundle:download-progress", listener);
+    return () => {
+      ipcRenderer.removeListener("bundle:download-progress", listener);
+    };
+  },
+  onBundleReady: (cb) => {
+    const listener = (_event: unknown, state: any) => cb(state);
+    ipcRenderer.on("bundle:ready", listener);
+    return () => {
+      ipcRenderer.removeListener("bundle:ready", listener);
+    };
+  },
+  onBundleStamp: (cb) => {
+    const listener = (_event: unknown, line: string) => cb(line);
+    ipcRenderer.on("bundle:stamp", listener);
+    return () => {
+      ipcRenderer.removeListener("bundle:stamp", listener);
+    };
+  },
+  onDeeplink: (cb) => {
+    const listener = (_event: unknown, target: DeeplinkTarget) => cb(target);
+    ipcRenderer.on("deeplink:open", listener);
+    return () => {
+      ipcRenderer.removeListener("deeplink:open", listener);
+    };
+  },
+  touchbarUpdateState: (state) => {
+    ipcRenderer.send("touchbar:update-state", state);
+  },
+  onTouchBarAction: (cb) => {
+    const listener = (_event: unknown, action: any) => cb(action);
+    ipcRenderer.on("touchbar:action", listener);
+    return () => {
+      ipcRenderer.removeListener("touchbar:action", listener);
+    };
+  },
+  sendTouchBarAction: (action) => {
+    ipcRenderer.send("touchbar:send-action", action);
+  },
+  getTouchBarInitialState: () =>
+    ipcRenderer.invoke("touchbar:get-initial-state"),
+  onTouchBarRequestSync: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on("touchbar:request-sync", listener);
+    return () => {
+      ipcRenderer.removeListener("touchbar:request-sync", listener);
+    };
+  },
+  overlayReady: () => {
+    ipcRenderer.send("overlay:ready");
+  },
+  overlayUpdateState: (state) => {
+    ipcRenderer.send("overlay:update-state", state);
+  },
+  onOverlayAction: (cb) => {
+    const listener = (_event: unknown, action: any) => cb(action);
+    ipcRenderer.on("overlay:action", listener);
+    return () => {
+      ipcRenderer.removeListener("overlay:action", listener);
+    };
+  },
+  sendOverlayAction: (action) => {
+    ipcRenderer.send("overlay:send-action", action);
+  },
+  toggleOverlay: () => ipcRenderer.invoke("overlay:toggle"),
+  isOverlayOpen: () => ipcRenderer.invoke("overlay:is-open"),
+  closeOverlay: () => {
+    ipcRenderer.send("overlay:close");
+  },
+  onOverlayState: (cb) => {
+    const listener = (_event: unknown, state: any) => cb(state);
+    ipcRenderer.on("overlay:state", listener);
+    return () => {
+      ipcRenderer.removeListener("overlay:state", listener);
+    };
+  },
+  getOverlayInitialState: () => ipcRenderer.invoke("overlay:get-initial-state"),
+  updateOverlaySettings: (settings) => {
+    ipcRenderer.send("overlay:update-settings", settings);
+  },
+  pauseOverlayShortcuts: (paused) => {
+    ipcRenderer.send("overlay:pause-shortcuts", paused);
+  },
+  getShortcutStatus: () => ipcRenderer.invoke("shortcuts:get-status"),
+  onShortcutStatus: (cb) => {
+    const listener = (_event: unknown, status: Record<string, string>) =>
+      cb(status);
+    ipcRenderer.on("shortcuts:status", listener);
+    return () => {
+      ipcRenderer.removeListener("shortcuts:status", listener);
+    };
+  },
+  onOverlaySettingsChanged: (cb) => {
+    const listener = (_event: unknown, settings: any) => cb(settings);
+    ipcRenderer.on("overlay:settings-changed", listener);
+    return () => {
+      ipcRenderer.removeListener("overlay:settings-changed", listener);
+    };
+  },
+  onOverlayVisibility: (cb) => {
+    const listener = (_event: unknown, visible: boolean) => cb(visible);
+    ipcRenderer.on("overlay:visibility", listener);
+    return () => {
+      ipcRenderer.removeListener("overlay:visibility", listener);
+    };
+  },
+  setOverlayAuthenticated: (authenticated) => {
+    ipcRenderer.send("overlay:set-authenticated", authenticated);
+  },
+  discordUpdateState: (state) => {
+    ipcRenderer.send("discord:update-state", state);
+  },
+  discordUpdateSettings: (settings) => {
+    ipcRenderer.send("discord:update-settings", settings);
+  },
+  getDiscordStatus: () => ipcRenderer.invoke("discord:get-status"),
+  mintPoToken: (identifier) => ipcRenderer.invoke("potoken:mint", identifier),
+  youtubeTvSession: () => ipcRenderer.invoke("youtube:tv-session"),
+  youtubeSolveN: (playerId, values) =>
+    ipcRenderer.invoke("youtube:solve-n", { playerId, values }),
+  localTracksList: () => ipcRenderer.invoke("local-tracks:list"),
+  localTracksImport: (paths) =>
+    ipcRenderer.invoke("local-tracks:import", paths),
+  localTracksPick: () => ipcRenderer.invoke("local-tracks:pick"),
+  localTracksRemove: (ids) => ipcRenderer.invoke("local-tracks:remove", ids),
+  localTracksRemoveAll: () => ipcRenderer.invoke("local-tracks:remove-all"),
+  localTracksUsage: () => ipcRenderer.invoke("local-tracks:usage"),
+  savedTracksList: () => ipcRenderer.invoke("saved-tracks:list"),
+  savedTracksSave: (input) => ipcRenderer.invoke("saved-tracks:save", input),
+  savedTracksRemove: (trackIds) =>
+    ipcRenderer.invoke("saved-tracks:remove", trackIds),
+  savedTracksRemoveAll: () => ipcRenderer.invoke("saved-tracks:remove-all"),
+  savedTracksUsage: () => ipcRenderer.invoke("saved-tracks:usage"),
+  savedTracksUsageOf: (trackIds) =>
+    ipcRenderer.invoke("saved-tracks:usage-of", trackIds),
+  savedTracksOpenFolder: () => ipcRenderer.invoke("saved-tracks:open-folder"),
+  savedTracksGetLyrics: (trackId) =>
+    ipcRenderer.invoke("saved-tracks:lyrics-get", trackId),
+  savedTracksSetLyrics: (trackId, state, lyrics) =>
+    ipcRenderer.invoke("saved-tracks:lyrics-set", trackId, state, lyrics),
+  pathForFile: (file) => webUtils.getPathForFile(file),
+};
+
+if (location.hostname === "www.youtube.com") {
+  startPoTokenWorker();
+} else {
+  contextBridge.exposeInMainWorld("linerElectron", api);
+}

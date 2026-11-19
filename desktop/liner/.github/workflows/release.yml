@@ -1,0 +1,166 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Linux packages (AppImage & deb)
+        run: pnpm run electron:build:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_API_URL: https://api.tryliner.fun
+          VITE_COVERS_PROXY_URL: https://covers.tryliner.fun
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages
+          path: |
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows installer (NSIS)
+        run: pnpm run electron:build:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_API_URL: https://api.tryliner.fun
+          VITE_COVERS_PROXY_URL: https://covers.tryliner.fun
+
+      # the drag-to-top snap preview (windows 11) is a native add-on built by
+      # electron:build:win (native:build); never ship an installer without it
+      - name: Verify native snap preview add-on is packaged
+        shell: pwsh
+        run: |
+          $addon = "release/win-unpacked/resources/app.asar.unpacked/native/snap-preview/build/Release/snap_preview.node"
+          if (-not (Test-Path $addon)) { throw "snap_preview.node missing from the package: $addon" }
+          Write-Host "ok: $addon ($((Get-Item $addon).Length) bytes)"
+          # it must also load and export everything the app calls (not just exist)
+          node scripts/verify-native-addon.cjs $addon
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: |
+            release/*.exe
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build macOS packages (DMG & ZIP)
+        run: pnpm run electron:build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          VITE_API_URL: https://api.tryliner.fun
+          VITE_COVERS_PROXY_URL: https://covers.tryliner.fun
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-packages
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish Release
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    environment: release
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Write checksums
+        run: |
+          cd artifacts
+          sha256sum */*.AppImage */*.deb */*.exe */*.dmg */*.zip 2>/dev/null | sed 's#  [^/]*/#  #' > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/linux-packages/*.AppImage
+            artifacts/linux-packages/*.deb
+            artifacts/windows-installer/*.exe
+            artifacts/macos-packages/*.dmg
+            artifacts/macos-packages/*.zip
+            artifacts/SHA256SUMS.txt
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

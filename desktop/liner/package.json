@@ -1,0 +1,168 @@
+{
+  "name": "@liner/client",
+  "version": "0.2.12",
+  "type": "module",
+  "private": true,
+  "description": "Liner Music Player",
+  "author": {
+    "name": "hkamori",
+    "email": "dev@tryliner.fun"
+  },
+  "desktopName": "liner",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm lint && pnpm format:check && pnpm build && pnpm test",
+    "bundle:publish": "pnpm --dir ../updater bundle:publish",
+    "signer:build": "node ../signer/scripts/build-wasm.mjs",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "electron:build": "tsc -b && vite build && electron-builder",
+    "electron:build:linux": "tsc -b && vite build && electron-builder --linux",
+    "electron:build:win": "pnpm native:build && tsc -b && vite build && electron-builder --win",
+    "electron:build:mac": "tsc -b && vite build && electron-builder --mac",
+    "native:build": "node scripts/build-native-addon.cjs"
+  },
+  "build": {
+    "appId": "com.hkamori.liner",
+    "productName": "Liner",
+    "executableName": "liner",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tryliner",
+        "repo": "desktop"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "protocols": [
+      {
+        "name": "Liner",
+        "schemes": [
+          "liner"
+        ]
+      }
+    ],
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "native/snap-preview/build/Release/snap_preview.node"
+    ],
+    "linux": {
+      "executableName": "liner",
+      "syncDesktopName": true,
+      "maintainer": "hkamori <dev@tryliner.fun>",
+      "icon": "build/icons",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Audio"
+    },
+    "deb": {
+      "packageName": "liner",
+      "artifactName": "liner_${version}_${arch}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "Liner-${version}.${ext}"
+    },
+    "win": {
+      "executableName": "liner",
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "artifactName": "Liner-Setup-${version}.${ext}",
+      "allowToChangeInstallationDirectory": true,
+      "oneClick": false
+    },
+    "mac": {
+      "icon": "build/icon-mac.png",
+      "category": "public.app-category.music",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "asarUnpack": [
+      "native/**/*.node"
+    ]
+  },
+  "dependencies": {
+    "@braccato/core": "^1.16.13",
+    "@braccato/parsers": "^0.4.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@mingcute/react": "^1.4.1",
+    "@solar-icons/react": "^1.1.1",
+    "@tanstack/react-virtual": "^3.14.22",
+    "@xhayper/discord-rpc": "^1.5.1",
+    "bgutils-js": "4.0.3",
+    "clsx": "^2.1.1",
+    "electron-updater": "^6.8.11",
+    "framer-motion": "^14.7.1",
+    "googlevideo": "5.0.1",
+    "gsap": "^3.15.0",
+    "hash-wasm": "4.12.0",
+    "lottie-web": "^5.13.0",
+    "meriyah": "7.4.0",
+    "morphicons": "^2.0.2",
+    "music-metadata": "^11.16.1",
+    "next-themes": "^0.4.6",
+    "react": "19.3.1",
+    "react-apple-emojis": "^3.0.0",
+    "react-dom": "19.3.1",
+    "react-icons": "^5.6.0",
+    "react-router-dom": "^7.18.4",
+    "solar-icons": "^0.0.15",
+    "soundtouchjs": "^0.3.0",
+    "tailwind-merge": "^3.7.0",
+    "tar": "^7.5.22",
+    "uqr": "0.1.3",
+    "youtubei.js": "18.3.0",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/tar": "^7.0.87",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^44.9.3",
+    "electron-builder": "^26.18.0",
+    "eslint": "^9",
+    "jsdom": "^30.1.3",
+    "oxlint": "^1.89.0",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5",
+    "vite": "^8.3.5",
+    "vite-plugin-electron": "^1.1.2",
+    "vite-plugin-electron-renderer": "^1.0.0",
+    "vitest": "^4.1.9"
+  }
+}

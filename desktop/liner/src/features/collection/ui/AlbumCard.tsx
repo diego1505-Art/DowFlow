@@ -1,0 +1,119 @@
+import { Link } from "react-router-dom";
+import {
+  collectionPath,
+  collectionPreviewState,
+} from "../lib/collectionPreview";
+import { prefetchCollection } from "../hooks/useCollection";
+import { memo, useCallback, useState, type ReactNode } from "react";
+import DropdownMenu from "@/shared/ui/DropdownMenu";
+import type { DropdownMenuItem } from "@/shared/ui/DropdownMenu";
+import ExplicitBadge from "@/shared/ui/ExplicitBadge";
+import CoverImage from "@/features/covers/ui/CoverImage";
+
+export interface AlbumCardProps {
+  id: string;
+  title: string;
+  coverUrl: string;
+  year?: string;
+  explicit?: boolean;
+  trackCount?: number;
+  subtitle?: string;
+  badge?: ReactNode;
+  className?: string;
+  menuItems?: DropdownMenuItem[];
+}
+
+function AlbumCard({
+  id,
+  title,
+  coverUrl,
+  year,
+  explicit = false,
+  trackCount,
+  subtitle,
+  badge,
+  className = "",
+  menuItems,
+}: AlbumCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!menuItems || menuItems.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setMenuPosition({ x: e.clientX, y: e.clientY });
+      setMenuOpen(true);
+    },
+    [menuItems],
+  );
+
+  const handleMenuOpenChange = useCallback((isOpen: boolean) => {
+    setMenuOpen(isOpen);
+    if (!isOpen) setMenuPosition(null);
+  }, []);
+
+  const menu =
+    menuItems && menuItems.length > 0 ? (
+      <DropdownMenu
+        trigger={<span />}
+        items={menuItems}
+        open={menuOpen}
+        onOpenChange={handleMenuOpenChange}
+        position={menuPosition}
+      />
+    ) : null;
+
+  return (
+    <div onContextMenu={handleContextMenu}>
+      <Link
+        to={collectionPath("album", id)}
+        state={collectionPreviewState({ coverUrl, title, subtitle })}
+        onPointerDown={() => prefetchCollection("album", id)}
+        className={`group flex flex-col gap-[8px] no-underline cursor-pointer ${className}`}
+      >
+        <div className="relative aspect-square w-full overflow-hidden rounded-control bg-border-alpha-14">
+          {coverUrl && (
+            <CoverImage
+              src={coverUrl}
+              alt={title}
+              fill
+              sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 16vw"
+              className="object-cover transition-all duration-300 group-hover:brightness-[1.15]"
+            />
+          )}
+        </div>
+        <div className="flex flex-col">
+          <span className="truncate text-label font-[500] text-text-primary">
+            {title}
+          </span>
+          <span className="flex items-center gap-[5px] truncate text-body text-text-tertiary">
+            {badge}
+            {explicit && <ExplicitBadge />}
+            {subtitle ? (
+              <span className="truncate">{subtitle}</span>
+            ) : (
+              <>
+                {year && <span>{year}</span>}
+                {year && trackCount && (
+                  <span
+                    className="w-[3px] h-[3px] rounded-full bg-text-tertiary/40 shrink-0"
+                    aria-hidden
+                  />
+                )}
+                {trackCount && <span>{trackCount} tracks</span>}
+              </>
+            )}
+          </span>
+        </div>
+      </Link>
+      {menu}
+    </div>
+  );
+}
+
+export default memo(AlbumCard);

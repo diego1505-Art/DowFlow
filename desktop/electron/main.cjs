@@ -5,6 +5,7 @@ const { randomBytes } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { PoTokenService } = require("./youtube/potoken-service.cjs");
+const { createMusicLauncher } = require("./music-launcher.cjs");
 
 const APP_NAME = "DowFlow";
 const WINDOWS_APP_ID = "DowFlow.DowFlow";
@@ -12,6 +13,15 @@ app.setName(APP_NAME);
 if (process.platform === "win32") app.setAppUserModelId(WINDOWS_APP_ID);
 
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
+const musicLauncher = createMusicLauncher({
+  app,
+  projectRoot: PROJECT_ROOT,
+  resourcesPath: process.resourcesPath,
+  electronPath: process.execPath,
+  platform: process.platform,
+  spawnProcess: spawn,
+  env: process.env,
+});
 const STARTUP_TIMEOUT_MS = app.isPackaged ? 120_000 : 20_000;
 const HEALTH_INTERVAL_MS = 250;
 const MUSIC_CORS_HEADERS = new Set([
@@ -245,6 +255,13 @@ ipcMain.handle("dowflow:runtime-info", () => ({
   version: app.getVersion(),
 }));
 
+ipcMain.handle("dowflow:music:open", (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    throw new Error("Untrusted DowFlow renderer");
+  }
+  return musicLauncher.open();
+});
+
 ipcMain.handle("dowflow:youtube:mint-po-token", (event, identifier) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) {
     throw new Error("Untrusted DowFlow renderer");
@@ -275,6 +292,7 @@ app.whenReady().then(startDesktop).catch((error) => {
 app.on("before-quit", () => {
   quitting = true;
   poTokenService?.destroy();
+  musicLauncher.closeAll();
   if (backendProcess && backendProcess.exitCode === null) {
     backendProcess.kill();
   }

@@ -29,16 +29,36 @@ class ElectronPackagingTests(unittest.TestCase):
             next(item for item in build["extraResources"] if item["to"] == "backend/DowFlow.exe")["from"],
             "../../dist/DowFlow.exe",
         )
+        self.assertEqual(
+            next(item for item in build["extraResources"] if item["to"] == "liner")["from"],
+            "../liner/release/win-unpacked",
+        )
         self.assertIn("../../static/dowflow.ico", build["win"]["icon"])
 
     def test_windows_script_builds_renderer_backend_then_installer(self):
         script = (ELECTRON_ROOT / "build-win.ps1").read_text(encoding="utf-8")
         self.assertIn('"pnpm" @("check")', script)
         self.assertIn('"python" @("-m", "build_export", "all", "DowFlow")', script)
+        self.assertIn('"pnpm" @("native:build")', script)
+        self.assertIn('"pnpm" @("exec", "electron-builder", "--win", "--dir", "--x64")', script)
+        self.assertIn('release/win-unpacked/dowflow-music.exe', script)
+        self.assertIn('resources/liner/dowflow-music.exe', script)
         self.assertIn('"pnpm" @("exec", "electron-builder", "--win", "nsis", "--x64")', script)
         self.assertLess(script.index('"pnpm" @("check")'), script.index('"python" @("-m", "build_export", "all", "DowFlow")'))
         self.assertLess(script.index('"python" @("-m", "build_export", "all", "DowFlow")'), script.index('"pnpm" @("exec", "electron-builder", "--win", "nsis", "--x64")'))
         self.assertIn('$env:DOWFLOW_ELECTRON_BUILD = "1"', script)
+
+    def test_music_launcher_is_restricted_and_has_a_browser_fallback(self):
+        main = (ELECTRON_ROOT / "main.cjs").read_text(encoding="utf-8")
+        preload = (ELECTRON_ROOT / "preload.cjs").read_text(encoding="utf-8")
+        template = (PROJECT_ROOT / "templates" / "menu.html").read_text(encoding="utf-8")
+        self.assertIn('ipcMain.handle("dowflow:music:open"', main)
+        self.assertIn('event.sender !== mainWindow.webContents', main)
+        self.assertIn("musicLauncher.closeAll()", main)
+        self.assertIn('open: () => ipcRenderer.invoke("dowflow:music:open")', preload)
+        self.assertIn('href="/music" data-menu-id="music"', template)
+        self.assertIn("window.dowflow?.music?.open", template)
+        self.assertIn("window.location.assign(musicEntry.href)", template)
 
     def test_electron_build_does_not_embed_personal_portable_seeds(self):
         spec = (PROJECT_ROOT / "build.spec").read_text(encoding="utf-8")

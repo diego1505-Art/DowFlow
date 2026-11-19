@@ -289,6 +289,24 @@
             }
         });
 
+        const musicEntry = document.querySelector('[data-menu-id="music"]');
+        musicEntry?.addEventListener("click", async (event) => {
+            const openMusic = window.dowflow?.music?.open;
+            if (typeof openMusic !== "function") return;
+            event.preventDefault();
+            try {
+                const result = await openMusic();
+                if (result?.success) return;
+                if (result?.fallback) {
+                    window.location.assign(musicEntry.href);
+                    return;
+                }
+                window.alert(result?.error || "Unable to open DowFlow Music.");
+            } catch (error) {
+                window.alert(error instanceof Error ? error.message : "Unable to open DowFlow Music.");
+            }
+        });
+
         void refreshFolderStatus();
     </script>
     {% if is_frozen %}

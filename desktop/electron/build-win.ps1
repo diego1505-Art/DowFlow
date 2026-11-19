@@ -14,6 +14,7 @@ function Invoke-Checked {
 }
 
 $electronRoot = (Resolve-Path $PSScriptRoot).Path
+$linerRoot = (Resolve-Path (Join-Path $PSScriptRoot "../liner")).Path
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $backendExe = Join-Path $repoRoot "dist/DowFlow.exe"
 
@@ -43,12 +44,33 @@ try {
         throw "PyInstaller did not produce the required backend at $backendExe."
     }
 
+    Push-Location $linerRoot
+    try {
+        Invoke-Checked "pnpm" @("install", "--frozen-lockfile")
+        Invoke-Checked "pnpm" @("check")
+        Invoke-Checked "pnpm" @("native:build")
+        Invoke-Checked "pnpm" @("exec", "electron-builder", "--win", "--dir", "--x64")
+    }
+    finally {
+        Pop-Location
+    }
+
+    $linerExe = Join-Path $linerRoot "release/win-unpacked/dowflow-music.exe"
+    if (-not (Test-Path -LiteralPath $linerExe -PathType Leaf)) {
+        throw "Electron Builder did not produce the packaged DowFlow Music app at $linerExe."
+    }
+
     Push-Location $electronRoot
     try {
         Invoke-Checked "pnpm" @("exec", "electron-builder", "--win", "nsis", "--x64")
     }
     finally {
         Pop-Location
+    }
+
+    $bundledLinerExe = Join-Path $electronRoot "release/win-unpacked/resources/liner/dowflow-music.exe"
+    if (-not (Test-Path -LiteralPath $bundledLinerExe -PathType Leaf)) {
+        throw "The DowFlow Windows package does not contain the bundled DowFlow Music app at $bundledLinerExe."
     }
 
     $artifacts = @(Get-ChildItem -Path (Join-Path $electronRoot "release") -Filter "DowFlow-*-x64.exe" -File)

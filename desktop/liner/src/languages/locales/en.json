@@ -43,7 +43,7 @@
   },
   "common": {
     "app": {
-      "name": "Liner",
+      "name": "DowFlow Music",
       "description": "More of what you like",
       "version": "Version 0.1.0"
     },
@@ -619,8 +619,8 @@
       "toggle_overlay_desc": "Show or hide the floating desktop overlay from anywhere in the OS.",
       "quick_like_song": "Quick like current song",
       "quick_like_song_desc": "Like or unlike current playing track system-wide without focusing the player.",
-      "show_main_window": "Show Liner",
-      "show_main_window_desc": "Bring the main Liner window to the front from anywhere.",
+      "show_main_window": "Show DowFlow Music",
+      "show_main_window_desc": "Bring the main DowFlow Music window to the front from anywhere.",
       "not_set": "Not set",
       "play_pause": "Play / Pause",
       "play_pause_desc": "Toggle audio playback.",
@@ -1051,7 +1051,7 @@
       "badge_private": "Private"
     },
     "about": {
-      "liner": "Liner",
+      "liner": "DowFlow Music",
       "telegram": "Channel",
       "discord": "Discord",
       "github": "GitHub",
@@ -1224,13 +1224,13 @@
   },
   "updater": {
     "modal_title": "New Update Available",
-    "modal_desc": "A new version of Liner (v{version}) is ready to download.",
+    "modal_desc": "A new version of DowFlow Music (v{version}) is ready to download.",
     "view_changelog": "Changelog",
     "skip_button": "Skip",
     "update_button": "Update",
     "downloading_title": "Downloading update…",
     "downloaded_title": "Update downloaded",
-    "downloaded_desc": "Restart Liner to install version {version}.",
+    "downloaded_desc": "Restart DowFlow Music to install version {version}.",
     "install_button": "Install",
     "error_title": "Update failed"
   },

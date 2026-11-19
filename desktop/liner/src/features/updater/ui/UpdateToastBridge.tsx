@@ -53,7 +53,7 @@ export default function UpdateToastBridge() {
         description:
           t("updater.downloaded_desc", {
             version: updateInfo?.version || "",
-          }) || "Restart Liner to complete installation.",
+          }) || "Restart DowFlow Music to complete installation.",
         duration: 999999,
         action: {
           label: t("updater.install_button") || "Install",

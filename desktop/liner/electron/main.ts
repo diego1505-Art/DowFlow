@@ -103,6 +103,9 @@ import {
   youtubeOriginFor,
 } from "./youtube/request-origin.js";
 
+app.setName("DowFlow Music");
+if (process.platform === "win32") app.setAppUserModelId("com.dowflow.music");
+
 // root error handling for main process
 process.on("uncaughtException", (error) => {
   console.error("\x1b[41;37m main error \x1b[0m uncaught exception:", error);
@@ -289,7 +292,7 @@ function createWindow() {
     { width: MIN_WINDOW_WIDTH, height: MIN_WINDOW_HEIGHT },
   );
   mainWindow = new BrowserWindow({
-    title: "Liner",
+    title: "DowFlow Music",
     icon: path.join(process.env.VITE_PUBLIC!, "icon.png"),
     ...(restoredBounds ?? {
       width: DEFAULT_WINDOW_WIDTH,
@@ -806,7 +809,7 @@ if (!gotTheLock) {
           return desktopName.trim();
         }
       } catch {}
-      return "liner";
+      return "dowflow-music";
     };
 
     const installLinuxAppIcon = async (iconName: string, png: Buffer) => {

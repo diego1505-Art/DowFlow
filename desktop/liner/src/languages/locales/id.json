@@ -43,7 +43,7 @@
   },
   "common": {
     "app": {
-      "name": "Liner",
+      "name": "DowFlow Music",
       "description": "Lebih banyak dari yang kamu suka",
       "version": "Versi 0.1.0"
     },
@@ -847,7 +847,7 @@
       "badge_private": "Pribadi"
     },
     "about": {
-      "liner": "Liner",
+      "liner": "DowFlow Music",
       "telegram": "Kanal",
       "discord": "Discord",
       "github": "GitHub",
@@ -1012,13 +1012,13 @@
   },
   "updater": {
     "modal_title": "Pembaruan Baru Tersedia",
-    "modal_desc": "Liner versi baru (v{version}) siap diunduh.",
+    "modal_desc": "DowFlow Music versi baru (v{version}) siap diunduh.",
     "view_changelog": "Catatan perubahan",
     "skip_button": "Lewati",
     "update_button": "Perbarui",
     "downloading_title": "Mengunduh pembaruan…",
     "downloaded_title": "Pembaruan terunduh",
-    "downloaded_desc": "Mulai ulang Liner untuk memasang versi {version}.",
+    "downloaded_desc": "Mulai ulang DowFlow Music untuk memasang versi {version}.",
     "install_button": "Pasang",
     "error_title": "Pembaruan gagal"
   },

@@ -44,7 +44,7 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
             alt=""
             width={45}
             height={35}
-            className="theme-logo h-[34px] w-auto"
+            className="h-[34px] w-auto"
             draggable={false}
           />
           <span className="font-montserrat text-[22px] font-[700] leading-none text-text-primary">

@@ -7,6 +7,9 @@ export const IS_STAGING = __LINER_CHANNEL__ === "staging";
 
 export function useChannelData(app: App): void {
   if (IS_STAGING) {
-    app.setPath("userData", path.join(app.getPath("appData"), "Liner Staging"));
+    app.setPath(
+      "userData",
+      path.join(app.getPath("appData"), "DowFlow Music Staging"),
+    );
   }
 }

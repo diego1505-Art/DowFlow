@@ -19,15 +19,15 @@ function Sidebar({ searchOpen, onSearchToggle }: SidebarProps) {
         <nav className="shrink-0 flex flex-col items-center gap-[20px] py-[16px]">
           <Link
             to="/"
-            title="Liner"
+            title="DowFlow Music"
             className="flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
           >
             <img
               src={logo}
-              alt="Liner"
+              alt="DowFlow Music"
               width={30}
               height={23}
-              className="h-[23px] w-auto object-contain theme-logo invert dark:invert-0 select-none"
+              className="h-[23px] w-auto object-contain select-none"
               draggable={false}
             />
           </Link>

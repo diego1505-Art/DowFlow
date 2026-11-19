@@ -9,7 +9,7 @@ export default function ShieldBadge() {
           src={logo}
           alt=""
           draggable={false}
-          className="theme-logo h-[22px] w-auto select-none object-contain invert dark:invert-0"
+          className="h-[22px] w-auto select-none object-contain"
         />
       </div>
       <span className="absolute -bottom-[4px] -right-[4px] flex size-[20px] items-center justify-center rounded-full bg-white text-black">

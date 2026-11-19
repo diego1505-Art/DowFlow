@@ -17,7 +17,7 @@ export function SettingsUserFooter({ onClose }: SettingsUserFooterProps) {
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const displayName = userDisplayName(user) ?? "Liner";
+  const displayName = userDisplayName(user) ?? "DowFlow Music";
   const handle = user?.username
     ? `@${user.username}`
     : (user?.email ?? t("settings.manage_account"));

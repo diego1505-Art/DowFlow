@@ -100,15 +100,15 @@ export function SettingsSidebar<T extends string>({
             icon={Book2}
             label={t("settings.docs")}
             onClick={() =>
-              openExternal(
-                "https://github.com/tryliner/desktop/blob/main/README.md",
-              )
+              openExternal("https://github.com/diego1505-Art/DowFlow#readme")
             }
           />
           <NavItem
             icon={QuestionCircle}
             label={t("settings.support")}
-            onClick={() => openExternal("https://discord.gg/liner")}
+            onClick={() =>
+              openExternal("https://github.com/diego1505-Art/DowFlow/issues")
+            }
           />
         </div>
       </nav>

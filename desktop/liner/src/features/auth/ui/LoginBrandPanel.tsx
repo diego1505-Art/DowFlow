@@ -27,14 +27,14 @@ export function LoginBrandPanel({ title, subtitle }: LoginBrandPanelProps) {
       <div className="relative flex items-center gap-[10px]">
         <img
           src={logo}
-          alt="Liner"
+          alt="DowFlow Music"
           width={45}
           height={35}
           draggable={false}
-          className="theme-logo h-[22px] w-auto object-contain select-none"
+          className="h-[22px] w-auto object-contain select-none"
         />
         <span className="text-heading font-[650] tracking-[-0.03em] text-text-primary">
-          Liner
+          DowFlow Music
         </span>
       </div>
 

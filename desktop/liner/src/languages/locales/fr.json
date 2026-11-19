@@ -43,7 +43,7 @@
   },
   "common": {
     "app": {
-      "name": "Liner",
+      "name": "DowFlow Music",
       "description": "Plus de ce que tu aimes",
       "version": "Version 0.1.0"
     },
@@ -956,7 +956,7 @@
       "badge_private": "Privé"
     },
     "about": {
-      "liner": "Liner",
+      "liner": "DowFlow Music",
       "telegram": "Chaîne",
       "discord": "Discord",
       "github": "GitHub",
@@ -1194,13 +1194,13 @@
   },
   "updater": {
     "modal_title": "Nouvelle mise à jour disponible",
-    "modal_desc": "Une nouvelle version de Liner (v{version}) est prête à être téléchargée.",
+    "modal_desc": "Une nouvelle version de DowFlow Music (v{version}) est prête à être téléchargée.",
     "view_changelog": "Nouveautés",
     "skip_button": "Ignorer",
     "update_button": "Mettre à jour",
     "downloading_title": "Téléchargement de la mise à jour…",
     "downloaded_title": "Mise à jour téléchargée",
-    "downloaded_desc": "Redémarre Liner pour installer la version {version}.",
+    "downloaded_desc": "Redémarre DowFlow Music pour installer la version {version}.",
     "install_button": "Installer",
     "error_title": "Échec de la mise à jour"
   },

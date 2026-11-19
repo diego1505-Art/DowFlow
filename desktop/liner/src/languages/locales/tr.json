@@ -43,7 +43,7 @@
   },
   "common": {
     "app": {
-      "name": "Liner",
+      "name": "DowFlow Music",
       "description": "Sevdiklerinden daha fazlası",
       "version": "Sürüm 0.1.0"
     },
@@ -774,7 +774,7 @@
       "badge_private": "Gizli"
     },
     "about": {
-      "liner": "Liner",
+      "liner": "DowFlow Music",
       "telegram": "Kanal",
       "discord": "Discord",
       "github": "GitHub",
@@ -939,13 +939,13 @@
   },
   "updater": {
     "modal_title": "Yeni Güncelleme Var",
-    "modal_desc": "Liner'ın yeni bir sürümü (v{version}) indirilmeye hazır.",
+    "modal_desc": "DowFlow Music'ın yeni bir sürümü (v{version}) indirilmeye hazır.",
     "view_changelog": "Değişiklikler",
     "skip_button": "Atla",
     "update_button": "Güncelle",
     "downloading_title": "Güncelleme indiriliyor…",
     "downloaded_title": "Güncelleme indirildi",
-    "downloaded_desc": "{version} sürümünü yüklemek için Liner'ı yeniden başlat.",
+    "downloaded_desc": "{version} sürümünü yüklemek için DowFlow Music'ı yeniden başlat.",
     "install_button": "Yükle",
     "error_title": "Güncelleme başarısız"
   },

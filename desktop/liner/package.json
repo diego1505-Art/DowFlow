@@ -3,12 +3,12 @@
   "version": "0.2.12",
   "type": "module",
   "private": true,
-  "description": "Liner Music Player",
+  "description": "DowFlow Music Player based on Liner",
   "author": {
     "name": "hkamori",
     "email": "dev@tryliner.fun"
   },
-  "desktopName": "liner",
+  "desktopName": "dowflow-music",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -30,15 +30,15 @@
     "native:build": "node scripts/build-native-addon.cjs"
   },
   "build": {
-    "appId": "com.hkamori.liner",
-    "productName": "Liner",
-    "executableName": "liner",
-    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "appId": "com.dowflow.music",
+    "productName": "DowFlow Music",
+    "executableName": "dowflow-music",
+    "artifactName": "DowFlow-Music-${version}-${arch}.${ext}",
     "publish": [
       {
         "provider": "github",
-        "owner": "tryliner",
-        "repo": "desktop"
+        "owner": "diego1505-Art",
+        "repo": "DowFlow"
       }
     ],
     "directories": {
@@ -46,7 +46,7 @@
     },
     "protocols": [
       {
-        "name": "Liner",
+        "name": "DowFlow Music",
         "schemes": [
           "liner"
         ]
@@ -55,10 +55,11 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "LICENSE",
       "native/snap-preview/build/Release/snap_preview.node"
     ],
     "linux": {
-      "executableName": "liner",
+      "executableName": "dowflow-music",
       "syncDesktopName": true,
       "maintainer": "hkamori <dev@tryliner.fun>",
       "icon": "build/icons",
@@ -69,21 +70,21 @@
       "category": "Audio"
     },
     "deb": {
-      "packageName": "liner",
-      "artifactName": "liner_${version}_${arch}.${ext}"
+      "packageName": "dowflow-music",
+      "artifactName": "dowflow-music_${version}_${arch}.${ext}"
     },
     "appImage": {
-      "artifactName": "Liner-${version}.${ext}"
+      "artifactName": "DowFlow-Music-${version}.${ext}"
     },
     "win": {
-      "executableName": "liner",
+      "executableName": "dowflow-music",
       "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "nsis": {
-      "artifactName": "Liner-Setup-${version}.${ext}",
+      "artifactName": "DowFlow-Music-Setup-${version}.${ext}",
       "allowToChangeInstallationDirectory": true,
       "oneClick": false
     },

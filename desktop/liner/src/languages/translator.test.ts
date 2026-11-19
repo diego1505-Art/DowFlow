@@ -109,6 +109,6 @@ describe("createTranslatorSync with plurals", () => {
 
   it("falls back to English when key is missing in target locale", () => {
     const tRu = createTranslatorSync("ru");
-    expect(tRu("common.app.name")).toBe("Liner");
+    expect(tRu("common.app.name")).toBe("DowFlow Music");
   });
 });

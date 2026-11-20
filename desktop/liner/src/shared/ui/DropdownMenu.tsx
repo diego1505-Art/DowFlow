@@ -17,6 +17,10 @@ export interface DropdownMenuItem {
   disabled?: boolean;
   /** persistent highlight for the currently selected option */
   active?: boolean;
+  /** 0-100 progress bar drawn under the label (e.g. an active download) */
+  progress?: number;
+  /** keep the menu open after the click, so progress stays visible */
+  keepOpen?: boolean;
 }
 
 export interface DropdownMenuProps {
@@ -170,7 +174,7 @@ export default function DropdownMenu({
                 disabled={item.disabled}
                 onClick={async (e) => {
                   e.stopPropagation();
-                  setOpen(false);
+                  if (!item.keepOpen) setOpen(false);
                   await item.onClick();
                 }}
                 className={`group flex w-full h-[30px] items-center gap-[8px] rounded-control px-[9px] text-body font-normal transition-colors border-none bg-transparent text-left cursor-pointer select-none outline-none ${
@@ -193,7 +197,19 @@ export default function DropdownMenu({
                     {item.icon}
                   </span>
                 )}
-                <span className="truncate flex-1">{item.label}</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-[3px] py-[3px]">
+                  <span className="truncate">{item.label}</span>
+                  {typeof item.progress === "number" && (
+                    <span className="h-[3px] w-full overflow-hidden rounded-full bg-fill">
+                      <span
+                        className="block h-full rounded-full bg-text-primary transition-[width] duration-300"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, item.progress))}%`,
+                        }}
+                      />
+                    </span>
+                  )}
+                </span>
               </button>
             ))}
           </div>

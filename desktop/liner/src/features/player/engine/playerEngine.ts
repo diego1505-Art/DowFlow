@@ -1674,15 +1674,7 @@ class PlayerEngine {
     ) {
       return;
     }
-    if (isLocalTrackId(trackId)) {
-      this.currentLyricsTrackId = trackId;
-      ++this.lyricsLoadToken;
-      this.lyricsAbort?.abort();
-      this.lyricsAbort = null;
-      this.showNoLyrics(trackId, null);
-      return;
-    }
-
+    // Local files are looked up too: LRCLIB works from the title/artist tags.
     this.currentLyricsTrackId = trackId;
     const token = ++this.lyricsLoadToken;
     this.lyricsAbort?.abort();

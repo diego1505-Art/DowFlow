@@ -105,6 +105,44 @@ describe("LocalTrackLibrary", () => {
     expect(await library.usage()).toEqual({ count: 0, bytes: 0 });
   });
 
+  it("imports an external folder together with its sidecar covers", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    await fs.writeFile(path.join(folder, "Artist---Song.mp3"), "audio bytes");
+    await fs.writeFile(path.join(folder, "Artist---Song.jpg"), "cover bytes");
+
+    const first = await library.importExternalFolder(folder);
+
+    expect(first.added).toHaveLength(1);
+    const [record] = first.added;
+    expect(record.title).toBe("Artist---Song");
+    expect(record.coverFile).toBeDefined();
+    await expect(
+      fs.readFile(path.join(root, "covers", record.coverFile ?? ""), "utf8"),
+    ).resolves.toBe("cover bytes");
+
+    const again = await library.importExternalFolder(folder);
+    expect(again.added).toEqual([]);
+    expect(again.duplicates).toBe(1);
+  });
+
+  it("backfills a cover saved after the track was imported", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    await fs.writeFile(path.join(folder, "Late---Cover.mp3"), "late bytes");
+
+    const first = await library.importExternalFolder(folder);
+    expect(first.added[0].coverFile).toBeUndefined();
+
+    await fs.writeFile(path.join(folder, "Late---Cover.png"), "late cover");
+    await library.importExternalFolder(folder);
+
+    const [record] = await library.list();
+    expect(record.coverFile).toBe(`${record.id}.png`);
+  });
+
   it("refuses ids that could escape the library folder", async () => {
     const library = new LocalTrackLibrary(root);
     expect(await library.locate("audio", "../../etc/passwd")).toBeNull();

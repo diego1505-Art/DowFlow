@@ -459,14 +459,8 @@ class LocalVideoApiTests(unittest.TestCase):
         self.assertIn(b"DowFlow Music", music_response.data)
         music_response.close()
 
-        legacy_music_response = client.get("/music/explore/legacy")
-        self.assertEqual(legacy_music_response.status_code, 200)
-        self.assertIn(b'data-export-scope="music"', legacy_music_response.data)
-        legacy_music_response.close()
-
         music_routes = (
             "/music", "/music/stream", "/music/explore", "/music/liked",
-            "/music/explore/legacy", "/music/liked/legacy",
         )
         for route in music_routes:
             with self.subTest(route=route):

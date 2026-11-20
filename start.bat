@@ -7,6 +7,9 @@ setlocal EnableExtensions EnableDelayedExpansion
 REM Restart after update: skip directly to the setup phase.
 if /i "%~1"=="--updated" goto :after_update
 
+REM Music entry: open the Liner desktop Music app (start.bat music).
+if /i "%~1"=="music" goto :open_liner
+
 REM GitHub ZIP downloads do not contain .git. Never let Git walk into a
 REM parent directory and treat an unrelated repository as DowFlow.
 if not exist "%~dp0.git\HEAD" (
@@ -172,3 +175,43 @@ if exist "%~dp0DowFlow-Launcher.exe" (
     python startup.py
 )
 pause
+exit /b
+
+REM -- Music: open the Liner desktop app --------------------------------------
+:open_liner
+setlocal EnableExtensions
+set "LINER_DIR=%~dp0desktop\liner"
+echo [DowFlow] Opening DowFlow Music (Liner)...
+if not exist "%LINER_DIR%\package.json" (
+    echo [ERROR] Liner folder not found: "%LINER_DIR%"
+    pause
+    exit /b 1
+)
+set "LINER_EXE=%LINER_DIR%\release\win-unpacked\dowflow-music.exe"
+if exist "%LINER_EXE%" (
+    start "" "%LINER_EXE%"
+    exit /b 0
+)
+where pnpm >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] pnpm is required to start DowFlow Music from source.
+    pause
+    exit /b 1
+)
+if not exist "%LINER_DIR%\node_modules" (
+    echo [INFO] Installing DowFlow Music dependencies...
+    call pnpm --dir "%LINER_DIR%" install --frozen-lockfile
+    if errorlevel 1 goto :liner_failed
+)
+if not exist "%LINER_DIR%\dist-electron\main.js" (
+    echo [INFO] Building DowFlow Music...
+    call pnpm --dir "%LINER_DIR%" build
+    if errorlevel 1 goto :liner_failed
+)
+start "" /d "%LINER_DIR%" cmd /c "pnpm exec electron ."
+exit /b 0
+
+:liner_failed
+echo [ERROR] DowFlow Music could not be prepared. Run it once by hand to see the details.
+pause
+exit /b 1

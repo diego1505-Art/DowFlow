@@ -7,6 +7,12 @@ import { audioExtension, readLocalTrackTags } from "./metadata.js";
 import { LOCAL_AUDIO_EXTENSIONS, type LocalTrackRecord } from "./types.js";
 
 const SUPPORTED = new Set<string>(LOCAL_AUDIO_EXTENSIONS);
+const SIDECAR_COVERS = new Set(["jpg", "jpeg", "png", "webp"]);
+
+export interface ImportOptions {
+  /** Cover image stored next to the audio file (DowFlow keeps one per track). */
+  sidecarCover?: string;
+}
 
 async function hashFile(filePath: string): Promise<string> {
   const hash = crypto.createHash("sha1");
@@ -18,6 +24,7 @@ export async function importLocalFile(
   source: string,
   root: string,
   known: Set<string>,
+  options: ImportOptions = {},
 ): Promise<LocalTrackRecord | null> {
   const real = await fsp.realpath(source);
   const extension = audioExtension(real);
@@ -30,9 +37,18 @@ export async function importLocalFile(
   const audioFile = `${id}.${extension}`;
   await fsp.copyFile(real, path.join(root, "audio", audioFile));
   const tags = await readLocalTrackTags(real);
-  const coverFile = tags.cover ? `${id}.${tags.cover.extension}` : undefined;
+  let coverFile = tags.cover ? `${id}.${tags.cover.extension}` : undefined;
   if (tags.cover && coverFile) {
     await fsp.writeFile(path.join(root, "covers", coverFile), tags.cover.data);
+  } else if (options.sidecarCover) {
+    const extension = path.extname(options.sidecarCover).slice(1).toLowerCase();
+    if (SIDECAR_COVERS.has(extension)) {
+      coverFile = `${id}.${extension}`;
+      await fsp.copyFile(
+        options.sidecarCover,
+        path.join(root, "covers", coverFile),
+      );
+    }
   }
   return {
     id,

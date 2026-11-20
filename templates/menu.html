@@ -6,7 +6,7 @@
     <title>DowFlow - Menu</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20251111b">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20251120">
     {% if is_frozen %}
     <link rel="stylesheet" href="{{ url_for('static', filename='dependencies-loading.css') }}">
     {% endif %}
@@ -30,10 +30,6 @@
             background: #000;
             overflow-x: hidden;
         }
-
-        .bg-video-container { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
-        .bg-video-container video { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.35) saturate(1.2); opacity: 0.8; }
-        .bg-overlay { position: absolute; inset: 0; background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.55) 100%); }
 
         .page { position: relative; z-index: 1; width: min(1120px, calc(100% - 32px)); margin: 40px auto; }
 
@@ -162,13 +158,6 @@
         </div>
     </section>
     {% endif %}
-    <div class="bg-video-container">
-        <video autoplay muted loop playsinline poster="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop">
-            <source src="https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-night-sky-background-9937-large.mp4" type="video/mp4">
-        </video>
-        <div class="bg-overlay"></div>
-    </div>
-
     <main class="page">
         <section class="shell">
             <header class="topbar">
@@ -229,14 +218,6 @@
                     <span class="badge soon">Coming soon</span>
                 </a>
                 {% endif %}
-                {% if app_scope in ["all", "image"] %}
-                <a class="card disabled" href="/image" data-menu-id="image">
-                    <div class="card-index">05</div>
-                    <h3>Manhwa / Manga / Comics / Images</h3>
-                    <p>Chapters, pages and images.</p>
-                    <span class="badge soon">Coming soon</span>
-                </a>
-                {% endif %}
             </section>
 
             <footer class="footer">
@@ -292,18 +273,31 @@
         const musicEntry = document.querySelector('[data-menu-id="music"]');
         musicEntry?.addEventListener("click", async (event) => {
             const openMusic = window.dowflow?.music?.open;
-            if (typeof openMusic !== "function") return;
+            if (typeof openMusic === "function") {
+                event.preventDefault();
+                try {
+                    const result = await openMusic();
+                    if (result?.success) return;
+                    if (result?.fallback) {
+                        window.location.assign(musicEntry.href);
+                        return;
+                    }
+                    window.alert(result?.error || "Unable to open DowFlow Music.");
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : "Unable to open DowFlow Music.");
+                }
+                return;
+            }
+            // Plain browser or PyWebView launch: ask the backend to start Liner.
             event.preventDefault();
             try {
-                const result = await openMusic();
+                const response = await fetch("/api/music/open", { method: "POST" });
+                const result = await response.json();
                 if (result?.success) return;
-                if (result?.fallback) {
-                    window.location.assign(musicEntry.href);
-                    return;
-                }
-                window.alert(result?.error || "Unable to open DowFlow Music.");
-            } catch (error) {
-                window.alert(error instanceof Error ? error.message : "Unable to open DowFlow Music.");
+                // Liner is not built yet: fall back to the web Music shell.
+                window.location.assign(musicEntry.href);
+            } catch {
+                window.location.assign(musicEntry.href);
             }
         });
 

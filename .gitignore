@@ -58,3 +58,6 @@ dist/
 build/
 build-output/
 build-work/
+
+# DowFlow runtime update marker
+.dowflow-commit

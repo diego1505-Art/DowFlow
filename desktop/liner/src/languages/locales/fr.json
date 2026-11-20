@@ -76,6 +76,7 @@
     "back": "Retour",
     "link_copied": "Lien copié",
     "download": "Télécharger",
+    "downloading": "Téléchargement",
     "more": "Plus",
     "rename": "Renommer",
     "edit_description": "Modifier la description",
@@ -253,12 +254,12 @@
     "search_music": "Rechercher de la musique",
     "local": {
       "title": "Sur cet appareil",
-      "subtitle": "Tes propres fichiers audio. Ils restent sur cet ordinateur et ne sont jamais envoyés à YouTube ou aux serveurs de Liner.",
+      "subtitle": "Tes propres fichiers audio. Ils restent sur cet ordinateur et ne sont jamais envoyés à YouTube ou aux serveurs de DowFlow.",
       "add_files": "Ajouter des fichiers",
       "importing": "Ajout en cours…",
       "empty_title": "Aucun fichier local pour le moment",
       "empty_subtitle": "Ajoute des fichiers MP3, FLAC, M4A, OGG, OPUS ou WAV, ou glisse-les n'importe où dans la fenêtre.",
-      "drop_title": "Déposer pour ajouter à Liner",
+      "drop_title": "Déposer pour ajouter à DowFlow",
       "drop_subtitle": "Les fichiers sont copiés uniquement sur cet appareil",
       "drop_count_one": "{count} fichier",
       "drop_count_many": "{count} fichiers",
@@ -277,7 +278,7 @@
       "remove": "Supprimer de l'appareil",
       "remove_all": "Tout supprimer",
       "remove_all_title": "Supprimer toute la musique locale ?",
-      "remove_all_desc": "{tracks} ({size}) seront supprimés de Liner, avec leurs pochettes. Tes fichiers d'origine restent à leur place.",
+      "remove_all_desc": "{tracks} ({size}) seront supprimés de DowFlow, avec leurs pochettes. Tes fichiers d'origine restent à leur place.",
       "removed_all": "Musique locale supprimée"
     },
     "offline_mix": {
@@ -285,7 +286,7 @@
     },
     "cached": {
       "title": "Titres en cache",
-      "subtitle": "Titres conservés par Liner pendant ton écoute. Ils restent lisibles sans connexion jusqu'à ce que le cache fasse de la place pour les nouveaux.",
+      "subtitle": "Titres conservés par DowFlow pendant ton écoute. Ils restent lisibles sans connexion jusqu'à ce que le cache fasse de la place pour les nouveaux.",
       "clear_all": "Vider les titres en cache",
       "empty_title": "Aucun titre en cache pour le moment",
       "empty_subtitle": "Les titres que tu écoutes sont conservés ici temporairement pour démarrer instantanément et fonctionner hors ligne."
@@ -302,7 +303,7 @@
     "sign_in_to_account": "Connecte-toi à ton compte",
     "auth_title_login": "Ta musique, à ta façon",
     "auth_subtitle_login": "Connecte-toi et reprends là où tu t'étais arrêté.",
-    "auth_title_register": "Rejoindre Liner",
+    "auth_title_register": "Rejoindre DowFlow",
     "auth_subtitle_register": "Crée un compte et commence à construire ta bibliothèque personnelle.",
     "profile_setup_title": "Configure ton profil",
     "profile_setup_subtitle": "Choisis ton identifiant unique et ton nom affiché.",
@@ -374,7 +375,7 @@
       "email_invalid": "Saisis une adresse e-mail valide.",
       "password_min_8": "Le mot de passe doit contenir au moins 8 caractères.",
       "server_unavailable": "Impossible de joindre le serveur. Vérifie ta connexion.",
-      "server_error": "Les serveurs de Liner rencontrent des difficultés. Réessaie dans quelques minutes.",
+      "server_error": "Les serveurs de DowFlow rencontrent des difficultés. Réessaie dans quelques minutes.",
       "invalid_credentials": "E-mail ou mot de passe incorrect.",
       "email_already_used": "Cette adresse e-mail est déjà utilisée.",
       "username_invalid": "Le nom d'utilisateur doit contenir 3 à 30 lettres minuscules, chiffres ou tirets bas.",
@@ -619,9 +620,9 @@
     "shortcuts": {
       "description": "Personnalise les raccourcis clavier globaux et ceux du lecteur.",
       "global_section": "Raccourcis globaux (système)",
-      "global_desc": "Fonctionnent depuis n'importe quelle application, même quand Liner est réduit ou n'a pas le focus.",
+      "global_desc": "Fonctionnent depuis n'importe quelle application, même quand DowFlow est réduit ou n'a pas le focus.",
       "main_app_section": "Application principale",
-      "main_app_desc": "Actifs quand la fenêtre principale de Liner est ouverte et a le focus.",
+      "main_app_desc": "Actifs quand la fenêtre principale de DowFlow est ouverte et a le focus.",
       "miniplayer_section": "Mode mini-lecteur",
       "miniplayer_desc": "Actifs quand le mini-lecteur en overlay a le focus.",
       "toggle_overlay": "Afficher/masquer le mini-lecteur",
@@ -695,7 +696,7 @@
       },
       "auto_show_on_minimize": {
         "title": "Afficher à la réduction",
-        "description": "Affiche automatiquement l'overlay quand Liner est réduit."
+        "description": "Affiche automatiquement l'overlay quand DowFlow est réduit."
       },
       "always_on_top": {
         "title": "Toujours au premier plan",
@@ -777,8 +778,8 @@
       "title": "Cache et stockage",
       "description": "Répartition du stockage, statistiques du cache local et fichiers multimédias.",
       "usage_title": "Utilisation du stockage",
-      "device_usage": "Liner utilise actuellement {size} de stockage local.",
-      "device_usage_raw": "Liner utilise actuellement {size} de stockage local.",
+      "device_usage": "DowFlow utilise actuellement {size} de stockage local.",
+      "device_usage_raw": "DowFlow utilise actuellement {size} de stockage local.",
       "audio_cache_limit": "Taille maximale du cache",
       "audio_cache_limit_desc": "Les fichiers et médias les plus anciens sont supprimés automatiquement quand le cache est plein",
       "cache_limit": "Taille maximale du cache",
@@ -794,7 +795,7 @@
       "empty_storage": "Le cache est tout propre !",
       "cloud_disclaimer": "Tous les médias, pochettes et titres restent dans le cloud et seront retéléchargés automatiquement à la lecture.",
       "clearing_title": "Nettoyage du cache...",
-      "clearing_subtitle": "Garde cette fenêtre ouverte pendant que Liner nettoie ton cache.",
+      "clearing_subtitle": "Garde cette fenêtre ouverte pendant que DowFlow nettoie ton cache.",
       "cleared_title": "Stockage libéré",
       "cleared_subtitle": "Ton cache a été vidé. Les nouveaux médias seront diffusés et mis en cache automatiquement.",
       "done_button": "Terminé",
@@ -807,19 +808,19 @@
         "liked": "Titres aimés"
       },
       "local_confirm_title": "Supprimer aussi votre musique locale ?",
-      "local_confirm_desc": "{tracks} ({size}) seront supprimés de Liner, avec leurs pochettes. Tes fichiers d'origine restent à leur place.",
+      "local_confirm_desc": "{tracks} ({size}) seront supprimés de DowFlow, avec leurs pochettes. Tes fichiers d'origine restent à leur place.",
       "local_confirm_button": "Supprimer la musique locale",
       "removing_liked_title": "Suppression des titres aimés téléchargés…",
       "removing_local_title": "Suppression des fichiers importés…",
-      "removing_subtitle": "Garde cette fenêtre ouverte pendant que Liner termine.",
+      "removing_subtitle": "Garde cette fenêtre ouverte pendant que DowFlow termine.",
       "removed_title": "Supprimé",
       "removed_liked_subtitle": "Tes titres aimés restent dans ta bibliothèque. Ils seront retéléchargés quand tu seras en ligne si le téléchargement est activé.",
-      "removed_local_subtitle": "Les copies de Liner ont été supprimées. Les fichiers d'origine sur ton ordinateur n'ont pas été touchés.",
+      "removed_local_subtitle": "Les copies de DowFlow ont été supprimées. Les fichiers d'origine sur ton ordinateur n'ont pas été touchés.",
       "total_on_device": "{size} sur cet appareil",
       "music_title": "Ta musique",
       "music_desc": "Conservée sur cet appareil jusqu'à ce que tu la retires. Vider le cache n'y touche jamais.",
       "cache_title": "Cache",
-      "cache_desc": "Copies temporaires pour une lecture plus rapide. Peut être vidé sans risque : Liner les retélécharge au besoin.",
+      "cache_desc": "Copies temporaires pour une lecture plus rapide. Peut être vidé sans risque : DowFlow les retélécharge au besoin.",
       "liked_count": "{saved} sur {total} téléchargés",
       "liked_toggle": "Télécharger automatiquement",
       "liked_limit": "Limite de téléchargement",
@@ -852,7 +853,7 @@
       "local_desc": "{songs} · les originaux restent où ils sont",
       "downloads_limit": "Espace pour les téléchargements",
       "cache_row_title": "Titres, paroles et pochettes",
-      "cache_row_desc": "Enregistrés pendant ton écoute. Liner les récupère au besoin.",
+      "cache_row_desc": "Enregistrés pendant ton écoute. DowFlow les récupère au besoin.",
       "clear": "Vider",
       "cache_limit_hint": "Environ {count} titres. Les plus anciens sont supprimés en premier.",
       "cache_limit_unlimited": "Augmente jusqu'à ce que tu le vides",
@@ -903,7 +904,7 @@
       "title": "Profil",
       "signed_in_as": "Connecté en tant que",
       "not_signed_in": "Aucune session reconnue n'est actuellement connectée.",
-      "sign_in": "Se connecter à Liner",
+      "sign_in": "Se connecter à DowFlow",
       "sign_out": "Se déconnecter",
       "sign_out_confirm": "Veux-tu vraiment te déconnecter ?",
       "edit_profile": "Modifier le profil",
@@ -914,7 +915,7 @@
       "stat_active": "Actif",
       "no_bio": "Pas encore de bio",
       "details_section": "Détails du profil",
-      "details_subtitle": "Personnalise ton apparence publique sur Liner",
+      "details_subtitle": "Personnalise ton apparence publique sur DowFlow",
       "username_label": "Nom d'utilisateur",
       "username_hint": "3 à 30 caractères minuscules (a-z, 0-9, _). Doit être unique.",
       "username_invalid": "Le nom d'utilisateur doit contenir 3 à 30 lettres minuscules, chiffres ou tirets bas.",
@@ -931,7 +932,7 @@
       "saved_success": "Profil mis à jour",
       "save_failed": "Impossible de mettre à jour le profil",
       "privacy_section": "Confidentialité et social",
-      "privacy_subtitle": "Contrôle ta visibilité et ta présence sociale sur Liner",
+      "privacy_subtitle": "Contrôle ta visibilité et ta présence sociale sur DowFlow",
       "public_profile": {
         "title": "Profil public",
         "description": "Permet aux autres de trouver ton profil et de voir tes informations publiques."
@@ -1007,7 +1008,7 @@
       },
       "sync_library": {
         "title": "Synchroniser la bibliothèque",
-        "description": "Affiche les playlists de ton compte YouTube dans la bibliothèque à côté des playlists Liner."
+        "description": "Affiche les playlists de ton compte YouTube dans la bibliothèque à côté des playlists DowFlow."
       },
       "sign_out": "Se déconnecter",
       "sign_in": "Se connecter",
@@ -1030,7 +1031,7 @@
         "song": "Titre du morceau",
         "artist_song": "Artiste - Titre",
         "song_artist": "Titre - Artiste",
-        "app": "Liner (Nom de l'application)"
+        "app": "DowFlow (Nom de l'application)"
       },
       "show_timeline": {
         "title": "Barre de progression",
@@ -1049,11 +1050,11 @@
         "description": "Garde le statut visible sur Discord avec un indicateur de pause lorsque la musique est en pause."
       },
       "show_button": {
-        "title": "Bouton « Écouter sur Liner »",
-        "description": "Ajoute un bouton interactif renvoyant vers le titre sur Liner."
+        "title": "Bouton « Écouter sur DowFlow »",
+        "description": "Ajoute un bouton interactif renvoyant vers le titre sur DowFlow."
       },
       "show_download_button": {
-        "title": "Bouton « Télécharger Liner »",
+        "title": "Bouton « Télécharger DowFlow »",
         "description": "Ajoute un bouton interactif renvoyant vers tryliner.fun pour télécharger l'application."
       },
       "status": {
@@ -1134,7 +1135,7 @@
   },
   "error_screen": {
     "title": "Un problème est survenu",
-    "subtitle": "Une erreur inattendue s'est produite dans Liner. Tu peux recharger l'application ou réessayer.",
+    "subtitle": "Une erreur inattendue s'est produite dans DowFlow. Tu peux recharger l'application ou réessayer.",
     "reload": "Recharger l'application",
     "try_again": "Réessayer",
     "go_home": "Aller à l'accueil",
@@ -1161,13 +1162,13 @@
   },
   "connectivity": {
     "wall_title": "Échec de la connexion",
-    "wall_subtitle": "Liner n'arrive pas à joindre ses serveurs. Ta musique et ta bibliothèque sont en sécurité.",
-    "wall_title_server": "Les serveurs de Liner rencontrent des difficultés",
+    "wall_subtitle": "DowFlow n'arrive pas à joindre ses serveurs. Ta musique et ta bibliothèque sont en sécurité.",
+    "wall_title_server": "Les serveurs de DowFlow rencontrent des difficultés",
     "wall_subtitle_server": "Ta connexion fonctionne, mais le serveur a répondu par une erreur. Ta musique et ta bibliothèque sont en sécurité, réessaie dans quelques minutes.",
     "steps_title": "Solutions rapides à essayer",
     "step_net": "Vérifie que le Wi-Fi ou le câble est connecté et que les pages s'ouvrent dans un navigateur.",
     "step_vpn": "Mets en pause le VPN, le proxy ou les filtres DNS pendant une minute : ils bloquent souvent l'application.",
-    "step_firewall": "Autorise Liner dans le pare-feu et les protections réseau de l'antivirus.",
+    "step_firewall": "Autorise DowFlow dans le pare-feu et les protections réseau de l'antivirus.",
     "step_router": "Redémarre le routeur, puis clique sur Réessayer ci-dessous.",
     "retry": "Réessayer",
     "retrying": "Vérification…",
@@ -1189,8 +1190,8 @@
     "check_platform": "Plateforme",
     "check_main": "Tests de l'application",
     "support": "Contacter l'assistance",
-    "wall_title_unreachable": "Les serveurs de Liner ne répondent pas",
-    "wall_subtitle_unreachable": "Ta connexion fonctionne, mais Liner n'arrive pas à joindre ses serveurs. Ils sont peut-être indisponibles, ou ton réseau bloque Liner. Un VPN peut souvent aider."
+    "wall_title_unreachable": "Les serveurs de DowFlow ne répondent pas",
+    "wall_subtitle_unreachable": "Ta connexion fonctionne, mais DowFlow n'arrive pas à joindre ses serveurs. Ils sont peut-être indisponibles, ou ton réseau bloque DowFlow. Un VPN peut souvent aider."
   },
   "updater": {
     "modal_title": "Nouvelle mise à jour disponible",
@@ -1233,14 +1234,14 @@
   "offline": {
     "entered_auto_title": "Passage en mode hors ligne",
     "entered_manual_title": "Mode hors ligne activé",
-    "entered_desc_auto": "La musique enregistrée sur cet appareil continue d'être lue. Liner repassera en ligne dès que la connexion sera rétablie.",
+    "entered_desc_auto": "La musique enregistrée sur cet appareil continue d'être lue. DowFlow repassera en ligne dès que la connexion sera rétablie.",
     "entered_desc_manual": "Seule la musique enregistrée sur cet appareil est lue jusqu'à ce que tu te reconnectes.",
     "open_device": "Ouvrir la bibliothèque",
     "back_online_title": "Tu es de nouveau en ligne",
     "back_online_desc": "Tout refonctionne normalement.",
     "still_offline_title": "Toujours aucune connexion",
-    "still_server_title": "Les serveurs de Liner ne répondent toujours pas",
-    "still_desc": "Reste hors ligne pour l'instant. Liner se reconnecte tout seul dès qu'il peut joindre les serveurs.",
+    "still_server_title": "Les serveurs de DowFlow ne répondent toujours pas",
+    "still_desc": "Reste hors ligne pour l'instant. DowFlow se reconnecte tout seul dès qu'il peut joindre les serveurs.",
     "skipped_title": "Titres non téléchargés ignorés",
     "skipped_desc": "En mode hors ligne, seule la musique enregistrée sur cet appareil est lue.",
     "nothing_playable": "Aucun titre restant dans la file n'est enregistré sur cet appareil",
@@ -1257,8 +1258,8 @@
     "issue_youtube_unreachable_desc": "Certains titres ne peuvent pas être lus pour l'instant. Réessaie dans un instant, utilise un VPN, ou écoute la musique enregistrée sur cet appareil.",
     "issue_youtube_refused_title": "YouTube bloque la lecture",
     "issue_youtube_refused_desc": "Cela arrive souvent avec un VPN ou un proxy. Change de serveur VPN ou désactive-le, puis réessaie.",
-    "issue_server_title": "Les serveurs de Liner ne répondent pas",
-    "issue_server_desc": "Ta connexion fonctionne, mais Liner n'arrive pas à joindre ses serveurs. La musique enregistrée sur cet appareil reste lisible.",
+    "issue_server_title": "Les serveurs de DowFlow ne répondent pas",
+    "issue_server_desc": "Ta connexion fonctionne, mais DowFlow n'arrive pas à joindre ses serveurs. La musique enregistrée sur cet appareil reste lisible.",
     "issue_offline_title": "Tu es hors ligne",
     "issue_offline_desc": "Vérifie ta connexion Internet. La musique enregistrée sur cet appareil reste lisible.",
     "try_again": "Réessayer",
@@ -1269,7 +1270,7 @@
   },
   "human_check": {
     "title": "Confirme que tu n'es pas un robot",
-    "description": "Une rapide vérification Cloudflare protège les comptes Liner des robots. Elle se valide généralement toute seule en une seconde.",
+    "description": "Une rapide vérification Cloudflare protège les comptes DowFlow des robots. Elle se valide généralement toute seule en une seconde.",
     "expired": "La vérification a expiré et redémarre.",
     "failed": "La vérification n'a pas pu se charger. Vérifie ta connexion et réessaie.",
     "waiting": "Vérification…",

@@ -1,13 +1,10 @@
 import { useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { getAuthSession } from "@/shared/api";
 import AppFrame from "@/features/navigation/ui/AppFrame";
 import { useWindowState } from "@/features/navigation/hooks/useWindowState";
 
 export function AuthLock({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
   const status = useAuthStore((state) => state.status);
   const initialize = useAuthStore((state) => state.initialize);
   // keeps the body's outer padding in step with maximize / fullscreen on every screen,
@@ -26,20 +23,8 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("auth:changed", syncExpiredSession);
   }, [initialize]);
 
-  useEffect(() => {
-    if (status === "anonymous" && pathname !== "/login") {
-      navigate("/login", { replace: true });
-    }
-    if (status === "authenticated" && pathname === "/login") {
-      navigate("/", { replace: true });
-    }
-  }, [pathname, navigate, status]);
-
-  if (
-    status === "initializing" ||
-    (status === "anonymous" && pathname !== "/login") ||
-    (status === "authenticated" && pathname === "/login")
-  ) {
+  // DowFlow opens the player directly: no login wall, anonymous sessions stay in the app.
+  if (status === "initializing") {
     return (
       <div
         className={`h-full w-full bg-bg-canvas ${isEdgeToEdge ? "rounded-none" : "rounded-item"}`}
@@ -47,7 +32,7 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return pathname === "/login" ? children : <AppFrame>{children}</AppFrame>;
+  return <AppFrame>{children}</AppFrame>;
 }
 
 export default AuthLock;

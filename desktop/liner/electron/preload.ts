@@ -70,6 +70,26 @@ export interface LinerElectronApi {
   toggleMaximize: () => Promise<void>;
   toggleFullScreen: () => Promise<void>;
   close: () => Promise<void>;
+  downloadMusic: (payload: {
+    url: string;
+    title?: string;
+    artist?: string;
+  }) => Promise<{
+    success: boolean;
+    jobId?: string | null;
+    existing?: boolean;
+    error?: string;
+  }>;
+  downloadMusicStatus: (jobId: string) => Promise<{
+    status: "queued" | "running" | "success" | "failed" | "skipped";
+    progress?: number;
+    message?: string;
+    error?: string;
+  }>;
+  fetchLyrics: (request: {
+    path: string;
+    params?: Record<string, string>;
+  }) => Promise<unknown>;
   isMaximized: () => Promise<boolean>;
   isFullScreen: () => Promise<boolean>;
   getRememberWindowBounds: () => Promise<boolean>;
@@ -215,6 +235,7 @@ export interface LinerElectronApi {
     values: string[],
   ) => Promise<YoutubeSolveResult>;
   localTracksList: () => Promise<LocalTrackRecord[]>;
+  onLocalTracksChanged: (cb: () => void) => () => void;
   localTracksImport: (paths: string[]) => Promise<LocalImportResult>;
   localTracksPick: () => Promise<LocalImportResult | null>;
   localTracksRemove: (ids: string[]) => Promise<void>;
@@ -319,6 +340,11 @@ const api: LinerElectronApi = {
   diagnoseNetwork: (hosts) => ipcRenderer.invoke("net:diagnose", hosts),
   probeNetwork: () => ipcRenderer.invoke("net:probe"),
   openDownloads: () => ipcRenderer.invoke("shell:open-downloads"),
+  downloadMusic: (payload) =>
+    ipcRenderer.invoke("dowflow:download-music", payload),
+  downloadMusicStatus: (jobId) =>
+    ipcRenderer.invoke("dowflow:download-status", jobId),
+  fetchLyrics: (request) => ipcRenderer.invoke("lyrics:fetch", request),
   openExportFolder: () => ipcRenderer.invoke("shell:open-export-folder"),
   setAppIcon: (dataUrl, options) =>
     ipcRenderer.invoke("app:set-icon", dataUrl, options),
@@ -498,6 +524,13 @@ const api: LinerElectronApi = {
   youtubeSolveN: (playerId, values) =>
     ipcRenderer.invoke("youtube:solve-n", { playerId, values }),
   localTracksList: () => ipcRenderer.invoke("local-tracks:list"),
+  onLocalTracksChanged: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("local-tracks:changed", listener);
+    return () => {
+      ipcRenderer.removeListener("local-tracks:changed", listener);
+    };
+  },
   localTracksImport: (paths) =>
     ipcRenderer.invoke("local-tracks:import", paths),
   localTracksPick: () => ipcRenderer.invoke("local-tracks:pick"),

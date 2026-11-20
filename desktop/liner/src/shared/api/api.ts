@@ -9,6 +9,10 @@ import {
 } from "./auth-session";
 import { signApiRequest, syncServerTime } from "./requestSigner";
 import { clientCatalog } from "./clientCatalog";
+import {
+  searchLrclibLyrics,
+  streamLrclibLyrics,
+} from "@/shared/media/lyrics/lrclib";
 import { getLocalImportHandler } from "./localImports";
 import type { Track } from "@/shared/contracts";
 import { telemetry } from "@/shared/telemetry";
@@ -1181,30 +1185,10 @@ export const api = {
 
   async searchLyrics(
     hint: { title: string; artist: string; durationMs?: number },
-    signal?: AbortSignal,
+    _signal?: AbortSignal,
   ): Promise<LyricsSearchResult | null> {
-    const params = new URLSearchParams({
-      title: hint.title.trim(),
-      artist: hint.artist.trim(),
-      ...(hint.durationMs && hint.durationMs > 0
-        ? { durationMs: String(Math.round(hint.durationMs)) }
-        : {}),
-    });
-    try {
-      return await request<LyricsSearchResult>(
-        `/v1/me/lyrics/search?${params.toString()}`,
-        { signal },
-      );
-    } catch (err) {
-      if (
-        err instanceof ApiError &&
-        err.status === 404 &&
-        err.code === "LYRICS_NOT_FOUND"
-      ) {
-        return null;
-      }
-      throw err;
-    }
+    // LRCLIB replaces the Liner /v1 lyrics API (no account, no key).
+    return searchLrclibLyrics(hint);
   },
 
   async *streamLyrics(
@@ -1212,129 +1196,7 @@ export const api = {
     signal?: AbortSignal,
     hint?: { title: string; artist: string; durationMs?: number },
   ): AsyncGenerator<LyricsStreamEvent> {
-    const hintParams =
-      hint?.title.trim() && hint.artist.trim()
-        ? new URLSearchParams({
-            title: hint.title.trim(),
-            artist: hint.artist.trim(),
-            ...(hint.durationMs && hint.durationMs > 0
-              ? { durationMs: String(Math.round(hint.durationMs)) }
-              : {}),
-          }).toString()
-        : "";
-    const path = `/v1/tracks/${encodeURIComponent(id)}/lyrics${hintParams ? `?${hintParams}` : ""}`;
-    const signedHeaders = await signApiRequest("GET", path);
-    const accessToken = await getValidAccessToken();
-    const requestId =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-    const correlationHeaders: Record<string, string> = {
-      "x-request-id": requestId,
-      "x-client-version": CLIENT_VERSION,
-      "x-platform": getPlatform(),
-      "x-session-id": id,
-    };
-
-    let res: Response;
-    const connect = new AbortController();
-    const connectTimer = setTimeout(
-      () => connect.abort(),
-      LYRICS_CONNECT_TIMEOUT_MS,
-    );
-    try {
-      res = await fetch(`${getApiBaseUrl()}${path}`, {
-        signal: signal
-          ? AbortSignal.any([signal, connect.signal])
-          : connect.signal,
-        headers: {
-          // a known instrumental comes back as plain json instead of a stream
-          Accept: "application/json, text/event-stream",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          ...correlationHeaders,
-          ...signedHeaders,
-        },
-      });
-    } catch (fetchErr: any) {
-      if (signal?.aborted) throw fetchErr;
-      if (connect.signal.aborted)
-        throw new ApiError(0, "Lyrics request timed out.", "TIMEOUT_ERROR");
-      throw fetchErr;
-    } finally {
-      clearTimeout(connectTimer);
-    }
-
-    const lyricsDateHeader = res.headers?.get?.("date");
-    if (lyricsDateHeader) {
-      syncServerTime(lyricsDateHeader);
-    }
-
-    if (!res.ok || !res.body) {
-      const respReqId = res.headers?.get?.("x-request-id") || requestId;
-      throw new ApiError(res.status, res.statusText, undefined, respReqId);
-    }
-
-    if (res.headers.get("content-type")?.includes("application/json")) {
-      const body = (await res.json()) as { instrumental?: boolean };
-      yield body.instrumental
-        ? {
-            type: "done",
-            cached: true,
-            status: "not_found",
-            instrumental: true,
-          }
-        : { type: "done", cached: true, status: "not_found" };
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    const flushEvent = (): LyricsStreamEvent | null => {
-      const sep = buffer.indexOf("\n\n");
-      if (sep === -1) return null;
-      const rawEvent = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-
-      const dataLines: string[] = [];
-      for (const line of rawEvent.split("\n")) {
-        if (line.startsWith("data:")) {
-          dataLines.push(line.slice(5).trim());
-        }
-      }
-
-      if (dataLines.length === 0) return null;
-      try {
-        return JSON.parse(dataLines.join("\n")) as LyricsStreamEvent;
-      } catch {
-        return null;
-      }
-    };
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let event = flushEvent();
-        while (event) {
-          yield event;
-          event = flushEvent();
-        }
-      }
-
-      buffer += decoder.decode();
-      let event = flushEvent();
-      while (event) {
-        yield event;
-        event = flushEvent();
-      }
-    } finally {
-      reader.releaseLock();
-    }
+    yield* streamLrclibLyrics(id, hint, signal);
   },
 
   recordPlaybackEvent(payload: RecordPlaybackEventRequest): Promise<void> {

@@ -359,7 +359,6 @@ def check_codebase() -> None:
         "tools/debug_center.py",
         "tools/fix_videos.py",
         "tools/extract_urls_from_txt.py",
-        "templates/music.html",
         "templates/coming_soon.html",
         "requirements.txt",
         ".gitattributes",

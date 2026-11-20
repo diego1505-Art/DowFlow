@@ -87,6 +87,7 @@ import { DiscordRpcManager } from "./discord.js";
 import { PoTokenService } from "./youtube/potoken.js";
 import { confineToApp, handleTrusted, onTrusted } from "./ipc-guard.js";
 import { setupLocalTracks } from "./local-tracks/ipc.js";
+import { findDowflowBackend } from "./dowflow-backend.js";
 import {
   createSavedTrackLibrary,
   setupSavedTracks,
@@ -2017,6 +2018,136 @@ if (!gotTheLock) {
       });
       return true;
     });
+
+    // Lyrics come straight from LRCLIB (free, no account) instead of Liner's API.
+    handleTrusted("lyrics:fetch", async (_event, payload: unknown) => {
+      const input = (payload ?? {}) as { path?: unknown; params?: unknown };
+      const path = typeof input.path === "string" ? input.path : "";
+      if (!path.startsWith("/")) return null;
+      const url = new URL(`https://lrclib.net/api${path}`);
+      if (input.params && typeof input.params === "object") {
+        for (const [key, value] of Object.entries(
+          input.params as Record<string, unknown>,
+        )) {
+          if (typeof value === "string" || typeof value === "number") {
+            url.searchParams.set(key, String(value));
+          }
+        }
+      }
+      try {
+        const response = await fetch(url, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!response.ok) return null;
+        return await response.json();
+      } catch {
+        return null;
+      }
+    });
+
+    ipcMain.handle("dowflow:download-music", async (_event, payload: unknown) => {
+      const input = (payload ?? {}) as {
+        url?: unknown;
+        title?: unknown;
+        artist?: unknown;
+      };
+      const url = typeof input.url === "string" ? input.url.trim() : "";
+      if (!url) return { success: false, error: "No track URL." };
+      const backend = await findDowflowBackend();
+      if (!backend) {
+        return {
+          success: false,
+          error:
+            "DowFlow is not running: open the DowFlow app (start.bat) and try again.",
+        };
+      }
+      try {
+        const response = await fetch(`${backend}/api/music/download`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url,
+            title: typeof input.title === "string" ? input.title : undefined,
+            artist: typeof input.artist === "string" ? input.artist : undefined,
+            audio_format: "mp3",
+            with_cover: true,
+          }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          success?: boolean;
+          error?: string;
+          job_id?: string;
+          existing?: boolean;
+        };
+        if (!response.ok || data.success !== true) {
+          return {
+            success: false,
+            error: data.error || `DowFlow answered HTTP ${response.status}.`,
+          };
+        }
+        return {
+          success: true,
+          jobId: data.job_id ?? null,
+          existing: data.existing === true,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
+
+    handleTrusted(
+      "dowflow:download-status",
+      async (_event, jobId: unknown) => {
+        const id = typeof jobId === "string" ? jobId.trim() : "";
+        if (!id) return { status: "failed", error: "No download job." };
+        const backend = await findDowflowBackend();
+        if (!backend) {
+          return { status: "failed", error: "DowFlow is not running." };
+        }
+        try {
+          const response = await fetch(
+            `${backend}/jobs/${encodeURIComponent(id)}`,
+            { signal: AbortSignal.timeout(5_000) },
+          );
+          const data = (await response.json().catch(() => ({}))) as {
+            success?: boolean;
+            job?: {
+              status?: string;
+              progress?: number;
+              message?: string;
+              error?: string;
+            };
+          };
+          if (!response.ok || data.success !== true || !data.job) {
+            return { status: "failed", error: "Download job not found." };
+          }
+          const status = data.job.status ?? "running";
+          return {
+            status:
+              status === "success" ||
+              status === "failed" ||
+              status === "skipped" ||
+              status === "queued"
+                ? status
+                : "running",
+            progress:
+              typeof data.job.progress === "number" ? data.job.progress : 0,
+            message: data.job.message,
+            error: data.job.error,
+          };
+        } catch (error) {
+          return {
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    );
 
     // OTA bundle updater IPC handlers
     ipcMain.handle("bundle:check", async () => {

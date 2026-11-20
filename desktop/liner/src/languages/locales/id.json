@@ -245,7 +245,7 @@
     "sign_in_to_account": "Masuk ke akunmu",
     "auth_title_login": "Musikmu, caramu",
     "auth_subtitle_login": "Masuk dan lanjutkan dari bagian terakhir yang kamu dengarkan.",
-    "auth_title_register": "Bergabung dengan Liner",
+    "auth_title_register": "Bergabung dengan DowFlow",
     "auth_subtitle_register": "Buat akun dan mulai bangun pustaka pribadimu.",
     "profile_setup_title": "Atur profilmu",
     "profile_setup_subtitle": "Pilih handle unik dan nama tampilanmu.",
@@ -317,7 +317,7 @@
       "email_invalid": "Masukkan alamat email yang valid.",
       "password_min_8": "Kata sandi harus memiliki minimal 8 karakter.",
       "server_unavailable": "Tidak dapat terhubung ke server. Periksa koneksimu.",
-      "server_error": "Server Liner sedang bermasalah. Coba lagi beberapa menit lagi.",
+      "server_error": "Server DowFlow sedang bermasalah. Coba lagi beberapa menit lagi.",
       "invalid_credentials": "Email atau kata sandi salah.",
       "email_already_used": "Email ini sudah digunakan.",
       "username_invalid": "Nama pengguna harus 3-30 karakter berupa huruf kecil, angka, atau garis bawah.",
@@ -496,9 +496,9 @@
     "shortcuts": {
       "description": "Sesuaikan pintasan keyboard global (seluruh sistem) dan pintasan pemutar.",
       "global_section": "Pintasan Global (Seluruh Sistem)",
-      "global_desc": "Berfungsi dari aplikasi mana pun di komputermu, bahkan saat Liner diminimalkan atau tidak sedang difokuskan.",
+      "global_desc": "Berfungsi dari aplikasi mana pun di komputermu, bahkan saat DowFlow diminimalkan atau tidak sedang difokuskan.",
       "main_app_section": "Aplikasi Utama",
-      "main_app_desc": "Aktif saat jendela utama Liner terbuka dan difokuskan.",
+      "main_app_desc": "Aktif saat jendela utama DowFlow terbuka dan difokuskan.",
       "miniplayer_section": "Mode Miniplayer",
       "miniplayer_desc": "Aktif saat miniplayer overlay desktop difokuskan.",
       "toggle_overlay": "Tampilkan/sembunyikan overlay miniplayer",
@@ -572,7 +572,7 @@
       },
       "auto_show_on_minimize": {
         "title": "Tampilkan otomatis saat diminimalkan",
-        "description": "Tampilkan overlay secara otomatis saat Liner diminimalkan."
+        "description": "Tampilkan overlay secara otomatis saat DowFlow diminimalkan."
       },
       "always_on_top": {
         "title": "Selalu di atas",
@@ -592,7 +592,7 @@
       },
       "sync_library": {
         "title": "Sinkronkan pustaka",
-        "description": "Tampilkan playlist dari akun YouTube-mu di pustaka, di samping playlist Liner."
+        "description": "Tampilkan playlist dari akun YouTube-mu di pustaka, di samping playlist DowFlow."
       },
       "sign_out": "Keluar",
       "sign_in": "Masuk",
@@ -614,7 +614,7 @@
         "song": "Judul Lagu",
         "artist_song": "Artis - Lagu",
         "song_artist": "Lagu - Artis",
-        "app": "Liner (Nama aplikasi)"
+        "app": "DowFlow (Nama aplikasi)"
       },
       "show_timeline": {
         "title": "Lini Masa Pemutaran",
@@ -633,11 +633,11 @@
         "description": "Pertahankan status di Discord dengan indikator jeda saat musik dijeda."
       },
       "show_button": {
-        "title": "Tombol 'Dengarkan di Liner'",
-        "description": "Tambahkan tombol interaktif yang menautkan ke lagu di Liner."
+        "title": "Tombol 'Dengarkan di DowFlow'",
+        "description": "Tambahkan tombol interaktif yang menautkan ke lagu di DowFlow."
       },
       "show_download_button": {
-        "title": "Tombol 'Unduh Liner'",
+        "title": "Tombol 'Unduh DowFlow'",
         "description": "Tambahkan tombol interaktif yang menautkan ke tryliner.fun untuk mengunduh aplikasi."
       },
       "status": {
@@ -724,8 +724,8 @@
       "title": "Cache & Penyimpanan",
       "description": "Rincian penyimpanan, analitik cache lokal, dan file media.",
       "usage_title": "Penggunaan Penyimpanan",
-      "device_usage": "Liner saat ini menggunakan {size} penyimpanan lokal.",
-      "device_usage_raw": "Liner saat ini menggunakan {size} penyimpanan lokal.",
+      "device_usage": "DowFlow saat ini menggunakan {size} penyimpanan lokal.",
+      "device_usage_raw": "DowFlow saat ini menggunakan {size} penyimpanan lokal.",
       "audio_cache_limit": "Batas ukuran cache",
       "audio_cache_limit_desc": "File dan media yang lama dihapus otomatis saat penuh",
       "cache_limit": "Batas ukuran cache",
@@ -741,7 +741,7 @@
       "empty_storage": "Cache sudah bersih kinclong!",
       "cloud_disclaimer": "Semua media, sampul, dan lagu tetap ada di cloud dan akan diunduh ulang dengan mulus saat diputar.",
       "clearing_title": "Menghapus cache...",
-      "clearing_subtitle": "Biarkan jendela ini tetap terbuka selagi Liner membersihkan cache-mu.",
+      "clearing_subtitle": "Biarkan jendela ini tetap terbuka selagi DowFlow membersihkan cache-mu.",
       "cleared_title": "Penyimpanan Dibersihkan",
       "cleared_subtitle": "Cache-mu sudah bersih. Media baru akan di-stream dan disimpan ke cache secara otomatis.",
       "done_button": "Selesai",
@@ -753,7 +753,7 @@
         "local": "Musik Lokal"
       },
       "local_confirm_title": "Hapus juga musik lokalmu?",
-      "local_confirm_desc": "Musik Lokal adalah pustaka yang kamu impor, bukan cache. {tracks} ({size}) akan dihapus dari Liner beserta sampulnya. File aslimu tetap di tempatnya.",
+      "local_confirm_desc": "Musik Lokal adalah pustaka yang kamu impor, bukan cache. {tracks} ({size}) akan dihapus dari DowFlow beserta sampulnya. File aslimu tetap di tempatnya.",
       "local_confirm_button": "Hapus musik lokal"
     },
     "theme": {
@@ -794,7 +794,7 @@
       "title": "Profil",
       "signed_in_as": "Masuk sebagai",
       "not_signed_in": "Saat ini belum masuk ke sesi yang dikenali.",
-      "sign_in": "Masuk ke Liner",
+      "sign_in": "Masuk ke DowFlow",
       "sign_out": "Keluar",
       "sign_out_confirm": "Apakah kamu yakin ingin keluar?",
       "edit_profile": "Ubah profil",
@@ -805,7 +805,7 @@
       "stat_active": "Aktif",
       "no_bio": "Belum ada bio",
       "details_section": "Detail Profil",
-      "details_subtitle": "Sesuaikan tampilan publikmu di Liner",
+      "details_subtitle": "Sesuaikan tampilan publikmu di DowFlow",
       "username_label": "Nama pengguna",
       "username_hint": "3-30 karakter huruf kecil (a-z, 0-9, _). Harus unik.",
       "username_invalid": "Nama pengguna harus 3-30 karakter berupa huruf kecil, angka, atau garis bawah.",
@@ -822,7 +822,7 @@
       "saved_success": "Profil berhasil diperbarui",
       "save_failed": "Gagal memperbarui profil",
       "privacy_section": "Privasi & Sosial",
-      "privacy_subtitle": "Atur visibilitas dan kehadiran sosialmu di Liner",
+      "privacy_subtitle": "Atur visibilitas dan kehadiran sosialmu di DowFlow",
       "public_profile": {
         "title": "Profil publik",
         "description": "Izinkan orang lain mencari profilmu dan melihat informasi publikmu."
@@ -954,7 +954,7 @@
   },
   "error_screen": {
     "title": "Terjadi kesalahan",
-    "subtitle": "Terjadi error tak terduga di Liner. Kamu bisa memuat ulang aplikasi atau mencoba lagi.",
+    "subtitle": "Terjadi error tak terduga di DowFlow. Kamu bisa memuat ulang aplikasi atau mencoba lagi.",
     "reload": "Muat ulang aplikasi",
     "try_again": "Coba lagi",
     "go_home": "Ke beranda",
@@ -981,13 +981,13 @@
   },
   "connectivity": {
     "wall_title": "Koneksi gagal",
-    "wall_subtitle": "Liner tidak dapat menjangkau servernya. Musik dan pustakamu aman.",
-    "wall_title_server": "Server Liner sedang bermasalah",
+    "wall_subtitle": "DowFlow tidak dapat menjangkau servernya. Musik dan pustakamu aman.",
+    "wall_title_server": "Server DowFlow sedang bermasalah",
     "wall_subtitle_server": "Koneksimu baik-baik saja, server membalas dengan error. Musik dan pustakamu aman, coba lagi beberapa menit lagi.",
     "steps_title": "Perbaikan cepat yang layak dicoba",
     "step_net": "Pastikan Wi-Fi atau kabel terhubung dan halaman web bisa dibuka di browser.",
     "step_vpn": "Jeda VPN, proxy, atau filter DNS sebentar — sering kali ini memblokir aplikasi.",
-    "step_firewall": "Izinkan Liner melewati firewall dan perlindungan jaringan antivirus.",
+    "step_firewall": "Izinkan DowFlow melewati firewall dan perlindungan jaringan antivirus.",
     "step_router": "Restart router, lalu tekan Coba lagi di bawah.",
     "retry": "Coba lagi",
     "retrying": "Memeriksa…",

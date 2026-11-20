@@ -1,3 +1,4 @@
+import gzip
 import importlib
 import importlib.util
 import json
@@ -21,6 +22,7 @@ from config import (
     BASE_DIR,
     DownloadPathNotConfigured,
     IS_FROZEN,
+    SOURCE_DIR,
     SUBPROCESS_CREATION_FLAGS,
     VIDEO_EXTENSIONS,
     get_download_path,
@@ -59,6 +61,72 @@ if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
 _EXPORT_JOBS: dict[str, dict[str, Any]] = {}
 _EXPORT_LOCK = threading.Lock()
 _EXPORT_RUNNING = False
+# Track in-flight music downloads so repeated clicks reuse the same job.
+_MUSIC_DOWNLOAD_JOBS: dict[str, tuple[str, float]] = {}
+_MUSIC_DOWNLOAD_LOCK = threading.Lock()
+_MUSIC_DOWNLOAD_TTL_SECONDS = 1800.0
+
+
+# ── Response performance ────────────────────────────────────────────────
+_COMPRESSIBLE_MIMETYPES = frozenset({
+    "text/html",
+    "text/css",
+    "text/plain",
+    "text/javascript",
+    "application/javascript",
+    "application/json",
+    "application/xml",
+    "image/svg+xml",
+})
+_GZIP_MIN_BYTES = 1024
+
+
+@app.after_request
+def compress_text_responses(response):
+    """Gzip text assets and JSON so pages and API payloads transfer faster.
+
+    Media responses are streamed through ``direct_passthrough`` and are left
+    untouched so audio/video seeking keeps working.
+    """
+    if (
+        response.direct_passthrough
+        or response.status_code < 200
+        or response.status_code >= 300
+        or request.method == "HEAD"
+        or "Content-Encoding" in response.headers
+        or request.headers.get("Range")
+        or response.mimetype not in _COMPRESSIBLE_MIMETYPES
+        or "gzip" not in request.accept_encodings
+    ):
+        return response
+    payload = response.get_data()
+    if len(payload) < _GZIP_MIN_BYTES:
+        return response
+    compressed = gzip.compress(payload, compresslevel=6, mtime=0)
+    if len(compressed) >= len(payload):
+        return response
+    response.set_data(compressed)
+    response.headers["Content-Encoding"] = "gzip"
+    response.headers.add("Vary", "Accept-Encoding")
+    return response
+
+
+@app.after_request
+def cache_static_assets(response):
+    """Let the browser reuse static files instead of refetching them."""
+    if request.method != "GET" or response.status_code != 200:
+        return response
+    path = request.path
+    if not path.startswith("/static/"):
+        return response
+    if path.startswith("/static/music-stream/assets/"):
+        # Filenames contain a content hash, so they can be cached for good.
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    elif path.startswith("/static/music-stream/"):
+        response.headers["Cache-Control"] = "no-cache"
+    else:
+        response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
 
 
 @app.before_request
@@ -106,7 +174,6 @@ def _scope_allows_path(scope: str, path: str) -> bool:
     if scope == "music":
         return path in {
             "/music", "/music/stream", "/music/explore", "/music/liked",
-            "/music/explore/legacy", "/music/liked/legacy",
         } or path.startswith(("/api/music/", "/jobs/"))
     return path == f"/{scope}"
 
@@ -145,10 +212,6 @@ COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
     "anime": (
         "Anime / Animation",
         "Anime, animated shows and streaming catalogs.",
-    ),
-    "image": (
-        "Manhwa / Manga / Comics / Images",
-        "Chapters, pages and images.",
     ),
 }
 
@@ -209,7 +272,6 @@ def index():
             "music": "/music",
             "film": "/film",
             "anime": "/anime",
-            "image": "/image",
         }[APP_SCOPE])
     return render_template(
         "menu.html",
@@ -272,21 +334,8 @@ def music_stream_page():
     return send_from_directory(stream_ui, "index.html")
 
 
-@app.route("/music/explore/legacy")
-def music_explore_legacy_page():
-    """Music explorer (local library and online downloads)."""
-    return render_template("music_explore.html", has_ffmpeg=has_ffmpeg())
-
-
-@app.route("/music/liked/legacy")
-def music_liked_legacy_page():
-    """Music favorites page."""
-    return render_template("music_liked.html", has_ffmpeg=has_ffmpeg())
-
-
 @app.route("/film")
 @app.route("/anime")
-@app.route("/image")
 def coming_soon_page():
     """Menu categories that are not available yet."""
     category = request.path.strip("/")
@@ -300,6 +349,58 @@ def coming_soon_page():
         description=description,
         has_ffmpeg=has_ffmpeg(),
     )
+
+
+def _liner_launcher_spec() -> tuple[list[str], Path] | None:
+    """Return the command that opens the DowFlow Music (Liner) desktop app."""
+    if IS_FROZEN:
+        return None
+    app_dir = SOURCE_DIR / "desktop" / "liner"
+    if not (app_dir / "package.json").is_file():
+        return None
+    packaged = app_dir / "release" / "win-unpacked" / "dowflow-music.exe"
+    if packaged.is_file():
+        return [str(packaged)], app_dir
+    if not (app_dir / "dist-electron" / "main.js").is_file():
+        return None
+    if not (app_dir / "dist" / "index.html").is_file():
+        return None
+    electron_name = "electron.exe" if os.name == "nt" else "electron"
+    electron_binary = app_dir / "node_modules" / "electron" / "dist" / electron_name
+    if not electron_binary.is_file():
+        return None
+    return [str(electron_binary), str(app_dir)], app_dir
+
+
+@app.post("/api/music/open")
+def open_music_desktop_app():
+    """Open the DowFlow Music desktop app when no Electron bridge exists."""
+    spec = _liner_launcher_spec()
+    if spec is None:
+        return jsonify({
+            "success": False,
+            "error": "DowFlow Music (Liner) is not ready. Run start.bat music once to build it.",
+        }), 409
+    command, working_dir = spec
+    creation_flags = 0
+    if os.name == "nt":
+        creation_flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        )
+    try:
+        subprocess.Popen(
+            command,
+            cwd=str(working_dir),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creation_flags,
+            close_fds=True,
+        )
+    except OSError as exc:
+        log.warning("Unable to open DowFlow Music: %s", exc)
+        return jsonify({"success": False, "error": str(exc)}), 500
+    return jsonify({"success": True})
 
 
 # ─────────────────────────────  Music API  ────────────────────────────────────
@@ -345,6 +446,38 @@ def music_download():
     except DownloadPathNotConfigured:
         return jsonify({"success": False, "error": "Choose a download folder first."}), 409
 
+    # The track is already in the Music folder: never download a second copy.
+    existing = music.find_library_track(data.get("title"), data.get("artist"))
+    if existing is not None:
+        return jsonify(
+            {"success": True, "async": False, "existing": True, "track": existing}
+        )
+
+    # A click on a track that is still downloading reuses the running job.
+    title_key = None
+    if data.get("title"):
+        title_key = f"title:{music._normalize_text(str(data.get('title')))}"
+    now = time.time()
+    with _MUSIC_DOWNLOAD_LOCK:
+        expired = [
+            key
+            for key, (_, started_at) in _MUSIC_DOWNLOAD_JOBS.items()
+            if now - started_at > _MUSIC_DOWNLOAD_TTL_SECONDS
+        ]
+        for key in expired:
+            _MUSIC_DOWNLOAD_JOBS.pop(key, None)
+        for key in (url, title_key):
+            if not key:
+                continue
+            running = _MUSIC_DOWNLOAD_JOBS.get(key)
+            if running is None:
+                continue
+            running_job = get_job(running[0])
+            if running_job and running_job.get("status") in {"queued", "running"}:
+                return jsonify(
+                    {"success": True, "async": True, "job_id": running[0]}
+                )
+
     job_id = start_download_job(
         music.download_music_track,
         url,
@@ -354,6 +487,10 @@ def music_download():
         title=data.get("title"),
         artist=data.get("artist"),
     )
+    with _MUSIC_DOWNLOAD_LOCK:
+        _MUSIC_DOWNLOAD_JOBS[url] = (job_id, now)
+        if title_key:
+            _MUSIC_DOWNLOAD_JOBS[title_key] = (job_id, now)
     return jsonify({"success": True, "async": True, "job_id": job_id})
 
 
@@ -368,6 +505,31 @@ def music_library():
     except DownloadPathNotConfigured:
         return jsonify({"success": False, "error": "Choose a download folder first."}), 409
     return jsonify({"success": True, "items": items})
+
+
+@app.get("/api/music/folder")
+def music_folder_location():
+    """Expose the absolute Music folder so the desktop player can sync it."""
+    if music is None:
+        abort(404)
+    try:
+        folder = music._music_folder()
+        folder.mkdir(parents=True, exist_ok=True)
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
+    return jsonify({"success": True, "path": str(folder)})
+
+
+@app.post("/api/music/covers")
+def music_covers_backfill():
+    """Write the cover art missing for tracks already in the Music folder."""
+    if music is None:
+        abort(404)
+    try:
+        created = music.ensure_covers()
+    except DownloadPathNotConfigured:
+        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
+    return jsonify({"success": True, "created": created})
 
 
 @app.get("/api/music/favorites")
@@ -594,7 +756,7 @@ def start_export():
         return jsonify({"success": False, "error": "Export is restricted to the local computer."}), 403
     data = request.get_json(silent=True) or {}
     scope = str(data.get("scope") or "")
-    allowed_scopes = {"all", "video", "music", "film", "anime", "image"}
+    allowed_scopes = {"all", "video", "music", "film", "anime"}
     if scope not in allowed_scopes:
         return jsonify({"success": False, "error": "Unsupported export scope."}), 400
 

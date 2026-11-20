@@ -248,7 +248,7 @@
     "sign_in_to_account": "Hesabına giriş yap",
     "auth_title_login": "Senin müziğin, senin tarzın",
     "auth_subtitle_login": "Giriş yap ve kaldığın yerden devam et.",
-    "auth_title_register": "Liner'a katıl",
+    "auth_title_register": "DowFlow'a katıl",
     "auth_subtitle_register": "Bir hesap oluştur ve kişisel kitaplığını kurmaya başla.",
     "profile_setup_title": "Profilini ayarla",
     "profile_setup_subtitle": "Benzersiz kullanıcı adını ve görünen adını seç.",
@@ -320,7 +320,7 @@
       "email_invalid": "Geçerli bir e-posta adresi gir.",
       "password_min_8": "Şifre en az 8 karakter içermeli.",
       "server_unavailable": "Sunucuya ulaşılamıyor. Lütfen bağlantını kontrol et.",
-      "server_error": "Liner sunucularında şu anda sorun var. Lütfen birkaç dakika sonra tekrar dene.",
+      "server_error": "DowFlow sunucularında şu anda sorun var. Lütfen birkaç dakika sonra tekrar dene.",
       "invalid_credentials": "E-posta veya şifre hatalı.",
       "email_already_used": "Bu e-posta zaten kullanılıyor.",
       "username_invalid": "Kullanıcı adı 3-30 küçük harf, rakam veya alt çizgiden oluşmalı.",
@@ -493,9 +493,9 @@
     "shortcuts": {
       "description": "Sistem genelindeki ve oynatıcıdaki klavye kısayollarını özelleştir.",
       "global_section": "Genel Kısayollar (Sistem genelinde)",
-      "global_desc": "Liner simge durumundayken veya odakta değilken bile bilgisayarındaki her uygulamadan çalışır.",
+      "global_desc": "DowFlow simge durumundayken veya odakta değilken bile bilgisayarındaki her uygulamadan çalışır.",
       "main_app_section": "Ana Uygulama",
-      "main_app_desc": "Ana Liner penceresi açık ve odaktayken etkindir.",
+      "main_app_desc": "Ana DowFlow penceresi açık ve odaktayken etkindir.",
       "miniplayer_section": "Mini Oynatıcı Modu",
       "miniplayer_desc": "Masaüstü katmanındaki mini oynatıcı odaktayken etkindir.",
       "toggle_overlay": "Mini oynatıcı katmanını aç/kapat",
@@ -569,7 +569,7 @@
       },
       "auto_show_on_minimize": {
         "title": "Simge durumunda otomatik göster",
-        "description": "Liner simge durumuna küçültüldüğünde katmanı otomatik gösterir."
+        "description": "DowFlow simge durumuna küçültüldüğünde katmanı otomatik gösterir."
       },
       "always_on_top": {
         "title": "Her zaman üstte",
@@ -651,8 +651,8 @@
       "title": "Önbellek ve Depolama",
       "description": "Depolama dağılımı, yerel önbellek istatistikleri ve medya dosyaları.",
       "usage_title": "Depolama Kullanımı",
-      "device_usage": "Liner şu anda {size} yerel depolama alanı kullanıyor.",
-      "device_usage_raw": "Liner şu anda {size} yerel depolama alanı kullanıyor.",
+      "device_usage": "DowFlow şu anda {size} yerel depolama alanı kullanıyor.",
+      "device_usage_raw": "DowFlow şu anda {size} yerel depolama alanı kullanıyor.",
       "audio_cache_limit": "Önbellek boyutu sınırı",
       "audio_cache_limit_desc": "Dolduğunda eski dosyalar ve medya otomatik olarak silinir",
       "cache_limit": "Önbellek boyutu sınırı",
@@ -668,7 +668,7 @@
       "empty_storage": "Önbellek tertemiz!",
       "cloud_disclaimer": "Tüm medya, kapaklar ve parçalar bulutta kalır ve çalındığında sorunsuzca yeniden indirilir.",
       "clearing_title": "Önbellek temizleniyor...",
-      "clearing_subtitle": "Liner önbelleği temizlerken lütfen bu pencereyi açık tut.",
+      "clearing_subtitle": "DowFlow önbelleği temizlerken lütfen bu pencereyi açık tut.",
       "cleared_title": "Depolama Temizlendi",
       "cleared_subtitle": "Önbelleğin temizlendi. Yeni medya otomatik olarak yayınlanıp önbelleğe alınacak.",
       "done_button": "Tamam",
@@ -680,7 +680,7 @@
         "local": "Yerel Müzik"
       },
       "local_confirm_title": "Yerel müziğin de silinsin mi?",
-      "local_confirm_desc": "Yerel Müzik, içe aktardığın kitaplığındır, önbellek değil. {tracks} ({size}) kapaklarıyla birlikte Liner'dan silinecek. Orijinal dosyaların yerinde kalır.",
+      "local_confirm_desc": "Yerel Müzik, içe aktardığın kitaplığındır, önbellek değil. {tracks} ({size}) kapaklarıyla birlikte DowFlow'dan silinecek. Orijinal dosyaların yerinde kalır.",
       "local_confirm_button": "Yerel müziği sil"
     },
     "theme": {
@@ -721,7 +721,7 @@
       "title": "Profil",
       "signed_in_as": "Giriş yapılan hesap",
       "not_signed_in": "Şu anda tanınan bir oturumda giriş yapılmamış.",
-      "sign_in": "Liner'a giriş yap",
+      "sign_in": "DowFlow'a giriş yap",
       "sign_out": "Çıkış yap",
       "sign_out_confirm": "Çıkış yapmak istediğine emin misin?",
       "edit_profile": "Profili düzenle",
@@ -732,7 +732,7 @@
       "stat_active": "Etkin",
       "no_bio": "Henüz biyografi yok",
       "details_section": "Profil Ayrıntıları",
-      "details_subtitle": "Liner'daki herkese açık görünümünü özelleştir",
+      "details_subtitle": "DowFlow'daki herkese açık görünümünü özelleştir",
       "username_label": "Kullanıcı adı",
       "username_hint": "3-30 küçük karakter (a-z, 0-9, _). Benzersiz olmalı.",
       "username_invalid": "Kullanıcı adı 3-30 küçük harf, rakam veya alt çizgiden oluşmalı.",
@@ -749,7 +749,7 @@
       "saved_success": "Profil güncellendi",
       "save_failed": "Profil güncellenemedi",
       "privacy_section": "Gizlilik ve Sosyal",
-      "privacy_subtitle": "Liner'daki görünürlüğünü ve sosyal varlığını kontrol et",
+      "privacy_subtitle": "DowFlow'daki görünürlüğünü ve sosyal varlığını kontrol et",
       "public_profile": {
         "title": "Herkese açık profil",
         "description": "Başkalarının profilini aramasına ve herkese açık bilgilerini görmesine izin ver."
@@ -881,7 +881,7 @@
   },
   "error_screen": {
     "title": "Bir sorun oluştu",
-    "subtitle": "Liner'da beklenmeyen bir hata oluştu. Uygulamayı yeniden yükleyebilir veya tekrar deneyebilirsin.",
+    "subtitle": "DowFlow'da beklenmeyen bir hata oluştu. Uygulamayı yeniden yükleyebilir veya tekrar deneyebilirsin.",
     "reload": "Uygulamayı yeniden yükle",
     "try_again": "Tekrar dene",
     "go_home": "Ana sayfaya git",
@@ -908,13 +908,13 @@
   },
   "connectivity": {
     "wall_title": "Bağlantı kurulamadı",
-    "wall_subtitle": "Liner sunucularına ulaşamıyor. Müziğin ve kitaplığın güvende.",
-    "wall_title_server": "Liner sunucularında sorun var",
+    "wall_subtitle": "DowFlow sunucularına ulaşamıyor. Müziğin ve kitaplığın güvende.",
+    "wall_title_server": "DowFlow sunucularında sorun var",
     "wall_subtitle_server": "Bağlantın sorunsuz, ancak sunucu bir hatayla yanıt verdi. Müziğin ve kitaplığın güvende, birkaç dakika sonra tekrar dene.",
     "steps_title": "Denemeye değer hızlı çözümler",
     "step_net": "Wi-Fi'nin veya kablonun bağlı olduğundan ve sayfaların tarayıcıda açıldığından emin ol.",
     "step_vpn": "VPN, proxy veya DNS filtrelerini bir dakikalığına durdur, çoğu zaman uygulamayı engellerler.",
-    "step_firewall": "Liner'a güvenlik duvarında ve antivirüs ağ korumalarında izin ver.",
+    "step_firewall": "DowFlow'a güvenlik duvarında ve antivirüs ağ korumalarında izin ver.",
     "step_router": "Modemi yeniden başlat, ardından aşağıdaki Tekrar dene düğmesine bas.",
     "retry": "Tekrar dene",
     "retrying": "Denetleniyor…",

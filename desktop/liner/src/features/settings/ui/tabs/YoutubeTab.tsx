@@ -69,7 +69,7 @@ export function YoutubeTab({ searchQuery }: { searchQuery?: string }) {
           title={t("settings.youtube.sync_library.title") || "Sync library"}
           description={
             t("settings.youtube.sync_library.description") ||
-            "Show playlists from your YouTube account in the library next to Liner playlists."
+            "Show playlists from your YouTube account in the library next to DowFlow playlists."
           }
           icon={<Playlist2Fill size={20} />}
           titleKey="settings.youtube.sync_library.title"
@@ -86,11 +86,11 @@ export function YoutubeTab({ searchQuery }: { searchQuery?: string }) {
         <SettingRow
           title={
             t("settings.youtube.sign_out_with_liner.title") ||
-            "Sign out with Liner"
+            "Sign out with DowFlow"
           }
           description={
             t("settings.youtube.sign_out_with_liner.description") ||
-            "Also sign out of YouTube when you sign out of your Liner account."
+            "Also sign out of YouTube when you sign out of your DowFlow account."
           }
           icon={<ExitFill size={20} />}
           titleKey="settings.youtube.sign_out_with_liner.title"

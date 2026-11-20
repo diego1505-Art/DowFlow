@@ -254,7 +254,7 @@
     "sign_in_to_account": "Entre na sua conta",
     "auth_title_login": "Sua música, do seu jeito",
     "auth_subtitle_login": "Entre e continue exatamente de onde parou.",
-    "auth_title_register": "Junte-se ao Liner",
+    "auth_title_register": "Junte-se ao DowFlow",
     "auth_subtitle_register": "Crie uma conta e comece a montar a sua biblioteca pessoal.",
     "profile_setup_title": "Configure seu perfil",
     "profile_setup_subtitle": "Escolha seu handle único e seu nome de exibição.",
@@ -326,7 +326,7 @@
       "email_invalid": "Informe um endereço de e-mail válido.",
       "password_min_8": "A senha deve conter pelo menos 8 caracteres.",
       "server_unavailable": "Não foi possível alcançar o servidor. Verifique sua conexão.",
-      "server_error": "Os servidores do Liner estão instáveis agora. Tente novamente em alguns minutos.",
+      "server_error": "Os servidores do DowFlow estão instáveis agora. Tente novamente em alguns minutos.",
       "invalid_credentials": "E-mail ou senha incorretos.",
       "email_already_used": "Este e-mail já está em uso.",
       "username_invalid": "O nome de usuário deve ter de 3 a 30 letras minúsculas, números ou sublinhados.",
@@ -506,9 +506,9 @@
     "shortcuts": {
       "description": "Personalize os atalhos globais do sistema e os do player.",
       "global_section": "Atalhos globais (em todo o sistema)",
-      "global_desc": "Funcionam a partir de qualquer aplicativo do seu computador, mesmo com o Liner minimizado ou fora de foco.",
+      "global_desc": "Funcionam a partir de qualquer aplicativo do seu computador, mesmo com o DowFlow minimizado ou fora de foco.",
       "main_app_section": "Aplicativo principal",
-      "main_app_desc": "Ativos quando a janela principal do Liner estiver aberta e em foco.",
+      "main_app_desc": "Ativos quando a janela principal do DowFlow estiver aberta e em foco.",
       "miniplayer_section": "Modo miniplayer",
       "miniplayer_desc": "Ativos quando o miniplayer flutuante do desktop estiver em foco.",
       "toggle_overlay": "Alternar miniplayer flutuante",
@@ -582,7 +582,7 @@
       },
       "auto_show_on_minimize": {
         "title": "Mostrar automaticamente ao minimizar",
-        "description": "Mostra o overlay automaticamente quando o Liner é minimizado."
+        "description": "Mostra o overlay automaticamente quando o DowFlow é minimizado."
       },
       "always_on_top": {
         "title": "Sempre no topo",
@@ -604,7 +604,7 @@
         "song": "Título da música",
         "artist_song": "Artista - Música",
         "song_artist": "Música - Artista",
-        "app": "Liner (nome do app)"
+        "app": "DowFlow (nome do app)"
       },
       "show_timeline": {
         "title": "Linha do tempo da reprodução",
@@ -623,11 +623,11 @@
         "description": "Mantém o status visível no Discord, com um indicador de pausa quando a música estiver pausada."
       },
       "show_button": {
-        "title": "Botão \"Ouvir na Liner\"",
-        "description": "Adiciona um botão interativo com link para a música na Liner."
+        "title": "Botão \"Ouvir na DowFlow\"",
+        "description": "Adiciona um botão interativo com link para a música na DowFlow."
       },
       "show_download_button": {
-        "title": "Botão \"Baixar a Liner\"",
+        "title": "Botão \"Baixar a DowFlow\"",
         "description": "Adiciona um botão interativo com link para a tryliner.fun para baixar o app."
       },
       "status": {
@@ -714,8 +714,8 @@
       "title": "Cache e armazenamento",
       "description": "Detalhamento do armazenamento, análise do cache local e arquivos de mídia.",
       "usage_title": "Uso de armazenamento",
-      "device_usage": "O Liner está usando {size} do armazenamento local.",
-      "device_usage_raw": "O Liner está usando {size} do armazenamento local.",
+      "device_usage": "O DowFlow está usando {size} do armazenamento local.",
+      "device_usage_raw": "O DowFlow está usando {size} do armazenamento local.",
       "audio_cache_limit": "Limite do tamanho do cache",
       "audio_cache_limit_desc": "Arquivos e mídias antigos são removidos automaticamente quando cheio",
       "cache_limit": "Limite do tamanho do cache",
@@ -731,7 +731,7 @@
       "empty_storage": "O cache está limpinho!",
       "cloud_disclaimer": "Todas as mídias, capas e faixas ficam na nuvem e serão baixadas novamente de forma transparente ao tocar.",
       "clearing_title": "Limpando cache...",
-      "clearing_subtitle": "Mantenha esta janela aberta enquanto o Liner limpa o seu cache.",
+      "clearing_subtitle": "Mantenha esta janela aberta enquanto o DowFlow limpa o seu cache.",
       "cleared_title": "Armazenamento limpo",
       "cleared_subtitle": "O seu cache foi completamente limpo. Novas mídias serão transmitidas e armazenadas em cache automaticamente.",
       "done_button": "Concluir",
@@ -743,7 +743,7 @@
         "local": "Música local"
       },
       "local_confirm_title": "Apagar também a sua música local?",
-      "local_confirm_desc": "A música local é a sua biblioteca importada, não cache. {tracks} ({size}) serão apagadas do Liner, junto com as capas. Os seus arquivos originais continuam onde estão.",
+      "local_confirm_desc": "A música local é a sua biblioteca importada, não cache. {tracks} ({size}) serão apagadas do DowFlow, junto com as capas. Os seus arquivos originais continuam onde estão.",
       "local_confirm_button": "Apagar música local"
     },
     "theme": {
@@ -784,7 +784,7 @@
       "title": "Perfil",
       "signed_in_as": "Conectado como",
       "not_signed_in": "No momento não conectado a uma sessão reconhecida.",
-      "sign_in": "Entrar no Liner",
+      "sign_in": "Entrar no DowFlow",
       "sign_out": "Sair",
       "sign_out_confirm": "Tem certeza de que deseja sair?",
       "edit_profile": "Editar perfil",
@@ -795,7 +795,7 @@
       "stat_active": "Ativo",
       "no_bio": "Ainda sem bio",
       "details_section": "Detalhes do perfil",
-      "details_subtitle": "Personalize a sua aparência pública em todo o Liner",
+      "details_subtitle": "Personalize a sua aparência pública em todo o DowFlow",
       "username_label": "Nome de usuário",
       "username_hint": "3 a 30 caracteres minúsculos (a-z, 0-9, _). Deve ser único.",
       "username_invalid": "O nome de usuário deve ter de 3 a 30 letras minúsculas, números ou sublinhados.",
@@ -812,7 +812,7 @@
       "saved_success": "Perfil atualizado com sucesso",
       "save_failed": "Falha ao atualizar o perfil",
       "privacy_section": "Privacidade e social",
-      "privacy_subtitle": "Controle a sua visibilidade e presença social em todo o Liner",
+      "privacy_subtitle": "Controle a sua visibilidade e presença social em todo o DowFlow",
       "public_profile": {
         "title": "Perfil público",
         "description": "Permita que outras pessoas encontrem o seu perfil e vejam as suas informações públicas."
@@ -946,7 +946,7 @@
   },
   "error_screen": {
     "title": "Algo deu errado",
-    "subtitle": "Ocorreu um erro inesperado no Liner. Você pode recarregar o app ou tentar novamente.",
+    "subtitle": "Ocorreu um erro inesperado no DowFlow. Você pode recarregar o app ou tentar novamente.",
     "reload": "Recarregar o app",
     "try_again": "Tentar novamente",
     "go_home": "Ir para o início",
@@ -973,13 +973,13 @@
   },
   "connectivity": {
     "wall_title": "Falha na conexão",
-    "wall_subtitle": "O Liner não consegue alcançar os seus servidores. A sua música e a sua biblioteca estão seguras.",
-    "wall_title_server": "Os servidores da Liner estão com problemas",
+    "wall_subtitle": "O DowFlow não consegue alcançar os seus servidores. A sua música e a sua biblioteca estão seguras.",
+    "wall_title_server": "Os servidores da DowFlow estão com problemas",
     "wall_subtitle_server": "Sua conexão está boa, o servidor respondeu com um erro. Sua música e biblioteca estão seguras; tente novamente em alguns minutos.",
     "steps_title": "Correções rápidas que vale tentar",
     "step_net": "Verifique se o Wi-Fi ou o cabo está conectado e se as páginas abrem no navegador.",
     "step_vpn": "Pause a VPN, o proxy ou filtros de DNS por um minuto — eles costumam bloquear o app.",
-    "step_firewall": "Permita o Liner no firewall e nas proteções de rede do antivírus.",
+    "step_firewall": "Permita o DowFlow no firewall e nas proteções de rede do antivírus.",
     "step_router": "Reinicie o roteador e pressione Tentar novamente abaixo.",
     "retry": "Tentar novamente",
     "retrying": "Verificando…",

@@ -113,7 +113,7 @@ export function SettingsSidebar<T extends string>({
         </div>
       </nav>
 
-      <SettingsUserFooter onClose={onClose} />
+      <SettingsUserFooter />
     </aside>
   );
 }

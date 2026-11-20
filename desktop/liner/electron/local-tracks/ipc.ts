@@ -1,10 +1,16 @@
 import path from "node:path";
 import { BrowserWindow, app, dialog } from "electron";
 import { handleTrusted } from "../ipc-guard.js";
+import {
+  findDowflowMusicFolder,
+  requestDowflowCoverBackfill,
+} from "../dowflow-backend.js";
 import { LocalTrackLibrary } from "./library.js";
 import { handleLocalTrackScheme } from "./protocol.js";
 import type { SavedTrackLibrary } from "../saved-tracks/library.js";
 import { LOCAL_AUDIO_EXTENSIONS } from "./types.js";
+
+const DOWFLOW_SYNC_INTERVAL_MS = 10_000;
 
 const stringList = (value: unknown): string[] =>
   Array.isArray(value)
@@ -45,4 +51,34 @@ export function setupLocalTracks(saved: SavedTrackLibrary) {
   handleTrusted("local-tracks:remove-all", () => library.removeAll());
 
   handleTrusted("local-tracks:usage", () => library.usage());
+
+  // Keep DowFlow's downloaded tracks in sync with "On this device".
+  let syncing = false;
+  let coversRequested = false;
+  const syncDowflowMusic = async () => {
+    if (syncing) return;
+    syncing = true;
+    try {
+      const folder = await findDowflowMusicFolder();
+      if (!folder) return;
+      if (!coversRequested) {
+        coversRequested = true;
+        // Let DowFlow fill in the artwork missing beside older tracks once.
+        void requestDowflowCoverBackfill();
+      }
+      const result = await library.importExternalFolder(folder);
+      if (result.added.length > 0) {
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) win.webContents.send("local-tracks:changed");
+        }
+      }
+    } catch {
+      // DowFlow may be closed; the next tick retries.
+    } finally {
+      syncing = false;
+    }
+  };
+  const timer = setInterval(() => void syncDowflowMusic(), DOWFLOW_SYNC_INTERVAL_MS);
+  void syncDowflowMusic();
+  app.on("before-quit", () => clearInterval(timer));
 }

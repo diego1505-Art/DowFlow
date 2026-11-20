@@ -119,7 +119,7 @@ export function DiscordTab({ searchQuery }: { searchQuery?: string }) {
                   },
                   {
                     value: "app",
-                    label: t("settings.discord.status_display.app") || "Liner",
+                    label: t("settings.discord.status_display.app") || "DowFlow",
                   },
                 ]}
               />
@@ -218,15 +218,15 @@ export function DiscordTab({ searchQuery }: { searchQuery?: string }) {
       <SettingSection
         label={t("settings.discord.section_buttons") || "Profile buttons"}
       >
-        {/* Listen on Liner button */}
+        {/* Listen on DowFlow button */}
         <SettingRow
           title={
             t("settings.discord.show_button.title") ||
-            "“Listen on Liner” button"
+            "“Listen on DowFlow” button"
           }
           description={
             t("settings.discord.show_button.description") ||
-            "Add an interactive button linking to the song on Liner."
+            "Add an interactive button linking to the song on DowFlow."
           }
           titleKey="settings.discord.show_button.title"
           descKey="settings.discord.show_button.description"
@@ -240,11 +240,11 @@ export function DiscordTab({ searchQuery }: { searchQuery?: string }) {
           }
         />
 
-        {/* Download Liner button */}
+        {/* Download DowFlow button */}
         <SettingRow
           title={
             t("settings.discord.show_download_button.title") ||
-            "“Download Liner” button"
+            "“Download DowFlow” button"
           }
           description={
             t("settings.discord.show_download_button.description") ||

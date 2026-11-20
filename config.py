@@ -250,7 +250,7 @@ def get_app_scope() -> str:
         scope = json.loads(APP_SCOPE_FILE.read_text(encoding="utf-8")).get("scope")
     except (OSError, ValueError, AttributeError):
         return "all"
-    return scope if scope in {"all", "video", "music", "film", "anime", "image"} else "all"
+    return scope if scope in {"all", "video", "music", "film", "anime"} else "all"
 
 
 APP_SCOPE = get_app_scope()

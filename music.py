@@ -304,11 +304,18 @@ def fetch_cover_url_cached(artist: str | None, title: str | None) -> str | None:
     return url
 
 
+def _normalize_text(value: str) -> str:
+    """Fold a title so "poster boy" and "poster-boy" compare equal."""
+    folded = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", " ", folded.lower()).strip()
+
+
 def _save_cover_image(media_path: str, cover_url: str | None, video_id: str | None) -> str | None:
     """Save the cover beside the audio file, falling back to a YouTube thumbnail."""
     candidates = [cover_url] if cover_url else []
     if video_id:
         candidates.append(f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg")
+        candidates.append(f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
         candidates.append(_thumb_for(video_id))
 
     target = os.path.splitext(media_path)[0] + ".jpg"
@@ -371,6 +378,74 @@ def download_music_track(
             result["cover_path"] = cover_source
 
     return result
+
+
+def find_library_track(title: str | None, artist: str | None = None) -> dict[str, Any] | None:
+    """Return the track already stored in the Music folder, if there is one.
+
+    Used to avoid downloading the same song twice when it is requested again.
+    """
+    wanted_title = _normalize_text(title or "")
+    if not wanted_title:
+        return None
+    wanted_artist = _normalize_text(artist or "")
+    folder = _music_folder()
+    try:
+        entries = list(folder.iterdir())
+    except OSError:
+        return None
+    for path in entries:
+        if not path.is_file() or path.suffix.lower() not in AUDIO_EXTENSIONS:
+            continue
+        file_artist, file_title, _ = _library_track_metadata(path.stem)
+        if _normalize_text(file_title or path.stem) != wanted_title:
+            continue
+        if wanted_artist:
+            normalized_file_artist = _normalize_text(file_artist)
+            if (
+                normalized_file_artist
+                and wanted_artist not in normalized_file_artist
+                and normalized_file_artist not in wanted_artist
+            ):
+                continue
+        cover_name = None
+        for ext in COVER_EXTENSIONS:
+            candidate = folder / f"{path.stem}{ext}"
+            if candidate.is_file():
+                cover_name = candidate.name
+                break
+        return {
+            "filename": path.name,
+            "title": file_title or path.stem,
+            "artist": file_artist,
+            "audio_url": f"/media/{MUSIC_SUBFOLDER}/{quote(path.name)}",
+            "cover_url": (
+                f"/media/{MUSIC_SUBFOLDER}/{quote(cover_name)}" if cover_name else None
+            ),
+        }
+    return None
+
+
+def ensure_covers(limit: int = 60) -> int:
+    """Write the missing cover art for tracks already in the Music folder."""
+    folder = _music_folder()
+    try:
+        entries = sorted(folder.iterdir())
+    except OSError:
+        return 0
+    created = 0
+    for path in entries:
+        if created >= limit:
+            break
+        if not path.is_file() or path.suffix.lower() not in AUDIO_EXTENSIONS:
+            continue
+        if any((folder / f"{path.stem}{ext}").is_file() for ext in COVER_EXTENSIONS):
+            continue
+        artist, title, _ = _library_track_metadata(path.stem)
+        cover_url = fetch_cover_url(artist or None, title or path.stem)
+        if _save_cover_image(str(path), cover_url, None):
+            created += 1
+    return created
 
 
 # ─────────────────────────────────────────────────────────────────────────────

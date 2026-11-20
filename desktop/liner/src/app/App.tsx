@@ -12,7 +12,6 @@ import { useAppIconSync } from "@/features/player";
 import { I18nProvider } from "@/languages";
 import { AuthLock } from "@/features/auth";
 import { CoverSwRegistrar } from "@/features/covers";
-import { usePresenceSync } from "@/shared/presence";
 import { useTouchBarSync } from "@/features/touchbar";
 import { useOverlaySync } from "@/features/overlay";
 import { useDiscordSync } from "@/features/discord";
@@ -25,11 +24,6 @@ import "./globals.css";
 
 function AppIconSync() {
   useAppIconSync();
-  return null;
-}
-
-function PresenceSync() {
-  usePresenceSync();
   return null;
 }
 
@@ -68,7 +62,6 @@ export default function App() {
         <GlobalTooltip />
         <ThemeSync />
         <AppIconSync />
-        <PresenceSync />
         <TouchBarSync />
         <OverlaySync />
         <DiscordSync />

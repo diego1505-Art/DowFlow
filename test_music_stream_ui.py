@@ -8,16 +8,6 @@ import app as app_module
 
 class MusicStreamUiRouteTests(unittest.TestCase):
     MUSIC_ROUTES = ("/music", "/music/stream", "/music/explore", "/music/liked")
-    LEGACY_ROUTES = {
-        "/music/explore/legacy": (
-            b'data-page="explore"', b"DowFlow Music - Explore",
-            b'href="/music/explore/legacy"', b'href="/music/liked/legacy"',
-        ),
-        "/music/liked/legacy": (
-            b'data-page="liked"', b"DowFlow Music - Favorites",
-            b'href="/music/explore/legacy"', b'href="/music/liked/legacy"',
-        ),
-    }
 
     def setUp(self):
         app_module.app.config.update(TESTING=True)
@@ -60,24 +50,23 @@ class MusicStreamUiRouteTests(unittest.TestCase):
                 finally:
                     response.close()
 
-    def test_legacy_music_routes_render_their_historical_templates(self):
-        for route, markers in self.LEGACY_ROUTES.items():
+    def test_legacy_music_routes_are_removed(self):
+        for route in ("/music/explore/legacy", "/music/liked/legacy"):
             with self.subTest(route=route):
                 response = self.client.get(route)
                 try:
-                    self.assertEqual(response.status_code, 200)
-                    for marker in markers:
-                        self.assertIn(marker, response.data)
+                    self.assertEqual(response.status_code, 404)
                 finally:
                     response.close()
 
-    def test_music_export_scope_includes_react_and_legacy_routes(self):
-        allowed_routes = self.MUSIC_ROUTES + tuple(self.LEGACY_ROUTES)
-        for route in allowed_routes:
+    def test_music_export_scope_allows_only_react_routes(self):
+        for route in self.MUSIC_ROUTES:
             with self.subTest(route=route):
                 self.assertTrue(app_module._scope_allows_path("music", route))
         self.assertTrue(app_module._scope_allows_path("music", "/jobs/job-123"))
         self.assertFalse(app_module._scope_allows_path("music", "/jobs"))
+        self.assertFalse(app_module._scope_allows_path("music", "/music/explore/legacy"))
+        self.assertFalse(app_module._scope_allows_path("music", "/music/liked/legacy"))
         self.assertFalse(app_module._scope_allows_path("music", "/music/not-a-route"))
         self.assertFalse(app_module._scope_allows_path("music", "/history"))
 

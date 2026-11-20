@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LuRadio,
   LuStepForward,
@@ -8,6 +8,7 @@ import {
   LuTrash2,
   LuFolderPlus,
   LuEraser,
+  LuDownload,
 } from "react-icons/lu";
 import { ShareForwardLine } from "@mingcute/react";
 import type { DropdownMenuItem } from "@/shared/ui/DropdownMenu";
@@ -21,6 +22,8 @@ import {
 import { useTranslation } from "@/languages";
 import { showToast } from "@/shared/ui";
 import { buildShareUrl } from "@/shared/utils/share";
+import { toVideoId } from "@/shared/youtube";
+import { findYoutubeStandIn } from "../engine/youtubeStandIn";
 import { isLocalTrackId } from "@/shared/media/local";
 import { useIsTrackCached } from "@/features/library/cached/hooks/useIsTrackCached";
 import { removeTrackFromCache } from "@/shared/utils/cacheManager";
@@ -32,6 +35,7 @@ const CLOUD_ONLY_ITEMS = new Set([
   "add-to-playlist",
   "remove-from-playlist",
   "share",
+  "download-audio",
 ]);
 
 export interface SongMenuContext {
@@ -92,6 +96,100 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
     toggleLike(id);
   }, [id, toggleLike]);
 
+  const [downloadJob, setDownloadJob] = useState<{
+    jobId: string;
+    percent: number;
+  } | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current !== null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopPolling, [stopPolling]);
+
+  const handleDownload = useCallback(async () => {
+    if (!id || downloadJob) return;
+    const bridge = typeof window !== "undefined" ? window.linerElectron : undefined;
+    if (!bridge?.downloadMusic) {
+      showToast(t("common.download"), "error", {
+        description: "Open the DowFlow app to download this track.",
+      });
+      return;
+    }
+    try {
+      const videoId =
+        toVideoId(id) ??
+        (await findYoutubeStandIn({
+          id,
+          title,
+          artists,
+          durationMs: durationMs ?? 0,
+        }));
+      if (!videoId) {
+        showToast(t("common.download"), "error", {
+          description: "No YouTube link found for this track.",
+        });
+        return;
+      }
+      const result = await bridge.downloadMusic({
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        title,
+        artist: artists,
+      });
+      if (!result?.success) {
+        showToast(t("common.download"), "error", {
+          description: result?.error || "Download failed.",
+        });
+        return;
+      }
+      // DowFlow already has this track: do not download a second copy.
+      if (result.existing || !result.jobId) {
+        showToast(t("common.download"), "checkmark", {
+          description: artists ? `${title} — ${artists}` : title,
+        });
+        return;
+      }
+      const jobId = result.jobId;
+      setDownloadJob({ jobId, percent: 0 });
+      stopPolling();
+      pollRef.current = setInterval(() => {
+        if (typeof bridge.downloadMusicStatus !== "function") return;
+        void bridge
+          .downloadMusicStatus(jobId)
+          .catch(() => null)
+          .then((state) => {
+            if (!state) return;
+            if (state.status === "queued" || state.status === "running") {
+              setDownloadJob({
+                jobId,
+                percent: Math.min(99, Math.max(0, state.progress ?? 0)),
+              });
+              return;
+            }
+            stopPolling();
+            setDownloadJob(null);
+            if (state.status === "failed") {
+              showToast(t("common.download"), "error", {
+                description: state.error || "Download failed.",
+              });
+            } else {
+              showToast(t("common.download"), "checkmark", {
+                description: artists ? `${title} — ${artists}` : title,
+              });
+            }
+          });
+      }, 1200);
+    } catch (error) {
+      showToast(t("common.download"), "error", {
+        description: error instanceof Error ? error.message : "Download failed.",
+      });
+    }
+  }, [artists, downloadJob, durationMs, id, stopPolling, title, t]);
+
   const handleShare = useCallback(() => {
     if (!id) return;
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -103,6 +201,12 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
       });
     }
   }, [id, searchType, title, artists, t]);
+
+  const downloading = downloadJob !== null;
+  const downloadPercent = Math.round(downloadJob?.percent ?? 0);
+  const downloadLabel = downloading
+    ? `${t("common.downloading")} ${downloadPercent} %`
+    : t("common.download");
 
   const buildMenu = useCallback((): DropdownMenuItem[] => {
     const isTrack = searchType === "track" || !searchType;
@@ -173,6 +277,14 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
               />
             ),
             onClick: handleLike,
+          },
+          {
+            id: "download-audio",
+            label: downloadLabel,
+            icon: <LuDownload size={15} />,
+            progress: downloading ? downloadPercent : undefined,
+            keepOpen: true,
+            onClick: () => void handleDownload(),
           },
           {
             id: "share",
@@ -283,6 +395,14 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
           },
         },
         {
+          id: "download-audio",
+          label: downloadLabel,
+          icon: <LuDownload size={15} />,
+          progress: downloading ? downloadPercent : undefined,
+          keepOpen: true,
+          onClick: () => void handleDownload(),
+        },
+        {
           id: "share",
           label: t("common.share"),
           icon: <ShareForwardLine size={15} />,
@@ -340,7 +460,11 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
     playlistTitle,
     onRemoveFromQueue,
     liked,
+    downloadLabel,
+    downloading,
+    downloadPercent,
     handleLike,
+    handleDownload,
     handleShare,
     playlistsData,
     t,

@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 from config import SUBPROCESS_CREATION_FLAGS
 
-EXPORT_SCOPES = {"all", "video", "music", "film", "anime", "image"}
+EXPORT_SCOPES = {"all", "video", "music", "film", "anime"}
 _INVALID_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _WINDOWS_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 

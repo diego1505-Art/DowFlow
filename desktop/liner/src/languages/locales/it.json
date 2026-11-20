@@ -248,7 +248,7 @@
     "sign_in_to_account": "Accedi al tuo account",
     "auth_title_login": "La tua musica, a modo tuo",
     "auth_subtitle_login": "Accedi e riprendi da dove avevi lasciato.",
-    "auth_title_register": "Unisciti a Liner",
+    "auth_title_register": "Unisciti a DowFlow",
     "auth_subtitle_register": "Crea un account e inizia a costruire la tua libreria personale.",
     "profile_setup_title": "Configura il tuo profilo",
     "profile_setup_subtitle": "Scegli il tuo handle univoco e il nome visualizzato.",
@@ -320,7 +320,7 @@
       "email_invalid": "Inserisci un indirizzo email valido.",
       "password_min_8": "La password deve contenere almeno 8 caratteri.",
       "server_unavailable": "Impossibile raggiungere il server. Controlla la connessione.",
-      "server_error": "I server di Liner hanno dei problemi in questo momento. Riprova tra qualche minuto.",
+      "server_error": "I server di DowFlow hanno dei problemi in questo momento. Riprova tra qualche minuto.",
       "invalid_credentials": "Email o password non corretti.",
       "email_already_used": "Questa email è già in uso.",
       "username_invalid": "Il nome utente deve contenere 3-30 lettere minuscole, numeri o trattini bassi.",
@@ -493,9 +493,9 @@
     "shortcuts": {
       "description": "Personalizza le scorciatoie da tastiera globali e del player.",
       "global_section": "Scorciatoie globali (di sistema)",
-      "global_desc": "Funzionano da qualsiasi applicazione sul tuo computer, anche quando Liner è ridotto a icona o non è in primo piano.",
+      "global_desc": "Funzionano da qualsiasi applicazione sul tuo computer, anche quando DowFlow è ridotto a icona o non è in primo piano.",
       "main_app_section": "Applicazione principale",
-      "main_app_desc": "Attive quando la finestra principale di Liner è aperta e in primo piano.",
+      "main_app_desc": "Attive quando la finestra principale di DowFlow è aperta e in primo piano.",
       "miniplayer_section": "Modalità miniplayer",
       "miniplayer_desc": "Attive quando il miniplayer in overlay sul desktop è in primo piano.",
       "toggle_overlay": "Mostra/nascondi overlay miniplayer",
@@ -569,7 +569,7 @@
       },
       "auto_show_on_minimize": {
         "title": "Mostra automaticamente quando ridotto a icona",
-        "description": "Mostra automaticamente l'overlay quando Liner viene ridotto a icona."
+        "description": "Mostra automaticamente l'overlay quando DowFlow viene ridotto a icona."
       },
       "always_on_top": {
         "title": "Sempre in primo piano",
@@ -651,8 +651,8 @@
       "title": "Cache e archiviazione",
       "description": "Ripartizione dello spazio, statistiche della cache locale e file multimediali.",
       "usage_title": "Utilizzo dello spazio",
-      "device_usage": "Liner sta usando {size} di spazio locale.",
-      "device_usage_raw": "Liner sta usando {size} di spazio locale.",
+      "device_usage": "DowFlow sta usando {size} di spazio locale.",
+      "device_usage_raw": "DowFlow sta usando {size} di spazio locale.",
       "audio_cache_limit": "Limite della cache",
       "audio_cache_limit_desc": "I file e i contenuti più vecchi vengono rimossi automaticamente quando la cache è piena",
       "cache_limit": "Limite della cache",
@@ -668,7 +668,7 @@
       "empty_storage": "La cache è pulitissima!",
       "cloud_disclaimer": "Tutti i contenuti, le copertine e i brani restano nel cloud e verranno riscaricati automaticamente quando li riproduci.",
       "clearing_title": "Pulizia della cache...",
-      "clearing_subtitle": "Tieni aperta questa finestra mentre Liner pulisce la cache.",
+      "clearing_subtitle": "Tieni aperta questa finestra mentre DowFlow pulisce la cache.",
       "cleared_title": "Spazio liberato",
       "cleared_subtitle": "La cache è stata svuotata. I nuovi contenuti verranno trasmessi e memorizzati automaticamente.",
       "done_button": "Fatto",
@@ -680,7 +680,7 @@
         "local": "Musica locale"
       },
       "local_confirm_title": "Eliminare anche la tua musica locale?",
-      "local_confirm_desc": "La musica locale è la tua libreria importata, non cache. {tracks} ({size}) verranno eliminati da Liner, insieme alle copertine. I tuoi file originali restano dove sono.",
+      "local_confirm_desc": "La musica locale è la tua libreria importata, non cache. {tracks} ({size}) verranno eliminati da DowFlow, insieme alle copertine. I tuoi file originali restano dove sono.",
       "local_confirm_button": "Elimina musica locale"
     },
     "theme": {
@@ -721,7 +721,7 @@
       "title": "Profilo",
       "signed_in_as": "Accesso effettuato come",
       "not_signed_in": "Non hai effettuato l'accesso a una sessione riconosciuta.",
-      "sign_in": "Accedi a Liner",
+      "sign_in": "Accedi a DowFlow",
       "sign_out": "Esci",
       "sign_out_confirm": "Vuoi davvero uscire?",
       "edit_profile": "Modifica profilo",
@@ -732,7 +732,7 @@
       "stat_active": "Attivo",
       "no_bio": "Ancora nessuna bio",
       "details_section": "Dettagli del profilo",
-      "details_subtitle": "Personalizza il tuo aspetto pubblico su Liner",
+      "details_subtitle": "Personalizza il tuo aspetto pubblico su DowFlow",
       "username_label": "Nome utente",
       "username_hint": "3-30 caratteri minuscoli (a-z, 0-9, _). Deve essere univoco.",
       "username_invalid": "Il nome utente deve contenere 3-30 lettere minuscole, numeri o trattini bassi.",
@@ -749,7 +749,7 @@
       "saved_success": "Profilo aggiornato",
       "save_failed": "Impossibile aggiornare il profilo",
       "privacy_section": "Privacy e social",
-      "privacy_subtitle": "Controlla la tua visibilità e la tua presenza social su Liner",
+      "privacy_subtitle": "Controlla la tua visibilità e la tua presenza social su DowFlow",
       "public_profile": {
         "title": "Profilo pubblico",
         "description": "Consenti agli altri di cercare il tuo profilo e vedere le tue informazioni pubbliche."
@@ -881,7 +881,7 @@
   },
   "error_screen": {
     "title": "Qualcosa è andato storto",
-    "subtitle": "Si è verificato un errore imprevisto in Liner. Puoi ricaricare l'app o riprovare.",
+    "subtitle": "Si è verificato un errore imprevisto in DowFlow. Puoi ricaricare l'app o riprovare.",
     "reload": "Ricarica l'app",
     "try_again": "Riprova",
     "go_home": "Vai alla home",
@@ -908,13 +908,13 @@
   },
   "connectivity": {
     "wall_title": "Connessione non riuscita",
-    "wall_subtitle": "Liner non riesce a raggiungere i suoi server. La tua musica e la tua libreria sono al sicuro.",
-    "wall_title_server": "I server di Liner hanno dei problemi",
+    "wall_subtitle": "DowFlow non riesce a raggiungere i suoi server. La tua musica e la tua libreria sono al sicuro.",
+    "wall_title_server": "I server di DowFlow hanno dei problemi",
     "wall_subtitle_server": "La tua connessione funziona, ma il server ha risposto con un errore. La tua musica e la tua libreria sono al sicuro: riprova tra qualche minuto.",
     "steps_title": "Soluzioni rapide da provare",
     "step_net": "Verifica che il Wi-Fi o il cavo siano collegati e che le pagine si aprano nel browser.",
     "step_vpn": "Sospendi per un minuto VPN, proxy o filtri DNS: spesso bloccano l'app.",
-    "step_firewall": "Consenti a Liner di passare attraverso il firewall e le protezioni di rete dell'antivirus.",
+    "step_firewall": "Consenti a DowFlow di passare attraverso il firewall e le protezioni di rete dell'antivirus.",
     "step_router": "Riavvia il router, poi premi Riprova qui sotto.",
     "retry": "Riprova",
     "retrying": "Controllo…",

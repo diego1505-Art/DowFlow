@@ -1,11 +1,22 @@
+import type { Dirent } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { importLocalFile } from "./importer.js";
-import type {
-  LocalImportResult,
-  LocalLibraryUsage,
-  LocalTrackRecord,
+import {
+  LOCAL_AUDIO_EXTENSIONS,
+  type LocalImportResult,
+  type LocalLibraryUsage,
+  type LocalTrackRecord,
 } from "./types.js";
+
+const SUPPORTED_AUDIO = new Set<string>(LOCAL_AUDIO_EXTENSIONS);
+const SIDECAR_COVERS = new Set(["jpg", "jpeg", "png", "webp"]);
+const fileStem = (name: string) => path.basename(name, path.extname(name));
+/** Match "poster boy.mp3" with "poster-boy.jpg": same track, different separators. */
+const coverKey = (name: string) =>
+  fileStem(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 
 const ID_PATTERN = /^[a-f0-9]{20}$/;
 const LIBRARY_FOLDERS = ["audio", "covers"] as const;
@@ -98,6 +109,90 @@ export class LocalTrackLibrary {
         }
       }
       if (result.added.length > 0) await this.save(records);
+      return result;
+    });
+  }
+
+  /**
+   * Import every new track from a folder managed by another app (DowFlow's
+   * `downloads/music`) and pick up the cover image stored beside each file.
+   */
+  importExternalFolder(folder: string): Promise<LocalImportResult> {
+    return this.serialized(async () => {
+      const result: LocalImportResult = { added: [], duplicates: 0, failed: [] };
+      let entries: Dirent[];
+      try {
+        entries = await fsp.readdir(folder, { withFileTypes: true });
+      } catch {
+        return result;
+      }
+
+      const covers = new Map<string, string>();
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const extension = path.extname(entry.name).slice(1).toLowerCase();
+        if (SIDECAR_COVERS.has(extension)) {
+          covers.set(coverKey(entry.name), path.join(folder, entry.name));
+        }
+      }
+
+      const records = [...(await this.load())];
+      const known = new Set(records.map((record) => record.id));
+      // Recognise files that are already imported before hashing them: reading
+      // every track on each sync tick saturated the disk and slowed the app.
+      const knownSources = new Set(
+        records.map((record) => `${record.fileName}\u0000${record.byteSize}`),
+      );
+      await fsp.mkdir(this.filePath("audio"), { recursive: true });
+      await fsp.mkdir(this.filePath("covers"), { recursive: true });
+
+      let changed = false;
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const extension = path.extname(entry.name).slice(1).toLowerCase();
+        if (!SUPPORTED_AUDIO.has(extension)) continue;
+        const source = path.join(folder, entry.name);
+        try {
+          const { size } = await fsp.stat(source);
+          if (knownSources.has(`${entry.name}\u0000${size}`)) {
+            result.duplicates += 1;
+            continue;
+          }
+          const record = await importLocalFile(source, this.root, known, {
+            sidecarCover: covers.get(coverKey(entry.name)),
+          });
+          if (!record) {
+            result.duplicates += 1;
+            continue;
+          }
+          known.add(record.id);
+          knownSources.add(`${record.fileName}\u0000${record.byteSize}`);
+          records.push(record);
+          result.added.push(record);
+          changed = true;
+        } catch {
+          result.failed.push(entry.name);
+        }
+      }
+
+      // Backfill covers for tracks imported before their artwork existed.
+      for (const record of records) {
+        if (record.coverFile) continue;
+        const cover = covers.get(coverKey(record.fileName));
+        if (!cover) continue;
+        const extension = path.extname(cover).slice(1).toLowerCase();
+        if (!SIDECAR_COVERS.has(extension)) continue;
+        try {
+          const coverFile = `${record.id}.${extension}`;
+          await fsp.copyFile(cover, this.filePath("covers", coverFile));
+          record.coverFile = coverFile;
+          changed = true;
+        } catch {
+          // keep the track without artwork
+        }
+      }
+
+      if (changed) await this.save(records);
       return result;
     });
   }

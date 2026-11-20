@@ -24,7 +24,6 @@ body {
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   letter-spacing: -.01em;
 }
-.bg-video-container, .bg-video-container video, .bg-overlay { display: none !important; }
 .page { width: min(1380px, calc(100% - 36px)) !important; margin: 18px auto !important; }
 .shell, .app-shell {
   overflow: hidden !important;

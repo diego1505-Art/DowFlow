@@ -10,7 +10,6 @@ import {
 } from "@/features/library";
 import ArtistPage from "@/features/artist/ui/ArtistPage";
 import CollectionPage from "@/features/collection/ui/CollectionPage";
-import LoginPage from "@/features/auth/ui/LoginPage";
 import PlayerPage from "@/features/player/ui/FullscreenPlayer";
 import { FullscreenRouteContext } from "@/features/navigation/fullscreenRouteContext";
 import KeepAlivePage from "./KeepAlivePage";
@@ -52,7 +51,7 @@ export function AppRoutes() {
   if (location.pathname !== PLAYER_PATH) shellLocationRef.current = location;
 
   if (inFullscreenOverlay) return <PlayerPage />;
-  if (location.pathname === "/login") return <LoginPage />;
+  if (location.pathname === "/login") return <Navigate to="/" replace />;
 
   const shellLocation = shellLocationRef.current;
   const { pathname, search } = shellLocation;

@@ -7,31 +7,24 @@ PROJECT_ROOT = Path(SPECPATH).resolve()
 BUILD_SCOPE = os.environ.get("DOWFLOW_BUILD_SCOPE", "all")
 BUILD_NAME = os.environ.get("DOWFLOW_BUILD_NAME", "DowFlow")
 
-if BUILD_SCOPE not in {"all", "video", "music", "film", "anime", "image"}:
+if BUILD_SCOPE not in {"all", "video", "music", "film", "anime"}:
     raise ValueError(f"Unsupported DowFlow build scope: {BUILD_SCOPE}")
 
 template_sets = {
     "all": [
-        "menu.html", "download.html", "music.html", "music_explore.html",
-        "music_liked.html", "coming_soon.html", "stats.html", "export_controls.html",
+        "menu.html", "download.html", "coming_soon.html",
+        "stats.html", "export_controls.html",
     ],
     "video": ["download.html", "stats.html", "export_controls.html"],
-    "music": [
-        "music.html", "music_explore.html", "music_liked.html",
-        "export_controls.html",
-    ],
+    "music": ["export_controls.html"],
     "film": ["coming_soon.html", "export_controls.html"],
     "anime": ["coming_soon.html", "export_controls.html"],
-    "image": ["coming_soon.html", "export_controls.html"],
 }
 templates = [(str(PROJECT_ROOT / "templates" / name), "templates") for name in template_sets[BUILD_SCOPE]]
 static_files = [
     "favicon.svg", "dowflow.ico", "app.css", "export.js", "export.css",
     "dependencies-loading.js", "dependencies-loading.css",
 ]
-if BUILD_SCOPE in {"all", "music"}:
-    static_files += ["music.css", "music.js"]
-
 datas = templates + [(str(PROJECT_ROOT / "static" / name), "static") for name in static_files]
 if BUILD_SCOPE in {"all", "music"}:
     music_stream_root = PROJECT_ROOT / "static" / "music-stream"

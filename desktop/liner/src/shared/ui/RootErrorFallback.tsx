@@ -62,7 +62,7 @@ export function RootErrorFallback({
 
   const errorDetailsString = useMemo(() => {
     const lines: string[] = [
-      "=== Liner Desktop Client Error Report ===",
+      "=== DowFlow Desktop Client Error Report ===",
       `Time: ${new Date().toISOString()}`,
       `URL: ${typeof window !== "undefined" ? window.location.href : "unknown"}`,
       `User Agent: ${typeof navigator !== "undefined" ? navigator.userAgent : "unknown"}`,
@@ -103,7 +103,7 @@ export function RootErrorFallback({
   const subtitleText =
     t("error_screen.subtitle") !== "error_screen.subtitle"
       ? t("error_screen.subtitle")
-      : "An unexpected error occurred in Liner. You can reload the app or try again.";
+      : "An unexpected error occurred in DowFlow. You can reload the app or try again.";
 
   const reloadText =
     t("error_screen.reload") !== "error_screen.reload"

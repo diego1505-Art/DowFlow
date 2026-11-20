@@ -10,7 +10,6 @@ vi.mock("@/shared/youtube", async (importOriginal) => ({
 }));
 
 import { useAuthStore } from "./authStore";
-import { useYoutubePreferences } from "@/shared/youtube";
 import {
   api,
   ApiError,
@@ -188,7 +187,6 @@ describe("signing out of liner and the youtube account", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     youtube.signOut.mockClear();
-    useYoutubePreferences.setState({ signOutWithLiner: false });
     setAuthSession(null);
   });
 
@@ -196,15 +194,6 @@ describe("signing out of liner and the youtube account", () => {
     await useAuthStore.getState().logout();
 
     expect(youtube.signOut).not.toHaveBeenCalled();
-    expect(useAuthStore.getState().status).toBe("anonymous");
-  });
-
-  it("signs out of youtube too when the setting asks for it", async () => {
-    useYoutubePreferences.setState({ signOutWithLiner: true });
-
-    await useAuthStore.getState().logout();
-
-    expect(youtube.signOut).toHaveBeenCalledTimes(1);
     expect(useAuthStore.getState().status).toBe("anonymous");
   });
 });

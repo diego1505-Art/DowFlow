@@ -434,6 +434,22 @@ BROWSER_HEADLESS = os.environ.get("DOWFLOW_BROWSER_VISIBLE", "").strip().lower()
 BROWSER_PROFILE_DIR = BASE_DIR / "browser_profile"
 YOUTUBE_COOKIES_FILE = BASE_DIR / "youtube_cookies.txt"
 
+# DowFlow Music (Liner) stores its data in the per-user Electron folder. The
+# downloader also reads cookie exports left in <data>/cookies, so a session
+# kept by the desktop music app works for video downloads too.
+_music_data_root = os.environ.get("DOWFLOW_MUSIC_DATA_DIR", "").strip()
+if not _music_data_root:
+    _appdata = os.environ.get("APPDATA", "").strip()
+    _music_data_root = str(
+        (Path(_appdata) if _appdata else Path.home() / "AppData" / "Roaming")
+        / "DowFlow Music"
+    )
+DOWFLOW_MUSIC_DATA_DIR = Path(_music_data_root)
+LINER_COOKIES_DIR = Path(
+    os.environ.get("DOWFLOW_COOKIES_DIR", "").strip()
+    or (DOWFLOW_MUSIC_DATA_DIR / "cookies")
+)
+
 # ── Performance: number of parallel connections ──────────────────────────────
 # Tier selected at startup based on CPU cores and measured network speed:
 # 8 / 16 / 32 / 64 / 128. More connections improve throughput for large files

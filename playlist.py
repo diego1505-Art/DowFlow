@@ -18,6 +18,7 @@ from config import (
     VIDEO_QUALITIES,
     LANGUAGES,
     YOUTUBE_COOKIES_FILE,
+    LINER_COOKIES_DIR,
     CONNECTIONS_OVERRIDE,
     get_download_path,
     normalize_language,
@@ -122,6 +123,12 @@ def _resolve_cookie_file(url: str | None = None) -> str | None:
 
     candidates = [YOUTUBE_COOKIES_FILE.with_name(name) for name in site_names]
     for cookie_path in candidates:
+        if cookie_path.is_file():
+            return str(cookie_path)
+
+    # Exports left next to DowFlow Music's own data (same file names).
+    liner_candidates = [LINER_COOKIES_DIR / name for name in (*site_names, "cookies.txt")]
+    for cookie_path in liner_candidates:
         if cookie_path.is_file():
             return str(cookie_path)
 

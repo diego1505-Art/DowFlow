@@ -70,7 +70,6 @@ export {
 export {
   prefersAccountPlayback,
   prefersSignInPrompt,
-  prefersSignOutWithLiner,
   useYoutubePreferences,
 } from "./auth/youtubePreferences";
 export {

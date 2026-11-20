@@ -729,10 +729,6 @@
         "title": "Синхронізувати бібліотеку",
         "description": "Показувати плейлисти з акаунта YouTube у бібліотеці поруч із плейлистами DowFlow."
       },
-      "sign_out_with_liner": {
-        "title": "Виходити разом із DowFlow",
-        "description": "Виходити з YouTube, коли ви виходите з акаунта DowFlow."
-      },
       "sign_out": "Вийти з акаунта",
       "sign_in": "Увійти",
       "signed_out_title": "Вхід не виконано",

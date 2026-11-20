@@ -728,10 +728,6 @@
         "title": "Sync library",
         "description": "Show playlists from your YouTube account in the library next to DowFlow playlists."
       },
-      "sign_out_with_liner": {
-        "title": "Sign out with DowFlow",
-        "description": "Also sign out of YouTube when you sign out of your DowFlow account."
-      },
       "sign_out": "Sign out",
       "sign_in": "Sign in",
       "signed_out_title": "Not signed in",

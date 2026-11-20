@@ -550,6 +550,26 @@ class DownloadStabilityTests(unittest.TestCase):
                         playlist._resolve_cookie_file("https://www.instagram.com/")
                     )
 
+    def test_resolve_cookie_file_reads_dowflow_music_exports(self):
+        with tempfile.TemporaryDirectory() as output:
+            root = Path(output)
+            liner_dir = root / "DowFlow Music" / "cookies"
+            liner_dir.mkdir(parents=True)
+            export = liner_dir / "youtube.com_cookies.txt"
+            export.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+            with patch.object(playlist, "YOUTUBE_COOKIES_FILE", root / "youtube_cookies.txt"):
+                with patch.object(playlist, "LINER_COOKIES_DIR", liner_dir):
+                    with patch.dict(
+                        os.environ,
+                        {"DOWFLOW_YOUTUBE_COOKIES": "", "DOWFLOW_COOKIES": ""},
+                    ):
+                        self.assertEqual(
+                            playlist._resolve_cookie_file(
+                                "https://www.youtube.com/watch?v=abc"
+                            ),
+                            str(export),
+                        )
+
     def test_resolve_cookie_file_falls_back_to_generic_export(self):
         with tempfile.TemporaryDirectory() as output:
             root = Path(output)

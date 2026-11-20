@@ -97,7 +97,9 @@ Some sites may require a signed-in session. DowFlow can use Netscape-format cook
 	- Other sites: `{domain}_cookies.txt`, for example `vimeo.com_cookies.txt`.
 4. Start a new download. The log should say `retrying with <cookie filename>` when DowFlow uses the export.
 
-For a single export containing cookies for several sites, name it `cookies.txt`. A site-specific file takes priority over the generic export. You can also set `DOWFLOW_YOUTUBE_COOKIES`, `DOWFLOW_INSTAGRAM_COOKIES`, `DOWFLOW_TIKTOK_COOKIES`, or `DOWFLOW_COOKIES` to a custom file path.
+For a single export containing cookies for several sites, name it `cookies.txt`. A site-specific file takes priority over the generic export.
+
+The desktop music app keeps its data in `%APPDATA%\DowFlow Music`. DowFlow also reads the same file names from `%APPDATA%\DowFlow Music\cookies\` (for example `youtube.com_cookies.txt` or `cookies.txt`), so an export dropped there is used by video downloads too. Files in the project root still take priority; set `DOWFLOW_COOKIES_DIR` to point at another folder. You can also set `DOWFLOW_YOUTUBE_COOKIES`, `DOWFLOW_INSTAGRAM_COOKIES`, `DOWFLOW_TIKTOK_COOKIES`, or `DOWFLOW_COOKIES` to a custom file path.
 
 Cookie files contain account credentials. Do not share them or commit them to Git; `*_cookies.txt` and `cookies.txt` are excluded by `.gitignore`. If you expose a cookie file or its contents, revoke the affected sessions and export a fresh file.
 

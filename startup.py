@@ -489,6 +489,36 @@ def _update_dashboard(
     layout["logs"].update(_logs_panel(lines))
 
 
+def _stop_server(process, timeout: float = 5.0) -> None:
+    """Stop the Flask child together with the processes it spawned.
+
+    On Windows the virtual-environment ``python.exe`` is a redirector that
+    waits for the real interpreter: ``terminate()`` only kills the redirector
+    and leaves the interpreter that owns the listening socket running as an
+    orphan (they used to pile up on ports 5001, 5002, ...).
+    """
+    if process is None or process.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                creationflags=SUBPROCESS_CREATION_FLAGS,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+    else:
+        process.terminate()
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
 def _startup_capture_complete(
     ready: bool,
     frozen: bool,
@@ -649,13 +679,7 @@ def _run_webview_session(
         return 1
     finally:
         stream_stop.set()
-        if process is not None and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        _stop_server(process)
         if output_reader is not None:
             output_reader.join(timeout=2)
         if output_streamer is not None:
@@ -711,7 +735,13 @@ def main() -> int:
                 stderr=subprocess.STDOUT,
                 bufsize=0,
                 creationflags=SUBPROCESS_CREATION_FLAGS,
-                env={**os.environ, "DOWFLOW_PORT": str(port)},
+                env={
+                    **os.environ,
+                    "DOWFLOW_PORT": str(port),
+                    # Lets the server notice our death even though it owns a
+                    # separate hidden console (see _start_parent_watchdog).
+                    "DOWFLOW_PARENT_PID": str(os.getpid()),
+                },
             )
             if process.stdout is not None:
                 output_reader = Thread(
@@ -786,13 +816,7 @@ def main() -> int:
                         failure = "The server did not respond within 10 seconds."
 
                 if failure is not None:
-                    if process is not None and process.poll() is None:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=2)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                            process.wait()
+                    _stop_server(process, timeout=2)
                     if output_reader is not None:
                         output_reader.join(timeout=2)
                     output_finished = _drain_startup_output(
@@ -856,9 +880,7 @@ def main() -> int:
                 existing_log_offset,
             )
     except KeyboardInterrupt:
-        if process is not None and process.poll() is None:
-            process.terminate()
-            process.wait()
+        _stop_server(process, timeout=2)
         if output_reader is not None:
             output_reader.join(timeout=2)
         return 0

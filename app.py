@@ -1245,9 +1245,82 @@ def _start_network_detection() -> None:
     threading.Thread(target=worker, name="dowflow-network-detection", daemon=True).start()
 
 
+# ── Parent watchdog ────────────────────────────────────────────────────
+# ``startup.py`` spawns this server with CREATE_NO_WINDOW, so it owns a hidden
+# console that survives the one the user closes: without a watchdog every
+# launch left one more Flask server listening on 5001, 5002, ... forever.
+_WATCHDOG_POLL_SECONDS = 1.0
+_SYNCHRONIZE = 0x00100000
+_WAIT_TIMEOUT = 0x00000102
+
+
+def _watchdog_parent_ids() -> list[int]:
+    """Process ids whose death must stop this server."""
+    parents: list[int] = []
+    configured = os.environ.get("DOWFLOW_PARENT_PID", "").strip()
+    if configured.isdigit():
+        parents.append(int(configured))
+    try:
+        parents.append(os.getppid())
+    except OSError:
+        pass
+    current = os.getpid()
+    unique = dict.fromkeys(pid for pid in parents if pid > 0 and pid != current)
+    return list(unique)
+
+
+def _start_parent_watchdog() -> None:
+    """Exit as soon as the process that launched DowFlow disappears."""
+    parents = _watchdog_parent_ids()
+    if not parents:
+        return
+
+    def stop(reason: str) -> None:
+        log.info("Stopping the server: %s", reason)
+        # Skip interpreter teardown so waitress threads cannot hold the port.
+        os._exit(0)
+
+    def watch_windows() -> None:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+
+        handles = {}
+        for pid in parents:
+            handle = kernel32.OpenProcess(_SYNCHRONIZE, False, pid)
+            if not handle:
+                stop(f"process {pid} is already gone")
+            handles[pid] = handle
+        while True:
+            time.sleep(_WATCHDOG_POLL_SECONDS)
+            for pid, handle in handles.items():
+                if kernel32.WaitForSingleObject(handle, 0) != _WAIT_TIMEOUT:
+                    stop(f"process {pid} exited")
+
+    def watch_posix() -> None:
+        while True:
+            time.sleep(_WATCHDOG_POLL_SECONDS)
+            for pid in parents:
+                try:
+                    os.kill(pid, 0)
+                except OSError:
+                    stop(f"process {pid} exited")
+
+    target = watch_windows if os.name == "nt" else watch_posix
+    threading.Thread(
+        target=target, name="dowflow-parent-watchdog", daemon=True
+    ).start()
+
+
 def run_server() -> None:
     from logger import banner
     banner(log, "DowFlow — Multi-Site Media Downloader")
+    _start_parent_watchdog()
 
     if getattr(sys, "frozen", False):
         from bootstrap import start_dependency_setup

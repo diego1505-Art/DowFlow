@@ -163,6 +163,10 @@ if "!DOWFLOW_WARN!"=="1" (
     echo Check logs\dowflow.log for details.
     echo.
 )
+echo Starting DowFlow...
+echo Logs move into the DowFlow window (Terminal button, Ctrl+`).
+echo.
+
 REM Prefer the windowless DowFlow launcher so Windows uses the DowFlow icon
 REM instead of the generic Python process icon in the taskbar. The launcher
 REM delegates to this same venv and startup.py; keep the Python fallback for

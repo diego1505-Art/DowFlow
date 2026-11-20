@@ -4,6 +4,7 @@ import importlib.util
 import json
 import hmac
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, url_for
 from werkzeug.utils import secure_filename
 from folder_picker import select_download_folder
 
@@ -295,6 +296,131 @@ def application_status():
         "build_id": _APP_BUILD_ID,
         "ffmpeg": has_ffmpeg(),
     })
+
+
+# ── Live terminal ────────────────────────────────────────────────────────────
+
+_LIVE_LOG_TAIL_LINES = 300
+_LIVE_LOG_TAIL_BYTES = 512 * 1024
+_LIVE_LOG_POLL_SECONDS = 0.4
+_LIVE_LOG_HEARTBEAT_SECONDS = 15.0
+_LIVE_LOG_SESSION_SECONDS = 300.0
+_LIVE_LOG_ENTRY_RE = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}:\d{2}:\d{2}) \| "
+    r"(?P<level>[A-Z]+)\s*\| (?P<source>[^|]*?) \| \d+ \| \d+ \| (?P<message>.*)$"
+)
+_LIVE_LOG_ACCESS_RE = re.compile(r'- - \[[^\]]+\] "[A-Z]+ .+ HTTP/[\d.]+" \d{3} \S+\s*$')
+
+
+def _live_log_file() -> Path:
+    """Return the log file the running server writes to."""
+    from config import get_data_root
+
+    candidate = get_data_root() / "logs" / "dowflow.log"
+    if candidate.is_file():
+        return candidate
+    from logger import LOG_DIR
+
+    return LOG_DIR / "dowflow.log"
+
+
+def _live_log_event(line: str) -> str | None:
+    """Format one log line as a Server-Sent Event (None when it is noise)."""
+    line = line.rstrip("\r\n")
+    if not line:
+        return None
+    match = _LIVE_LOG_ENTRY_RE.match(line)
+    if match:
+        stamp = match["time"]
+        level = match["level"]
+        source = match["source"].strip()
+        message = match["message"]
+    else:
+        stamp = time.strftime("%H:%M:%S")
+        level = "INFO"
+        source = "dowflow"
+        message = line
+    # HTTP access lines would drown the download progress.
+    if source == "werkzeug" and _LIVE_LOG_ACCESS_RE.search(message):
+        return None
+    payload = {"time": stamp, "level": level, "source": source, "message": message}
+    return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
+
+def _live_log_snapshot(path: Path, tail_lines: int) -> tuple[list[str], int]:
+    """Read the last lines of the file and the offset to continue from."""
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            start = max(0, size - _LIVE_LOG_TAIL_BYTES) if tail_lines else size
+            handle.seek(start)
+            if start:
+                handle.readline()  # drop the truncated first line
+            lines = handle.readlines()
+            return (lines[-tail_lines:] if tail_lines else []), handle.tell()
+    except OSError:
+        return [], 0
+
+
+@app.get("/api/logs/stream")
+def live_logs():
+    """Stream the application log for the in-app terminal."""
+    try:
+        tail_lines = max(0, min(1000, int(request.args.get("tail", _LIVE_LOG_TAIL_LINES))))
+    except (TypeError, ValueError):
+        tail_lines = _LIVE_LOG_TAIL_LINES
+
+    def generate():
+        path = _live_log_file()
+        backlog, position = _live_log_snapshot(path, tail_lines)
+        for line in backlog:
+            event = _live_log_event(line)
+            if event:
+                yield event
+        pending = ""
+        started = time.monotonic()
+        last_beat = started
+        while True:
+            time.sleep(_LIVE_LOG_POLL_SECONDS)
+            now = time.monotonic()
+            path = _live_log_file()
+            try:
+                with path.open("r", encoding="utf-8", errors="replace") as handle:
+                    handle.seek(0, os.SEEK_END)
+                    if handle.tell() < position:  # rotated or truncated
+                        position = 0
+                        pending = ""
+                    handle.seek(position)
+                    chunk = handle.read()
+                    position = handle.tell()
+            except OSError:
+                chunk = ""
+            if chunk:
+                pending += chunk
+                lines = pending.split("\n")
+                pending = lines.pop()
+                for line in lines:
+                    event = _live_log_event(line)
+                    if event:
+                        yield event
+                last_beat = now
+            elif now - last_beat >= _LIVE_LOG_HEARTBEAT_SECONDS:
+                last_beat = now
+                yield ": keepalive\n\n"
+            if now - started >= _LIVE_LOG_SESSION_SECONDS:
+                # Let the browser reconnect with a fresh snapshot.
+                return
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/api/dependencies/progress")

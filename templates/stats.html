@@ -57,5 +57,6 @@ document.getElementById('refreshStats').addEventListener('click', () => loadStat
 function showError(error) { document.getElementById('summaryCards').innerHTML = `<div class="empty-state">${esc(error.message)}</div>`; }
 loadStats().catch(showError);
 </script>
+<script src="{{ url_for('static', filename='terminal.js') }}"></script>
 </body>
 </html>

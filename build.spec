@@ -24,7 +24,6 @@ templates = [(str(PROJECT_ROOT / "templates" / name), "templates") for name in t
 static_files = [
     "favicon.svg", "dowflow.ico", "app.css", "export.js", "export.css",
     "dependencies-loading.js", "dependencies-loading.css",
-    "terminal.js", "terminal.css",
 ]
 datas = templates + [(str(PROJECT_ROOT / "static" / name), "static") for name in static_files]
 if BUILD_SCOPE in {"all", "music"}:

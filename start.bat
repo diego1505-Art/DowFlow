@@ -164,7 +164,7 @@ if "!DOWFLOW_WARN!"=="1" (
     echo.
 )
 echo Starting DowFlow...
-echo Logs move into the DowFlow window (Terminal button, Ctrl+`).
+echo Logs are written to logs\dowflow.log
 echo.
 
 REM Prefer the windowless DowFlow launcher so Windows uses the DowFlow icon

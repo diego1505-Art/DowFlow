@@ -57,32 +57,34 @@ function HomeFeed({ onRetry }: { onRetry: () => void }) {
     albumsLoading ||
     savedLoading;
 
-  const isReady = !isDataLoading;
-  const nothingLoaded =
-    !mixesLoading &&
-    !hasMixes &&
-    popularAlbums.length === 0 &&
-    listeningNow.length === 0 &&
-    !recentlyPlayed?.length &&
-    !popularTracksAllTime?.length &&
-    mostSaved.length === 0;
-  const [skeletonExited, setSkeletonExited] = useState(() => !isDataLoading);
+  // Every section renders as soon as its own request answers. Waiting for the
+  // slowest endpoint (daily mixes) used to hold the whole feed behind the
+  // skeletons even when the other rows were already available.
+  const hasAnyData =
+    hasMixes ||
+    popularAlbums.length > 0 ||
+    listeningNow.length > 0 ||
+    Boolean(recentlyPlayed?.length) ||
+    Boolean(popularTracksAllTime?.length) ||
+    mostSaved.length > 0;
+  const nothingLoaded = !isDataLoading && !mixesLoading && !hasAnyData;
+  const [skeletonExited, setSkeletonExited] = useState(() => hasAnyData);
 
   useEffect(() => {
-    if (isReady && !skeletonExited) {
+    if (hasAnyData && !skeletonExited) {
       const timer = setTimeout(() => {
         setSkeletonExited(true);
-      }, 400);
+      }, 250);
       return () => clearTimeout(timer);
     }
-  }, [isReady, skeletonExited]);
+  }, [hasAnyData, skeletonExited]);
 
   return (
     // the header only sits on the right now, so the feed starts at the top:
     // the 36px "Your Mixes" row is centred on the sidebar logo (16px + 23px / 2)
     <div className="relative h-full w-full overflow-y-auto overflow-x-hidden bg-transparent pt-[10px] pb-(--page-inset-bottom)">
       <div className="relative z-1 grid grid-cols-1 items-start w-full">
-        {isReady && nothingLoaded && (
+        {nothingLoaded && (
           <div className="col-start-1 row-start-1 flex min-h-[60vh] w-full flex-col items-center justify-center gap-[6px] px-[24px] text-center">
             <span className="text-title font-[600] text-text-primary">
               {t("home.load_failed")}
@@ -100,7 +102,7 @@ function HomeFeed({ onRetry }: { onRetry: () => void }) {
           </div>
         )}
 
-        {isReady && !nothingLoaded && (
+        {hasAnyData && (
           <div className="col-start-1 row-start-1 w-full pb-[16px]">
             {mixesLoading ? (
               <MixesSectionSkeleton />
@@ -167,10 +169,10 @@ function HomeFeed({ onRetry }: { onRetry: () => void }) {
           </div>
         )}
 
-        {!skeletonExited && (
+        {!skeletonExited && !nothingLoaded && (
           <div
             className={`col-start-1 row-start-1 w-full z-10 transition-opacity duration-300 ease-out ${
-              isReady
+              hasAnyData
                 ? "opacity-0 pointer-events-none"
                 : "opacity-100 pointer-events-auto"
             }`}

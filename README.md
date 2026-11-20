@@ -74,17 +74,7 @@ Close DowFlow before building so the included database and its SQLite write-ahea
 
 ### Local launcher icon
 
-When running from a source ZIP with `start.bat`, Windows normally shows the generic Python icon because the batch file starts `python.exe`. Build the small windowless launcher with `build_launcher.bat`; it creates `dist/DowFlow-Launcher.exe` using `static/dowflow.ico`. `start.bat` detects that launcher automatically and delegates to the same virtual environment and `startup.py`, so the local application uses the DowFlow identity instead of the Python launch icon. If the launcher has not been built yet, `start.bat` keeps the normal Python fallback.
-
-## Diagnostics
-
-The diagnostic center uses the venv, ANSI colors and non-destructive checks:
-
-```powershell
-.\debug.bat
-```
-
-It can check Python, dependencies, imports, FFmpeg, FFprobe, Chrome, Playwright, the network, SQLite, the Flask APIs and the latest commit available on GitHub. Results are kept in `logs/debug_*.log`.
+When running from a source ZIP with `start.bat`, Windows normally shows the generic Python icon because the batch file starts `python.exe`. Run `build.bat` and pick option **6** to build the small windowless launcher; it creates `dist/DowFlow-Launcher.exe` using `static/dowflow.ico`. `start.bat` detects that launcher automatically and delegates to the same virtual environment and `startup.py`, so the local application uses the DowFlow identity instead of the Python launch icon. If the launcher has not been built yet, `start.bat` keeps the normal Python fallback.
 
 ## Tests
 
@@ -127,7 +117,6 @@ Downloads, logs, SQLite databases, browser profiles, Python caches and virtual e
 | `music_dataset.py` | Local catalog interface |
 | `browser_extractor.py` | Browser-based extraction |
 | `url_expanders/` | URL and episode expansion |
-| `tools/debug_center.py` | Interactive diagnostics |
 | `tools/fix_videos.py` | MP4 file remuxing |
 | `tools/extract_urls_from_txt.py` | URL extraction from a text file |
 | `templates/` and `static/` | Web interface |

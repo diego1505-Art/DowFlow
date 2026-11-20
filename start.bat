@@ -160,7 +160,7 @@ for /d %%D in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*") do (
 cls
 if "!DOWFLOW_WARN!"=="1" (
     echo [WARNING] Startup encountered a dependency problem.
-    echo Check logs\dowflow.log or run debug.bat.
+    echo Check logs\dowflow.log for details.
     echo.
 )
 REM Prefer the windowless DowFlow launcher so Windows uses the DowFlow icon

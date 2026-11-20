@@ -617,6 +617,22 @@ def _prepare_windows_app_identity() -> None:
         return
 
 
+def _show_native_error(message: str) -> None:
+    """Report a launch failure when no console is attached.
+
+    ``start.bat`` starts the app with ``pythonw.exe`` so only the DowFlow
+    window appears; without this dialog a broken launch would be silent.
+    """
+    if os.name != "nt" or sys.stdout is not None:
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(None, message, "DowFlow", 0x10)
+    except (AttributeError, OSError):
+        return
+
+
 def _run_webview_session(
     console: Console,
     url: str,
@@ -675,6 +691,11 @@ def _run_webview_session(
             "Could not open the native application window: %s",
             error,
             exc_info=True,
+        )
+        _show_native_error(
+            "The DowFlow window could not be opened.\n\n"
+            f"{error}\n\n"
+            "See logs\\dowflow.log for details."
         )
         return 1
     finally:
@@ -867,6 +888,13 @@ def main() -> int:
                     break
                 frame_number += 1
                 time.sleep(0.125)
+
+        if failure is not None:
+            _show_native_error(
+                "DowFlow could not start.\n\n"
+                f"{failure}\n\n"
+                "See logs\\dowflow.log for details."
+            )
 
         if ready:
             exit_code = _run_webview_session(

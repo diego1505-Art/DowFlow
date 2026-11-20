@@ -167,13 +167,23 @@ REM Prefer the windowless DowFlow launcher so Windows uses the DowFlow icon
 REM instead of the generic Python process icon in the taskbar. The launcher
 REM delegates to this same venv and startup.py; keep the Python fallback for
 REM source ZIPs where the launcher has not been built yet.
+REM
+REM Start the app detached and let this console close. Running startup.py in
+REM this console kept a second, log-filled window next to the DowFlow window.
 if exist "%~dp0DowFlow-Launcher.exe" (
-    "%~dp0DowFlow-Launcher.exe"
-) else if exist "%~dp0dist\DowFlow-Launcher.exe" (
-    "%~dp0dist\DowFlow-Launcher.exe"
-) else (
-    python startup.py
+    start "" /d "%~dp0" "%~dp0DowFlow-Launcher.exe"
+    exit /b
 )
+if exist "%~dp0dist\DowFlow-Launcher.exe" (
+    start "" /d "%~dp0" "%~dp0dist\DowFlow-Launcher.exe"
+    exit /b
+)
+if exist "%VENV_DIR%\Scripts\pythonw.exe" (
+    start "" /d "%~dp0" "%VENV_DIR%\Scripts\pythonw.exe" "%~dp0startup.py"
+    exit /b
+)
+echo [INFO] pythonw.exe not found: starting with a console window.
+python startup.py
 pause
 exit /b
 

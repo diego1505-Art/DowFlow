@@ -17,6 +17,7 @@ import { useTranslation } from "@/languages";
 import { useModalStore } from "../../store/modalStore";
 import { useImportStore } from "../../store/importStore";
 import { resolveApiErrorMessage } from "@/shared/api";
+import type { Track } from "@/shared/types";
 import { isYoutubeHost } from "@/shared/youtube";
 import { useElementSize } from "@/shared/hooks/useElementSize";
 
@@ -173,6 +174,7 @@ export default function CreatePlaylistModal() {
           await addTrack.mutateAsync({
             playlistId: playlist.id,
             trackId: pendingTrack.id,
+            track: pendingTrack as Track,
           });
           toast(t("common.added_to_playlist"), "checkmark", {
             description: playlist.title || trimmed,

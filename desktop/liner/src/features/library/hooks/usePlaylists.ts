@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   api,
   getAuthSession,
@@ -9,6 +9,13 @@ import {
 } from "@/shared/api";
 import { queryCache } from "@/shared/cache/queryCache";
 import type { Track } from "@/shared/types";
+import {
+  getLocalPlaylistSummaries,
+  getLocalPlaylists,
+  isLocalPlaylistId,
+  subscribeLocalPlaylists,
+  type LocalPlaylist,
+} from "../local/playlists";
 
 export interface LibraryPlaylistSummary {
   id: string;
@@ -116,8 +123,12 @@ function load(force = false): Promise<void> {
   if (request) return request;
   const session = getAuthSession();
   if (!session?.accessToken) {
-    cache = EMPTY;
-    loaded = false;
+    // DowFlow has no account: playlists created here stay on this device.
+    cache = {
+      playlists: getLocalPlaylistSummaries(),
+      total: getLocalPlaylistSummaries().length,
+    };
+    loaded = true;
     emit();
     return Promise.resolve();
   }
@@ -183,7 +194,15 @@ function load(force = false): Promise<void> {
     }
     writeCoverCache(coverCache);
 
-    cache = { playlists, total: playlists.length };
+    const local = getLocalPlaylistSummaries();
+    const localIds = new Set(local.map((playlist) => playlist.id));
+    cache = {
+      playlists: [
+        ...local,
+        ...playlists.filter((playlist) => !localIds.has(playlist.id)),
+      ],
+      total: local.length + playlists.filter((p) => !localIds.has(p.id)).length,
+    };
     loaded = true;
   })()
     .catch((err) => {
@@ -202,8 +221,11 @@ if (typeof window !== "undefined") {
   const handleRefresh = () => {
     const session = getAuthSession();
     if (!session?.accessToken) {
-      cache = EMPTY;
-      loaded = false;
+      cache = {
+        playlists: getLocalPlaylistSummaries(),
+        total: getLocalPlaylistSummaries().length,
+      };
+      loaded = true;
       emit();
     } else {
       void load(true);
@@ -211,6 +233,7 @@ if (typeof window !== "undefined") {
   };
   window.addEventListener("library:changed", handleRefresh);
   window.addEventListener("auth:changed", handleRefresh);
+  window.addEventListener("liner:local-playlists-changed", handleRefresh);
 }
 
 function toTrack(item: ApiUserPlaylistItem): Track {
@@ -232,6 +255,27 @@ export function usePlaylistsList() {
     void load();
   }, []);
   return state;
+}
+
+function toLocalDetail(playlist: LocalPlaylist): LibraryPlaylistDetail {
+  const coverUrls = playlist.tracks
+    .map((track) => track.coverUrl)
+    .filter((url, index, list) => Boolean(url) && list.indexOf(url) === index)
+    .slice(0, 4);
+  return {
+    id: playlist.id,
+    title: playlist.title,
+    description: playlist.description,
+    trackCount: playlist.tracks.length,
+    coverUrl: coverUrls[0] ?? "",
+    coverUrls,
+    revision: playlist.revision,
+    tracks: playlist.tracks,
+    durationMs: playlist.tracks.reduce(
+      (total, track) => total + (track.durationMs || 0),
+      0,
+    ),
+  };
 }
 
 function toDetail(
@@ -271,19 +315,41 @@ function rememberCovers(
 }
 
 export function usePlaylist(id: string | null) {
-  const cacheKey = id ? `playlist:detail:${id}` : null;
-  const cached = cacheKey
-    ? queryCache.get<LibraryPlaylistDetail>(cacheKey)
+  const localPlaylists = useSyncExternalStore(
+    subscribeLocalPlaylists,
+    getLocalPlaylists,
+    getLocalPlaylists,
+  );
+  const localPlaylist = id
+    ? localPlaylists.find((playlist) => playlist.id === id)
     : undefined;
+  const localDetail = useMemo(
+    () => (localPlaylist ? toLocalDetail(localPlaylist) : null),
+    [localPlaylist],
+  );
+  const cacheKey = id ? `playlist:detail:${id}` : null;
+  const cached =
+    cacheKey && !isLocalPlaylistId(id)
+      ? queryCache.get<LibraryPlaylistDetail>(cacheKey)
+      : undefined;
   const [data, setData] = useState<LibraryPlaylistDetail | null>(
-    cached ?? null,
+    localDetail ?? cached ?? null,
   );
   const [error, setError] = useState<unknown>();
-  const [isLoading, setIsLoading] = useState(!cached && Boolean(id));
+  const [isLoading, setIsLoading] = useState(
+    !localDetail && !cached && Boolean(id),
+  );
 
   useEffect(() => {
     if (!id || !cacheKey) {
       setData(null);
+      setIsLoading(false);
+      return;
+    }
+
+    if (isLocalPlaylistId(id)) {
+      setData(localDetail);
+      setError(undefined);
       setIsLoading(false);
       return;
     }
@@ -358,7 +424,7 @@ export function usePlaylist(id: string | null) {
       active = false;
       window.removeEventListener("library:changed", refresh);
     };
-  }, [id, cacheKey]);
+  }, [id, cacheKey, localDetail]);
 
   return { data, error, isLoading };
 }

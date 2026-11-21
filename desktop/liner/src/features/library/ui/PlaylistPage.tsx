@@ -60,6 +60,7 @@ import { playerEngine } from "@/features/player";
 import type { Track } from "@/shared/types";
 import { useTranslation } from "@/languages";
 import { api } from "@/shared/api";
+import { isLocalPlaylistId, updateLocalPlaylist } from "../local/playlists";
 import {
   useTrackSearch,
   TrackSearchField,
@@ -398,7 +399,9 @@ function LibraryPlaylistContent() {
   const handleShare = useCallback(() => {
     if (typeof navigator !== "undefined" && navigator.clipboard && decodedId) {
       navigator.clipboard.writeText(buildShareUrl("playlist", decodedId));
-      void api.updatePlaylist(decodedId, { isPublic: true }).catch(() => {});
+      if (!isLocalPlaylistId(decodedId)) {
+        void api.updatePlaylist(decodedId, { isPublic: true }).catch(() => {});
+      }
       toast(t("common.link_copied"), "checkmark", {
         description: viewData?.title || undefined,
       });
@@ -636,13 +639,18 @@ function LibraryPlaylistContent() {
                         if (!isEditingTitle) return;
                         const title = e.currentTarget.textContent?.trim();
                         if (title && decodedId && title !== viewData.title) {
-                          void api
-                            .updatePlaylist(decodedId, { title })
-                            .then(() =>
-                              window.dispatchEvent(
-                                new Event("library:changed"),
-                              ),
-                            );
+                          if (isLocalPlaylistId(decodedId)) {
+                            updateLocalPlaylist(decodedId, { title });
+                            window.dispatchEvent(new Event("library:changed"));
+                          } else {
+                            void api
+                              .updatePlaylist(decodedId, { title })
+                              .then(() =>
+                                window.dispatchEvent(
+                                  new Event("library:changed"),
+                                ),
+                              );
+                          }
                         }
                         setIsEditingTitle(false);
                       }}
@@ -684,13 +692,24 @@ function LibraryPlaylistContent() {
                           const next =
                             e.currentTarget.textContent?.trim() ?? "";
                           if (decodedId && next !== viewData.bio) {
-                            void api
-                              .updatePlaylist(decodedId, { description: next })
-                              .then(() =>
-                                window.dispatchEvent(
-                                  new Event("library:changed"),
-                                ),
+                            if (isLocalPlaylistId(decodedId)) {
+                              updateLocalPlaylist(decodedId, {
+                                description: next,
+                              });
+                              window.dispatchEvent(
+                                new Event("library:changed"),
                               );
+                            } else {
+                              void api
+                                .updatePlaylist(decodedId, {
+                                  description: next,
+                                })
+                                .then(() =>
+                                  window.dispatchEvent(
+                                    new Event("library:changed"),
+                                  ),
+                                );
+                            }
                           }
                           setIsEditingDescription(false);
                         }}

@@ -7,6 +7,7 @@ import {
 } from "@mingcute/react";
 import { useToast } from "@/shared/ui";
 import { ApiError } from "@/shared/api";
+import type { Track } from "@/shared/types";
 import TextInput from "@/shared/ui/TextInput";
 import Dialog from "@/shared/ui/Dialog";
 import { DialogActions, DialogButton } from "@/shared/ui";
@@ -83,7 +84,11 @@ export default function AddToPlaylistModal() {
     const targetPlaylist = playlists.find((p) => p.id === playlistId);
     setAddingTo(playlistId);
     try {
-      await addTrack.mutateAsync({ playlistId, trackId: track.id });
+      await addTrack.mutateAsync({
+        playlistId,
+        trackId: track.id,
+        track: track as Track,
+      });
       toast(t("common.added_to_playlist"), "checkmark", {
         description: targetPlaylist?.title || undefined,
       });

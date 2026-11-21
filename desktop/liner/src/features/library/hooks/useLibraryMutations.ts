@@ -1,5 +1,15 @@
 import { useCallback, useState } from "react";
-import { api } from "@/shared/api";
+import { api, getAuthSession, toClientTrack } from "@/shared/api";
+import { clientCatalog } from "@/shared/api/clientCatalog";
+import type { Track } from "@/shared/types";
+import {
+  addLocalPlaylistTrack,
+  createLocalPlaylist,
+  deleteLocalPlaylist,
+  isLocalPlaylistId,
+  moveLocalPlaylistTrack,
+  removeLocalPlaylistTrack,
+} from "../local/playlists";
 import { notifyLibraryChanged, evictPlaylistFromCache } from "./usePlaylists";
 import { setTrackLiked, toggleTrackLike } from "./useLikedTracks";
 
@@ -38,44 +48,73 @@ function useMutation<T, R = unknown>(action: (input: T) => Promise<R>) {
 
 export function useAddPlaylistTracks() {
   return useMutation(
-    ({ playlistId, trackId }: { playlistId: string; trackId: string }) =>
-      api.addPlaylistTrack(playlistId, trackId),
+    async ({
+      playlistId,
+      trackId,
+      track,
+    }: {
+      playlistId: string;
+      trackId: string;
+      track?: Track;
+    }) => {
+      if (!isLocalPlaylistId(playlistId)) {
+        return api.addPlaylistTrack(playlistId, trackId);
+      }
+      const snapshot = track ?? (await clientCatalog.resolveSnapshot(trackId));
+      if (!snapshot) throw new Error("Track not found");
+      return addLocalPlaylistTrack(playlistId, toClientTrack(snapshot));
+    },
   );
 }
 
 export function useRemovePlaylistTracks() {
-  return useMutation(
-    ({ playlistId, itemId }: { playlistId: string; itemId: string }) =>
-      api.removePlaylistItem(playlistId, itemId),
+  return useMutation<{ playlistId: string; itemId: string }, unknown>(
+    async ({ playlistId, itemId }) => {
+      if (isLocalPlaylistId(playlistId)) {
+        removeLocalPlaylistTrack(playlistId, itemId);
+        return;
+      }
+      return api.removePlaylistItem(playlistId, itemId);
+    },
   );
 }
 
 export function useReorderPlaylistTracks() {
-  return useMutation(
-    ({
-      playlistId,
-      itemId,
-      beforeItemId,
-      revision,
-    }: {
+  return useMutation<
+    {
       playlistId: string;
       itemId: string;
       beforeItemId: string | null;
       revision: number;
-    }) => api.movePlaylistItem(playlistId, itemId, beforeItemId, revision),
-  );
+    },
+    unknown
+  >(async ({ playlistId, itemId, beforeItemId, revision }) => {
+    if (isLocalPlaylistId(playlistId)) {
+      moveLocalPlaylistTrack(playlistId, itemId, beforeItemId);
+      return;
+    }
+    return api.movePlaylistItem(playlistId, itemId, beforeItemId, revision);
+  });
 }
 
 export function useCreatePlaylist() {
   return useMutation(
-    ({ title, description }: { title: string; description?: string }) =>
-      api.createPlaylist({ title, description }),
+    async ({ title, description }: { title: string; description?: string }) => {
+      if (!getAuthSession()?.accessToken) {
+        return createLocalPlaylist(title, description);
+      }
+      return api.createPlaylist({ title, description });
+    },
   );
 }
 
 export function useDeletePlaylist() {
   return useMutation(async ({ playlistId }: { playlistId: string }) => {
     evictPlaylistFromCache(playlistId);
+    if (isLocalPlaylistId(playlistId)) {
+      deleteLocalPlaylist(playlistId);
+      return;
+    }
     await api.deletePlaylist(playlistId);
   });
 }
@@ -112,6 +151,10 @@ export function useRemoveExternalItem() {
     }) => {
       if (type === "playlist") {
         evictPlaylistFromCache(id);
+        if (isLocalPlaylistId(id)) {
+          deleteLocalPlaylist(id);
+          return;
+        }
         if (isOwned === false) {
           return api.removeCollection("playlists", id);
         }
@@ -167,11 +210,12 @@ export function useToggleTrackLike() {
     (
       trackId: string,
       options?: {
+        track?: Track;
         onSuccess?: (liked: boolean) => void;
         onError?: (error: unknown) => void;
       },
     ): boolean => {
-      const { liked, settled } = toggleTrackLike(trackId);
+      const { liked, settled } = toggleTrackLike(trackId, options?.track);
       settled.then(
         () => options?.onSuccess?.(liked),
         (error) => options?.onError?.(error),

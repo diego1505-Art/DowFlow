@@ -400,7 +400,7 @@ function MiniPlayer({
 
   const handleLikeToggle = useCallback(() => {
     if (!currentTrack) return;
-    toggleLike(currentTrack.id);
+    toggleLike(currentTrack.id, { track: currentTrack });
   }, [currentTrack, toggleLike]);
 
   const durationMs =

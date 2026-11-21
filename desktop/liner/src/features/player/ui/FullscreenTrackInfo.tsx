@@ -26,7 +26,7 @@ export function FullscreenTrackInfo({ onClose }: FullscreenTrackInfoProps) {
 
   const handleLikeToggle = useCallback(() => {
     if (!track) return;
-    toggleLike(track.id);
+    toggleLike(track.id, { track });
   }, [track, toggleLike]);
 
   return (

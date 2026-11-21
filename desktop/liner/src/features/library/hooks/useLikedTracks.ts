@@ -1,5 +1,12 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { api, getAuthSession, toClientTrack } from "@/shared/api";
+import { clientCatalog } from "@/shared/api/clientCatalog";
+import {
+  addLocalLike,
+  getLocalLikes,
+  removeLocalLike,
+  subscribeLocalLikes,
+} from "../local/likes";
 import { notifyLibraryChanged } from "./usePlaylists";
 import type { Track } from "@/shared/types";
 
@@ -77,9 +84,13 @@ function load(force = false): Promise<void> {
   }
   const session = getAuthSession();
   if (!session?.accessToken) {
-    cache = EMPTY;
-    loaded = false;
+    // No account in DowFlow: likes live on this device and stay after a
+    // restart instead of being thrown away by a 401.
+    const local = getLocalLikes();
+    cache = { tracks: local, total: local.length };
+    loaded = true;
     fetchedFromServer = false;
+    loadFailed = false;
     emit(false);
     return Promise.resolve();
   }
@@ -150,19 +161,51 @@ function settleLikeWaiters(trackId: string, error?: unknown) {
   }
 }
 
-async function syncTrackLike(trackId: string, confirmed: boolean) {
+async function resolveLikeTrack(
+  trackId: string,
+  snapshot?: Track,
+): Promise<Track | undefined> {
+  if (snapshot) return snapshot;
+  const cached = cache.tracks.find((track) => track.id === trackId);
+  if (cached) return cached;
+  const resolved = await clientCatalog.resolveSnapshot(trackId);
+  return resolved ? toClientTrack(resolved) : undefined;
+}
+
+async function syncTrackLike(
+  trackId: string,
+  confirmed: boolean,
+  trackSnapshot?: Track,
+) {
   syncingLikes.add(trackId);
   let serverLiked = confirmed;
   let sent = false;
   let failure: unknown;
   try {
-    for (;;) {
-      const wanted = desiredLikes.get(trackId);
-      if (wanted === undefined || wanted === serverLiked) break;
-      sent = true;
-      if (wanted) await api.likeTrack(trackId);
-      else await api.unlikeTrack(trackId);
-      serverLiked = wanted;
+    const session = getAuthSession();
+    if (!session?.accessToken) {
+      for (;;) {
+        const wanted = desiredLikes.get(trackId);
+        if (wanted === undefined || wanted === serverLiked) break;
+        sent = true;
+        if (wanted) {
+          const track = await resolveLikeTrack(trackId, trackSnapshot);
+          if (!track) throw new Error("This track cannot be liked yet.");
+          addLocalLike(track);
+        } else {
+          removeLocalLike(trackId);
+        }
+        serverLiked = wanted;
+      }
+    } else {
+      for (;;) {
+        const wanted = desiredLikes.get(trackId);
+        if (wanted === undefined || wanted === serverLiked) break;
+        sent = true;
+        if (wanted) await api.likeTrack(trackId);
+        else await api.unlikeTrack(trackId);
+        serverLiked = wanted;
+      }
     }
   } catch (error) {
     failure = error ?? new Error("like sync failed");
@@ -177,7 +220,11 @@ async function syncTrackLike(trackId: string, confirmed: boolean) {
   if (sent) notifyLibraryChanged();
 }
 
-export function setTrackLiked(trackId: string, liked: boolean): Promise<void> {
+export function setTrackLiked(
+  trackId: string,
+  liked: boolean,
+  trackSnapshot?: Track,
+): Promise<void> {
   const settled = new Promise<void>((resolve, reject) => {
     const waiters = likeWaiters.get(trackId) ?? [];
     waiters.push({ resolve, reject });
@@ -187,16 +234,30 @@ export function setTrackLiked(trackId: string, liked: boolean): Promise<void> {
   desiredLikes.set(trackId, liked);
   optimisticOverrides.set(trackId, liked);
   emit(false);
-  if (!syncingLikes.has(trackId)) void syncTrackLike(trackId, confirmed);
+  if (!syncingLikes.has(trackId))
+    void syncTrackLike(trackId, confirmed, trackSnapshot);
   return settled;
 }
 
-export function toggleTrackLike(trackId: string): {
+export function toggleTrackLike(
+  trackId: string,
+  trackSnapshot?: Track,
+): {
   liked: boolean;
   settled: Promise<void>;
 } {
   const liked = !isTrackLikedNow(trackId);
-  return { liked, settled: setTrackLiked(trackId, liked) };
+  return { liked, settled: setTrackLiked(trackId, liked, trackSnapshot) };
+}
+
+if (typeof window !== "undefined") {
+  subscribeLocalLikes(() => {
+    if (getAuthSession()?.accessToken) return;
+    const local = getLocalLikes();
+    cache = { tracks: local, total: local.length };
+    loaded = true;
+    emit(false);
+  });
 }
 
 export function reloadLikedTracks(): Promise<void> {
@@ -229,9 +290,11 @@ if (typeof window !== "undefined") {
   const handleRefresh = () => {
     const session = getAuthSession();
     if (!session?.accessToken) {
-      cache = EMPTY;
-      loaded = false;
+      const local = getLocalLikes();
+      cache = { tracks: local, total: local.length };
+      loaded = true;
       fetchedFromServer = false;
+      loadFailed = false;
       optimisticOverrides.clear();
       likeSettledEpoch.clear();
       emit(false);

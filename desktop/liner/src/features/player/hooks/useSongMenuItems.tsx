@@ -95,8 +95,17 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
 
   const handleLike = useCallback(() => {
     if (!id) return;
-    toggleLike(id);
-  }, [id, toggleLike]);
+    toggleLike(id, {
+      track: {
+        id,
+        title,
+        artists,
+        coverUrl,
+        durationMs: durationMs ?? 0,
+        playCount: 0,
+      },
+    });
+  }, [artists, coverUrl, durationMs, id, title, toggleLike]);
 
   const download = useMusicDownloadStore((state) =>
     id ? state.downloads[id] : undefined,

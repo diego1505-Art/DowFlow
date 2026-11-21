@@ -2,15 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addLocalMusicFavorite,
   addMusicFavorite,
+  chooseDownloadRoot,
   fetchLocalMusicFavorites,
   fetchMusicDownloadJob,
   fetchMusicFavorites,
   fetchMusicLibrary,
+  fetchMusicSettings,
+  importMusicCookies,
   removeLocalMusicFavorite,
   removeMusicFavorite,
   startMusicDownload,
 } from "./musicApi";
-import type { LocalMusicFile, StoredMusicFavorite } from "./musicApi";
+import type { LocalMusicFile, MusicSettings, StoredMusicFavorite } from "./musicApi";
 import { searchMusicTracks } from "./youtube/musicSearch";
 import type { MusicTrack } from "./types";
 
@@ -115,6 +118,11 @@ export default function MusicApp() {
   const [favoritesError, setFavoritesError] = useState("");
   const [favoriteBusyIds, setFavoriteBusyIds] = useState<Set<string>>(() => new Set());
   const [favoriteActionError, setFavoriteActionError] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<MusicSettings | null>(null);
+  const [settingsBusy, setSettingsBusy] = useState<"" | "load" | "root" | "cookies">("");
+  const [settingsMessage, setSettingsMessage] = useState("");
+  const [settingsError, setSettingsError] = useState("");
   const [downloadStates, setDownloadStates] = useState<Record<string, DownloadUiState>>({});
   const [currentItem, setCurrentItem] = useState<PlaybackItem | null>(null);
   const [playbackState, setPlaybackState] = useState<"idle" | "resolving" | "ready" | "playing" | "paused" | "error">("idle");
@@ -436,6 +444,65 @@ export default function MusicApp() {
     }
   }
 
+  async function loadSettings(): Promise<void> {
+    setSettingsBusy("load");
+    setSettingsError("");
+    try {
+      setSettings(await fetchMusicSettings());
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "Impossible de charger les paramètres.");
+    } finally {
+      setSettingsBusy("");
+    }
+  }
+
+  function openSettings(): void {
+    setSettingsOpen(true);
+    setSettingsMessage("");
+    setSettingsError("");
+    void loadSettings();
+  }
+
+  async function changeDownloadRoot(): Promise<void> {
+    setSettingsBusy("root");
+    setSettingsError("");
+    setSettingsMessage("");
+    try {
+      const selected = await chooseDownloadRoot();
+      if (!selected) {
+        setSettingsMessage("Sélection annulée.");
+        return;
+      }
+      setSettings(await fetchMusicSettings());
+      setSettingsMessage(`Dossier racine : ${selected}`);
+      void loadLibrary();
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "Le dossier racine n’a pas pu être modifié.");
+    } finally {
+      setSettingsBusy("");
+    }
+  }
+
+  async function importCookies(): Promise<void> {
+    setSettingsBusy("cookies");
+    setSettingsError("");
+    setSettingsMessage("");
+    try {
+      const imported = await importMusicCookies();
+      if (!imported) {
+        setSettingsMessage("Importation annulée.");
+        return;
+      }
+      setSettings(await fetchMusicSettings());
+      const domains = imported.domains.length ? ` (${imported.domains.join(", ")})` : "";
+      setSettingsMessage(`Cookies importés : ${imported.filename}${domains}`);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : "Les cookies n’ont pas pu être importés.");
+    } finally {
+      setSettingsBusy("");
+    }
+  }
+
   async function downloadTrack(track: MusicTrack): Promise<void> {
     const trackId = track.id;
     if (activeDownloadIds.current.has(trackId)) return;
@@ -592,6 +659,15 @@ export default function MusicApp() {
           <span className={`connection-pill ${electronReady ? "is-ready" : "is-warning"}`}>
             <i />{electronReady ? "Electron connecté" : "Shell Electron requis pour YouTube"}
           </span>
+          <button
+            type="button"
+            className="settings-button"
+            onClick={openSettings}
+            aria-label="Ouvrir les paramètres Music"
+            title="Paramètres"
+          >
+            <span aria-hidden="true">⚙</span>
+          </button>
         </div>
       </header>
 
@@ -673,6 +749,52 @@ export default function MusicApp() {
         </div>
         <div className="player-status"><span className={`status-dot ${playbackState}`} /><p title={playbackMessage}>{playbackMessage}</p><label className="volume-control" aria-label="Volume"><span>Vol.</span><input type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} /></label></div>
       </footer>
+      {settingsOpen && (
+        <div
+          className="settings-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSettingsOpen(false);
+          }}
+        >
+          <section className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="music-settings-title">
+            <header className="settings-header">
+              <div>
+                <p className="eyebrow">PARAMÈTRES</p>
+                <h2 id="music-settings-title">Music</h2>
+              </div>
+              <button type="button" className="settings-close" onClick={() => setSettingsOpen(false)} aria-label="Fermer les paramètres">×</button>
+            </header>
+
+            <div className="settings-section">
+              <h3>Téléchargement</h3>
+              <p className="settings-copy">Tous les fichiers sont enregistrés directement dans ce dossier, sans sous-dossier par site, artiste ou album.</p>
+              <p className="settings-path">{settingsBusy === "load" ? "Chargement…" : settings?.download_root ?? "Aucun dossier configuré"}</p>
+              <button type="button" className="settings-action" onClick={() => void changeDownloadRoot()} disabled={settingsBusy !== ""}>
+                {settingsBusy === "root" ? <><i className="spinner" aria-hidden="true" /> Ouverture du sélecteur…</> : "Dossier racine…"}
+              </button>
+            </div>
+
+            <div className="settings-section">
+              <h3>Cookies</h3>
+              <p className="settings-copy">Importe un export Netscape (<code>youtube_cookies.txt</code>, <code>instagram.com_cookies.txt</code>…). Le fichier est validé puis copié dans le dossier cookies de DowFlow.</p>
+              {settings?.cookies_dir && <p className="settings-path">{settings.cookies_dir}</p>}
+              <button type="button" className="settings-action" onClick={() => void importCookies()} disabled={settingsBusy !== ""}>
+                {settingsBusy === "cookies" ? <><i className="spinner" aria-hidden="true" /> Importation…</> : "Importer cookies…"}
+              </button>
+              {settings && settings.cookies.length > 0 ? (
+                <ul className="settings-cookie-list">
+                  {settings.cookies.map((name) => <li key={name}>{name}</li>)}
+                </ul>
+              ) : (
+                <p className="settings-empty">Aucun cookie importé pour le moment.</p>
+              )}
+            </div>
+
+            {settingsMessage && <p className="settings-message" role="status">{settingsMessage}</p>}
+            {settingsError && <p className="settings-error" role="alert">{settingsError}</p>}
+          </section>
+        </div>
+      )}
       <audio ref={audioRef} preload="metadata" crossOrigin="anonymous" />
     </div>
   );

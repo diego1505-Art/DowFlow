@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DowFlow - {{ label }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20251120">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,10 +47,8 @@
         <h1>{{ label }}</h1>
         <p>{{ description }}</p>
         <p>This workspace is not available yet. It will arrive in a future DowFlow update.</p>
-        {% include "export_controls.html" %}
         <span class="badge">Coming soon</span>
         <div><a class="btn" href="/">← Back to menu</a></div>
     </main>
-    <script src="{{ url_for('static', filename='export.js') }}"></script>
 </body>
 </html>

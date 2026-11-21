@@ -55,31 +55,31 @@ class PortableConfigurationTests(unittest.TestCase):
 
     def test_first_frozen_launch_prompts_and_saves_the_media_root(self):
         import folder_picker
-        import startup
+        import launcher
 
         selected = Path("C:/media-root")
-        with patch.object(startup.sys, "frozen", True, create=True), patch.object(
+        with patch.object(launcher.sys, "frozen", True, create=True), patch.object(
             config, "get_download_path", return_value=None
         ), patch.object(config, "set_download_path") as save_path, patch.object(
             folder_picker, "select_download_folder", return_value=str(selected)
         ) as picker:
-            self.assertTrue(startup._ensure_portable_download_folder())
+            self.assertTrue(launcher._ensure_portable_download_folder())
 
         picker.assert_called_once_with(None)
         save_path.assert_called_once_with(str(selected))
 
     def test_missing_saved_media_root_prompts_for_a_replacement(self):
         import folder_picker
-        import startup
+        import launcher
 
         missing_root = Path("Z:/disconnected-media")
         replacement = Path("C:/replacement-media")
-        with patch.object(startup.sys, "frozen", True, create=True), patch.object(
+        with patch.object(launcher.sys, "frozen", True, create=True), patch.object(
             config, "get_download_path", return_value=missing_root
         ), patch.object(config, "set_download_path") as save_path, patch.object(
             folder_picker, "select_download_folder", return_value=str(replacement)
         ) as picker, patch.object(Path, "is_dir", return_value=False):
-            self.assertTrue(startup._ensure_portable_download_folder())
+            self.assertTrue(launcher._ensure_portable_download_folder())
 
         picker.assert_called_once_with(None)
         save_path.assert_called_once_with(str(replacement))
@@ -109,16 +109,36 @@ class PortableConfigurationTests(unittest.TestCase):
                 config, "BASE_DIR", app_dir
             ), patch.object(config, "CONFIG_FILE", config_file):
                 self.assertEqual(config.set_download_path(selected), selected.resolve())
-                self.assertEqual(config.get_download_path(), (selected / "downloads").resolve())
+                self.assertEqual(config.get_download_path(), selected.resolve())
 
             self.assertEqual(
                 json.loads(selected_config.read_text(encoding="utf-8"))["download_path"],
-                str((selected / "downloads").resolve()),
+                str(selected.resolve()),
             )
             self.assertFalse(config_file.exists())
-            self.assertTrue((selected / "downloads").is_dir())
+            self.assertFalse((selected / "downloads").exists())
             self.assertTrue((selected / "bin").is_dir())
             self.assertFalse((selected / "music").exists())
+
+    def test_source_folder_selection_keeps_data_in_the_project(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "project"
+            selected = root / "media"
+            project.mkdir()
+            selected.mkdir()
+
+            with patch.object(config, "IS_FROZEN", False), patch.object(
+                config, "ELECTRON_SHELL", False
+            ), patch.object(config, "BASE_DIR", project), patch.object(
+                config, "CONFIG_FILE", project / "config.json"
+            ), patch.object(config, "BIN_FOLDER", project / "bin"):
+                config.set_download_path(selected)
+                self.assertEqual(config.get_download_path(), selected.resolve())
+
+            self.assertTrue((project / "config.json").is_file())
+            self.assertTrue((selected / "bin").is_dir())
+            self.assertFalse((selected / "config.json").exists())
 
     def test_portable_data_extraction_never_overwrites_existing_files(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -313,129 +333,6 @@ class LocalVideoApiTests(unittest.TestCase):
         self.assertIn(b"dependencyLoading", portable_response.data)
         self.assertIn(b"dependencies-loading.js", portable_response.data)
 
-    def test_export_job_installs_build_requirements_when_pyinstaller_is_missing(self):
-        import app as app_module
-
-        class FakeInstallProcess:
-            commands = []
-
-            def __init__(self, command, **kwargs):
-                self.command = command
-                self.commands.append(command)
-                if command[1:3] == ["-m", "pip"]:
-                    self.stdout = iter(
-                        ["Collecting pyinstaller\n", "Successfully installed pyinstaller\n"]
-                    )
-                else:
-                    executable = root / "dist" / "DowFlow-Video.exe"
-                    executable.parent.mkdir(parents=True, exist_ok=True)
-                    executable.write_bytes(b"exe")
-                    self.stdout = iter(
-                        [json.dumps({"type": "progress", "percent": 55, "stage": "Compressing Python modules"}) + "\n"]
-                    )
-
-            def wait(self):
-                return 0
-
-        job_id = "install-test"
-        original_job = app_module._EXPORT_JOBS.get(job_id)
-        app_module._EXPORT_JOBS[job_id] = {"status": "running"}
-        try:
-            with tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                requirements_file = root / "requirements-build.txt"
-                requirements_file.write_text("pyinstaller>=6\n", encoding="utf-8")
-                find_spec = [None, object()]
-                with patch.object(app_module, "BASE_DIR", root), patch.object(
-                    app_module.importlib.util,
-                    "find_spec",
-                    side_effect=lambda name: find_spec.pop(0),
-                ), patch.object(app_module.subprocess, "Popen", FakeInstallProcess):
-                    app_module._run_export_job(
-                        job_id,
-                        "video",
-                        "DowFlow-Video",
-                        root / "dist" / "DowFlow-Video.exe",
-                    )
-
-                install_command = FakeInstallProcess.commands[0]
-                build_command = FakeInstallProcess.commands[1]
-                self.assertEqual(install_command[1:4], ["-m", "pip", "install"])
-                self.assertEqual(install_command[4:], ["-r", str(requirements_file)])
-                self.assertEqual(build_command[1], str(root / "build_export.py"))
-                self.assertEqual(app_module._EXPORT_JOBS[job_id]["status"], "success")
-        finally:
-            if original_job is None:
-                app_module._EXPORT_JOBS.pop(job_id, None)
-            else:
-                app_module._EXPORT_JOBS[job_id] = original_job
-            app_module._EXPORT_RUNNING = False
-
-    def test_export_route_uses_native_name_and_reports_completed_build(self):
-        import app as app_module
-
-        class ImmediateThread:
-            def __init__(self, target, args=(), **kwargs):
-                self.target = target
-                self.args = args
-
-            def start(self):
-                self.target(*self.args)
-
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            dist_dir = root / "dist"
-            executable = dist_dir / "DowFlow-Video.exe"
-            progress_event = {
-                "type": "progress",
-                "percent": 55,
-                "stage": "Compressing Python modules",
-                "elapsed_seconds": 22,
-                "eta_seconds": 18,
-                "eta_updated_at": 1000,
-            }
-
-            def fake_run(command, **kwargs):
-                if "folder_picker.py" in command[1]:
-                    return SimpleNamespace(returncode=0, stdout=str(executable), stderr="")
-                raise AssertionError("The build must use Popen to stream progress.")
-
-            class FakeProcess:
-                stdout = iter([json.dumps(progress_event) + "\n"])
-
-                def __init__(self, *args, **kwargs):
-                    executable.parent.mkdir(parents=True, exist_ok=True)
-                    executable.write_bytes(b"exe")
-
-                def wait(self):
-                    return 0
-
-            with patch.object(app_module, "BASE_DIR", root), patch.object(
-                app_module.importlib.util, "find_spec", return_value=object()
-            ), patch.object(app_module.subprocess, "run", side_effect=fake_run), patch.object(
-                app_module.subprocess, "Popen", FakeProcess
-            ), patch.object(
-                app_module.threading, "Thread", ImmediateThread
-            ):
-                response = app_module.app.test_client().post(
-                    "/api/export", json={"scope": "video"}
-                )
-                payload = response.get_json()
-                status_response = app_module.app.test_client().get(
-                    f"/api/export/{payload['job_id']}"
-                )
-
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(payload["name"], "DowFlow-Video")
-            self.assertTrue(executable.is_file())
-            job = status_response.get_json()["job"]
-            self.assertEqual(job["scope"], "video")
-            self.assertEqual(job["status"], "success")
-            self.assertEqual(job["progress"], 100)
-            self.assertEqual(job["stage"], "Complete")
-            self.assertEqual(job["eta_seconds"], 0)
-            self.assertEqual(Path(job["path"]), executable)
-
     def test_menu_and_video_pages_render_portable_folder_controls(self):
         import app as app_module
 
@@ -445,13 +342,9 @@ class LocalVideoApiTests(unittest.TestCase):
 
         self.assertEqual(menu_response.status_code, 200)
         self.assertIn(b"downloadFolderDialog", menu_response.data)
-        self.assertIn(b'data-export-scope="all"', menu_response.data)
-        self.assertIn(b"data-export-percent", menu_response.data)
-        self.assertIn(b"data-export-eta", menu_response.data)
         self.assertEqual(video_response.status_code, 200)
         self.assertIn(b"chooseDownloadFolder", video_response.data)
         self.assertIn(b"chooseDownloadedVideo", video_response.data)
-        self.assertIn(b'data-export-scope="video"', video_response.data)
 
         music_response = client.get("/music/explore")
         self.assertEqual(music_response.status_code, 200)
@@ -469,7 +362,6 @@ class LocalVideoApiTests(unittest.TestCase):
 
         category_response = client.get("/film")
         self.assertEqual(category_response.status_code, 200)
-        self.assertIn(b'data-export-scope="film"', category_response.data)
 
     def test_scoped_app_hides_pages_outside_its_build(self):
         import app as app_module
@@ -571,12 +463,11 @@ class LocalVideoApiTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
-            video = folder / "youtube" / "clip.mp4"
-            video.parent.mkdir()
+            video = folder / "clip.mp4"
             video.write_bytes(b"video")
-            unknown_video = folder / "vacances" / "private.mp4"
-            unknown_video.parent.mkdir()
-            unknown_video.write_bytes(b"ignore")
+            nested_video = folder / "vacances" / "private.mp4"
+            nested_video.parent.mkdir()
+            nested_video.write_bytes(b"ignore")
             (folder / "notes.txt").write_text("ignore", encoding="utf-8")
 
             with patch.object(app_module, "_download_folder", return_value=folder):
@@ -584,9 +475,9 @@ class LocalVideoApiTests(unittest.TestCase):
 
             payload = response.get_json()
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(payload["items"][0]["relative_path"], "youtube/clip.mp4")
-            self.assertEqual(payload["items"][0]["file_url"], "/media/youtube/clip.mp4")
             self.assertEqual(len(payload["items"]), 1)
+            self.assertEqual(payload["items"][0]["relative_path"], "clip.mp4")
+            self.assertEqual(payload["items"][0]["file_url"], "/media/clip.mp4")
 
     def test_local_video_endpoint_does_not_create_a_missing_root(self):
         import app as app_module

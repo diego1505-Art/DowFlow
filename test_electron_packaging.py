@@ -110,7 +110,7 @@ print(json.dumps({
             self.assertEqual(Path(result["config"]), user_data.resolve() / "config.json")
             self.assertEqual(Path(result["database"]), user_data.resolve() / "dowflow.db")
             self.assertEqual(Path(result["logs"]), user_data.resolve() / "logs")
-            self.assertEqual(Path(result["download"]), media_root.resolve() / "downloads")
+            self.assertEqual(Path(result["download"]), media_root.resolve())
             self.assertEqual(Path(result["tools"]), user_data.resolve() / "bin")
             self.assertTrue((user_data / "config.json").is_file())
             self.assertFalse((media_root / "config.json").exists())

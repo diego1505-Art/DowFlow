@@ -19,6 +19,7 @@ from config import (
     LANGUAGES,
     YOUTUBE_COOKIES_FILE,
     LINER_COOKIES_DIR,
+    DOWFLOW_COOKIES_DIR,
     CONNECTIONS_OVERRIDE,
     get_download_path,
     normalize_language,
@@ -33,7 +34,6 @@ log = get_logger("playlist")
 
 IGNORED_EXTENSIONS = {".part", ".ytdl", ".jpg", ".jpeg", ".png", ".webp", ".description"}
 VALID_DOWNLOAD_TYPES = {"audio", "video"}
-CONTAINER_SEGMENTS = {"anime", "watch", "video", "videos", "embed", "episode", "show"}
 
 # ── Backward compatibility: map legacy quality keys to VIDEO_QUALITIES ───────
 _LEGACY_QUALITY_MAP = {
@@ -76,11 +76,6 @@ class _AdaptiveDowngrade(BaseException):
         self.note = note
 
 
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
-    return slug or "media"
-
-
 def _friendly_cookie_error(error: Exception) -> str | None:
     message = str(error).lower()
     if "could not copy chrome cookie database" in message or ("permission denied" in message and "cookies" in message):
@@ -120,6 +115,12 @@ def _resolve_cookie_file(url: str | None = None) -> str | None:
     if configured_path:
         cookie_path = Path(configured_path).expanduser()
         return str(cookie_path) if cookie_path.is_file() else None
+
+    # Exports imported from the Music settings (%APPDATA%\DowFlow\cookies).
+    imported = [DOWFLOW_COOKIES_DIR / name for name in (*site_names, "cookies.txt")]
+    for cookie_path in imported:
+        if cookie_path.is_file():
+            return str(cookie_path)
 
     candidates = [YOUTUBE_COOKIES_FILE.with_name(name) for name in site_names]
     for cookie_path in candidates:
@@ -172,40 +173,6 @@ def _cookie_retry_options(ydl_opts: dict[str, Any], cookie_file: str | None) -> 
     else:
         retry_opts.update(yt_dlp_runtime_options(include_browser_cookies=True))
     return retry_opts
-
-
-def _derive_series_slug(parsed_url) -> str:
-    raw_segments = [segment for segment in parsed_url.path.split("/") if segment.strip()]
-    segments = [_slugify(segment) for segment in raw_segments if _slugify(segment)]
-    if not segments:
-        return "remote"
-    if len(segments) >= 2 and segments[0] in CONTAINER_SEGMENTS:
-        return segments[1]
-    return segments[-1]
-
-
-def _build_output_folder(url: str, base_output_path: str) -> str:
-    """Create an output folder based on the domain (YouTube, Instagram, Twitter, etc.)."""
-    parsed = urlparse(url)
-    domain = parsed.netloc.lower().replace("www.", "") or "remote"
-
-    # Clean the domain name for the folder (e.g. youtube.com -> youtube).
-    folder_name = domain.split(".")[0] if "." in domain else domain
-    target_dir = os.path.join(base_output_path, folder_name)
-
-    # Keep a deeper folder structure for complex sites such as anime catalogs.
-    query = parse_qs(parsed.query)
-    stable_id = None
-    for key in ("anime_id", "series_id", "show_id", "id"):
-        values = query.get(key)
-        if values and values[0].strip():
-            stable_id = _slugify(values[0])
-            break
-
-    if stable_id:
-        return os.path.join(target_dir, f"id-{stable_id}")
-
-    return target_dir
 
 
 def _relative_download_path(filepath: str, base_output_path: str) -> str:
@@ -720,7 +687,6 @@ def download_media(
     write_subtitles: bool = False,
     progress_hook=None,
     adaptive_quality: bool = True,
-    force_folder: str | None = None,
 ) -> dict[str, Any]:
     """
         Single entry point:
@@ -733,8 +699,9 @@ def download_media(
             audio_format   : key in AUDIO_OUTPUT_FORMATS (best/mp3/mp3_320/flac/wav/...)
             language       : ISO language code (vf/vo/fr/en/es/...) or None for automatic detection
             write_subtitles: bool; download subtitles when available
-            force_folder   : required output subfolder (e.g. "music") instead of
-                                             automatic organization by domain
+
+        Every file is written directly into ``output_path``: there is no
+        per-domain, per-artist or per-album subfolder.
     """
     import re as _re
 
@@ -748,10 +715,7 @@ def download_media(
     resolved_lang = normalize_language(language) if language else detect_language_from_url(url)
 
     base_output_path = output_path or str(get_download_path())
-    if force_folder:
-        target_output_path = os.path.join(base_output_path, force_folder)
-    else:
-        target_output_path = _build_output_folder(url, base_output_path)
+    target_output_path = base_output_path
     os.makedirs(target_output_path, exist_ok=True)
 
     # ── Start database tracking ───────────────────────────────────────────────
@@ -901,7 +865,7 @@ def download_media(
     if relative_subs:
         result["subtitle_files"] = relative_subs
         log.info("Subtitle files attached: %s", ", ".join(os.path.basename(s) for s in relative_subs))
-    result["folder"] = os.path.relpath(target_output_path, start=base_output_path).replace("\\", "/")
+    result["folder"] = ""
     if resolved_lang:
         result["language"] = resolved_lang
 

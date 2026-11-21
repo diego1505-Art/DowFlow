@@ -231,3 +231,25 @@ audio { display: none; }
   .library-filter { width: 100%; }
   .legacy-link { text-align: left; line-height: 1.5; }
 }
+
+.settings-button { width: 36px; height: 36px; display: inline-grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--soft); font-size: 16px; cursor: pointer; transition: color .16s ease, background .16s ease; }
+.settings-button:hover { color: #fff; background: rgba(255,255,255,.05); }
+.settings-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: rgba(5,7,11,.72); backdrop-filter: blur(6px); }
+.settings-panel { width: min(100%, 560px); max-height: min(86vh, 720px); overflow: auto; padding: 26px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); box-shadow: 0 30px 90px rgba(0,0,0,.5); }
+.settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.settings-header h2 { margin: 0; font: 800 26px/1.1 Manrope, sans-serif; letter-spacing: -.05em; }
+.settings-close { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.settings-close:hover { color: #fff; background: rgba(255,255,255,.05); }
+.settings-section { padding: 18px 0; border-top: 1px solid var(--line); }
+.settings-section h3 { margin: 0 0 8px; font: 700 15px/1.2 Manrope, sans-serif; }
+.settings-copy { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.settings-copy code { padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,.06); font-size: 11.5px; }
+.settings-path { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); color: var(--soft); font: 12px/1.4 Consolas, monospace; overflow-wrap: anywhere; }
+.settings-action { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid rgba(198,243,107,.35); border-radius: 10px; background: rgba(198,243,107,.1); color: var(--accent-strong); font-size: 12px; font-weight: 600; cursor: pointer; }
+.settings-action:hover:not(:disabled) { background: rgba(198,243,107,.16); }
+.settings-action:disabled { opacity: .55; cursor: default; }
+.settings-cookie-list { margin: 12px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.settings-cookie-list li { padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--soft); font-size: 11px; }
+.settings-empty { margin: 10px 0 0; color: #6e7482; font-size: 11px; }
+.settings-message { margin: 14px 0 0; color: var(--accent); font-size: 12px; }
+.settings-error { margin: 14px 0 0; color: #ff9c8a; font-size: 12px; }

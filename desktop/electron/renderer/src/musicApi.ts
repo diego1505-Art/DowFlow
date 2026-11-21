@@ -29,6 +29,12 @@ export interface LocalMusicFile {
   mtime: number;
 }
 
+export interface MusicSettings {
+  download_root: string | null;
+  cookies_dir: string;
+  cookies: string[];
+}
+
 export interface StartMusicDownload {
   id: string;
   title: string;
@@ -82,6 +88,26 @@ interface MusicDownloadJobResponse {
   job?: MusicDownloadJob;
 }
 
+interface MusicSettingsResponse {
+  success: boolean;
+  download_root?: string | null;
+  cookies_dir?: string;
+  cookies?: string[];
+}
+
+interface ChooseRootResponse {
+  success: boolean;
+  cancelled?: boolean;
+  path?: string;
+}
+
+interface ImportCookiesResponse {
+  success: boolean;
+  cancelled?: boolean;
+  filename?: string;
+  domains?: string[];
+}
+
 const STREAM_FAVORITES_URL = "/api/music/stream/favorites";
 const LOCAL_FAVORITES_URL = "/api/music/favorites";
 const MUSIC_DOWNLOAD_URL = "/api/music/download";
@@ -109,6 +135,56 @@ async function readJson<T>(response: Response, label: string): Promise<T> {
   } catch {
     throw new Error(`La réponse de l’API ${label} est invalide (JSON attendu).`);
   }
+}
+
+export async function fetchMusicSettings(signal?: AbortSignal): Promise<MusicSettings> {
+  const response = await fetch("/api/music/settings", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    signal,
+  });
+  const body = await readJson<MusicSettingsResponse>(response, "paramètres Music");
+  if (body.success !== true) {
+    throw new Error("La réponse des paramètres Music est invalide.");
+  }
+  return {
+    download_root: typeof body.download_root === "string" ? body.download_root : null,
+    cookies_dir: typeof body.cookies_dir === "string" ? body.cookies_dir : "",
+    cookies: Array.isArray(body.cookies)
+      ? body.cookies.filter((name): name is string => typeof name === "string")
+      : [],
+  };
+}
+
+export async function chooseDownloadRoot(): Promise<string | null> {
+  const response = await fetch("/api/download-folder/select", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  const body = await readJson<ChooseRootResponse>(response, "dossier racine");
+  if (body.cancelled) return null;
+  if (body.success !== true || typeof body.path !== "string") {
+    throw new Error("Le dossier racine n’a pas pu être enregistré.");
+  }
+  return body.path;
+}
+
+export async function importMusicCookies(): Promise<{ filename: string; domains: string[] } | null> {
+  const response = await fetch("/api/music/cookies/import", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  const body = await readJson<ImportCookiesResponse>(response, "importation des cookies");
+  if (body.cancelled) return null;
+  if (body.success !== true || typeof body.filename !== "string") {
+    throw new Error("Les cookies n’ont pas pu être importés.");
+  }
+  return {
+    filename: body.filename,
+    domains: Array.isArray(body.domains)
+      ? body.domains.filter((domain): domain is string => typeof domain === "string")
+      : [],
+  };
 }
 
 export async function startMusicDownload(track: StartMusicDownload): Promise<StartedMusicDownload> {

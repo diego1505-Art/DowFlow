@@ -1,13 +1,14 @@
+import { useMemo } from "react";
 import { api, toClientTrack } from "@/shared/api";
 import type { PopularItem } from "./usePopularTracks";
 import { loadWithRetry, useSessionOwner } from "./sessionAwareLoad";
+import { useLocalListeningHistory } from "./useLocalListeningHistory";
 import { freshFor, useCachedResource } from "@/shared/cache/useCachedResource";
 
 export const recentlyPlayedKeys = {
   all: ["recently_played"] as const,
 };
 
-const EMPTY_ITEMS: PopularItem[] = [];
 const RECENT_POLICY = { isFresh: freshFor(60_000), revalidateOnFocus: true };
 
 async function loadRecentlyPlayed(limit: number): Promise<PopularItem[]> {
@@ -66,10 +67,30 @@ async function loadRecentlyPlayed(limit: number): Promise<PopularItem[]> {
 
 export function useRecentlyPlayed(limit = 20) {
   const owner = useSessionOwner();
+  // Signed-out users have no server-side history, and a fresh account can be
+  // empty: merge the tracks played on this device instead of hiding the
+  // "jump back in" row. Local plays come first so a track started a second
+  // ago shows up before the server-side history catches up.
+  const localItems = useLocalListeningHistory(limit);
   const { data, isLoading } = useCachedResource(
     `home:recent:${owner}:${limit}`,
     () => loadRecentlyPlayed(limit),
     RECENT_POLICY,
   );
-  return { data: data ?? EMPTY_ITEMS, isLoading };
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: PopularItem[] = [];
+    for (const item of [...localItems, ...(data ?? [])]) {
+      const key =
+        item.type === "track"
+          ? `track:${item.item.id}`
+          : `${item.type}:${item.item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+      if (merged.length >= limit) break;
+    }
+    return merged;
+  }, [localItems, data, limit]);
+  return { data: items, isLoading };
 }

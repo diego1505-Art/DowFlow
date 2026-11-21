@@ -26,11 +26,10 @@ echo    2  Video               dist\DowFlow-Video.exe
 echo    3  Music               dist\DowFlow-Music.exe
 echo    4  Movies / Series     dist\DowFlow-Films.exe
 echo    5  Anime               dist\DowFlow-Anime.exe
-echo    6  Launcher (icon)     dist\DowFlow-Launcher.exe
 echo    0  Quit
 echo.
 set "CHOICE="
-set /p "CHOICE=Choice [0-6]: "
+set /p "CHOICE=Choice [0-5]: "
 if not defined CHOICE goto :menu
 
 set "SCOPE="
@@ -40,7 +39,6 @@ if "%CHOICE%"=="2" set "SCOPE=video" & set "DEFAULT_NAME=DowFlow-Video"
 if "%CHOICE%"=="3" set "SCOPE=music" & set "DEFAULT_NAME=DowFlow-Music"
 if "%CHOICE%"=="4" set "SCOPE=film" & set "DEFAULT_NAME=DowFlow-Films"
 if "%CHOICE%"=="5" set "SCOPE=anime" & set "DEFAULT_NAME=DowFlow-Anime"
-if "%CHOICE%"=="6" goto :build_launcher
 if "%CHOICE%"=="0" goto :done
 if not defined SCOPE goto :menu
 
@@ -69,23 +67,6 @@ if exist "dist\%NAME%.exe" (
 ) else (
     echo [OK] dist\%NAME%.exe
 )
-echo.
-pause
-goto :menu
-
-:build_launcher
-echo.
-echo Building DowFlow-Launcher.exe (the start.bat icon).
-"%PYTHON%" -c "import PyInstaller" >nul 2>&1
-if errorlevel 1 (
-    echo [INFO] Installing the build requirements...
-    "%PYTHON%" -m pip install --disable-pip-version-check -q -r requirements-build.txt
-    if errorlevel 1 goto :failed
-)
-"%PYTHON%" -m PyInstaller --noconfirm --clean launcher.spec
-if errorlevel 1 goto :failed
-echo.
-echo [OK] dist\DowFlow-Launcher.exe
 echo.
 pause
 goto :menu

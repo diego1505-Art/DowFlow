@@ -26,6 +26,7 @@ import {
   type LyricsCandidate,
   type LyricsSyncLevel,
   type PlaybackContext,
+  type PopularTimeWindow,
   type RecordPlaybackEventRequest,
 } from "@/shared/api";
 import { toClientTrack } from "@/shared/api/track";
@@ -49,6 +50,7 @@ import { showToast } from "@/shared/ui";
 import { createTranslatorSync, getStoredLocale } from "@/languages";
 import type { Track } from "@/shared/types";
 import { isLocalTrackId } from "@/shared/media/local";
+import { recordListeningHistory } from "../lib/listeningHistory";
 import { readSavedLyrics } from "@/shared/media/saved";
 import { loadAmbientScript } from "@/shared/media/ambient";
 import { STREAMS_REFUSED_MESSAGE } from "@/shared/youtube";
@@ -341,6 +343,7 @@ class PlayerEngine {
   private radioWaveId: string | null = null;
   // single in-flight similar-tracks request, so a refill and an end-of-queue wait share it
   private radioFetchInFlight: Promise<void> | null = null;
+  private popularFetchInFlight: Promise<void> | null = null;
   private consecutiveAutoSkips = 0;
   private consecutiveOfflineSkips = 0;
   private lastPreloadKey: string | null = null;
@@ -380,6 +383,7 @@ class PlayerEngine {
           newTrack = true;
           this.lastPreloadKey = null;
           if (state.currentTrack) {
+            recordListeningHistory(state.currentTrack);
             this.telemetry.startTrack(
               state.currentTrack,
               state.playbackContext,
@@ -748,12 +752,12 @@ class PlayerEngine {
     const store = usePlayerStore.getState();
     const nextIndex = this.computeNextIndex(isAutoEnd);
 
-    if (
-      nextIndex === null &&
-      isRadioContext(store.playbackContext) &&
-      store.currentTrack
-    ) {
-      // radio ran dry (refill not back yet / failed earlier): fetch now and carry on
+    const canContinue =
+      isRadioContext(store.playbackContext) || continuesWithSimilar(store);
+    if (nextIndex === null && canContinue && store.currentTrack) {
+      // The queue ran dry (refill not back yet, failed earlier, or the last
+      // track of a plain list was reached): fetch similar and popular tracks
+      // now and carry on instead of stopping the music.
       const lengthBefore = store.queue.length;
       const waitSession = this.sessionId;
       store.setStatus("loading", null);
@@ -761,7 +765,7 @@ class PlayerEngine {
         clearTimeout(this.radioAppendTimeout);
         this.radioAppendTimeout = null;
       }
-      await this.appendSimilarTracksForSeed(waitSession, store.currentTrack.id);
+      await this.appendContinuationTracks(waitSession, store.currentTrack.id);
       if (waitSession !== this.sessionId) return;
       if (usePlayerStore.getState().queue.length > lengthBefore) {
         await this.skipNext(isAutoEnd);
@@ -1401,8 +1405,120 @@ class PlayerEngine {
     }
 
     this.radioAppendTimeout = setTimeout(() => {
-      void this.appendSimilarTracksForSeed(session, seedTrackId);
+      void this.appendContinuationTracks(session, seedTrackId);
     }, 400);
+  }
+
+  /**
+   * Keep playback going forever: first ask the similar/radio engine, then fall
+   * back to popular tracks from the Explore feed when it returns nothing.
+   */
+  private async appendContinuationTracks(
+    session: number,
+    seedTrackId: string,
+  ): Promise<void> {
+    try {
+      await Promise.race([
+        this.appendSimilarTracksForSeed(session, seedTrackId),
+        new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+      ]);
+    } catch {
+      // The popular fallback below still keeps the queue alive.
+    }
+
+    if (session !== this.sessionId) return;
+    const state = usePlayerStore.getState();
+    const radio = isRadioContext(state.playbackContext);
+    if (!radio && !continuesWithSimilar(state)) return;
+    if (radio) {
+      if (!shouldRefillRadio(state.queue.length, state.currentIndex)) return;
+    } else if (state.currentIndex < state.queue.length - 1) {
+      // Similar tracks already extended the queue.
+      return;
+    }
+    await this.appendPopularTracks(session);
+  }
+
+  private appendPopularTracks(session: number): Promise<void> {
+    if (this.popularFetchInFlight) return this.popularFetchInFlight;
+    const run = this.fetchAndAppendPopularTracks(session).finally(() => {
+      if (this.popularFetchInFlight === run) this.popularFetchInFlight = null;
+    });
+    this.popularFetchInFlight = run;
+    return run;
+  }
+
+  private async fetchAndAppendPopularTracks(session: number): Promise<void> {
+    const startState = usePlayerStore.getState();
+    const radio = isRadioContext(startState.playbackContext);
+    if (!radio && !continuesWithSimilar(startState)) return;
+    const startContext = startState.playbackContext;
+
+    // Random popularity window + shuffle: a different slice of the world's
+    // popular catalog each time the queue needs food.
+    const windows: PopularTimeWindow[] = ["24h", "7d", "30d", "all"];
+    const randomWindow =
+      windows[Math.floor(Math.random() * windows.length)] ?? "7d";
+    const candidates: Track[] = [];
+    const windowsToTry: PopularTimeWindow[] = [randomWindow, "all"];
+
+    for (const window of windowsToTry) {
+      try {
+        const response = await api.getPopularTracks(window, 60);
+        const state = usePlayerStore.getState();
+        if (
+          radio
+            ? state.playbackContext !== startContext
+            : session !== this.sessionId
+        ) {
+          return;
+        }
+        const queuedIds = new Set(state.queue.map((track) => track.id));
+        for (const entry of response.items ?? []) {
+          const track = toClientTrack(entry.track);
+          if (!track.id || isLocalTrackId(track.id)) continue;
+          if (queuedIds.has(track.id)) continue;
+          if (candidates.some((item) => item.id === track.id)) continue;
+          candidates.push(track);
+        }
+        if (candidates.length > 0) break;
+      } catch (error) {
+        log(
+          "yellow",
+          "radio",
+          `popular continuation fetch failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    if (candidates.length === 0) return;
+    const state = usePlayerStore.getState();
+    if (
+      radio
+        ? state.playbackContext !== startContext
+        : session !== this.sessionId
+    ) {
+      return;
+    }
+    if (!radio && !continuesWithSimilar(state)) return;
+
+    const queuedIds = new Set(state.queue.map((track) => track.id));
+    const additions = shuffleArray(candidates)
+      .filter((track) => !queuedIds.has(track.id))
+      .slice(0, 25);
+    if (additions.length === 0) return;
+
+    const sample = additions
+      .slice(0, 3)
+      .map((track) => `"${track.title}" by ${track.artists || "Unknown"}`)
+      .join(", ");
+    log(
+      "green",
+      "radio",
+      `appending ${additions.length} popular tracks to keep playing: [${sample}]`,
+    );
+    state.setQueue([...state.queue, ...additions]);
+    this.preloadNextTrack(state);
   }
 
   private appendSimilarTracksForSeed(

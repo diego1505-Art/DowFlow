@@ -86,7 +86,7 @@ import {
 import { DiscordRpcManager } from "./discord.js";
 import { PoTokenService } from "./youtube/potoken.js";
 import { confineToApp, handleTrusted, onTrusted } from "./ipc-guard.js";
-import { setupLocalTracks } from "./local-tracks/ipc.js";
+import { setupLocalTracks, syncLocalTracksNow } from "./local-tracks/ipc.js";
 import { findDowflowBackend } from "./dowflow-backend.js";
 import {
   createSavedTrackLibrary,
@@ -2127,6 +2127,9 @@ if (!gotTheLock) {
             return { status: "failed", error: "Download job not found." };
           }
           const status = data.job.status ?? "running";
+          // Bring the finished track into "On this device" immediately instead
+          // of waiting for the periodic folder sync.
+          if (status === "success") syncLocalTracksNow();
           return {
             status:
               status === "success" ||

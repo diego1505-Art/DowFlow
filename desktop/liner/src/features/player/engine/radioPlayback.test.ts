@@ -147,6 +147,35 @@ describe("radio playback", () => {
     expect(usePlayerStore.getState().currentTrack?.id).toBe("1");
   });
 
+  it("keeps a plain list playing with popular tracks when similar tracks run out", async () => {
+    usePlayerStore.setState({ autoplaySimilar: true });
+    getRadio.mockResolvedValue(radioItems([]));
+    const getPopular = vi.spyOn(api, "getPopularTracks").mockResolvedValue({
+      items: [
+        {
+          track: {
+            id: "p1",
+            title: "Popular One",
+            artists: "World Artist",
+            durationMs: 180000,
+          },
+          playCount: 10,
+        },
+      ],
+    } as any);
+
+    const tracks = [mk("1"), mk("2")];
+    await playerEngine.playTrack(tracks[1], tracks, "En écoute en ce moment");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(getPopular).toHaveBeenCalled();
+    expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual([
+      "1",
+      "2",
+      "p1",
+    ]);
+  });
+
   it("drops similar tracks that arrive after repeat was turned on", async () => {
     usePlayerStore.setState({ autoplaySimilar: true });
     let resolve!: (v: unknown) => void;

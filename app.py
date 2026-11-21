@@ -1,7 +1,5 @@
 import gzip
 import importlib
-import importlib.util
-import json
 import hmac
 import os
 import subprocess
@@ -10,16 +8,15 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any
 from urllib.parse import quote
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, url_for
 from werkzeug.utils import secure_filename
-from folder_picker import select_download_folder
+from folder_picker import select_cookie_file, select_download_folder
+import download_manager
 
 from config import (
     APP_SCOPE,
-    BASE_DIR,
     DownloadPathNotConfigured,
     IS_FROZEN,
     SOURCE_DIR,
@@ -34,6 +31,7 @@ from config import (
     ALLOWED_LOCAL_EXTENSIONS,
     PREVIEWABLE_EXTENSIONS,
     AUDIO_OUTPUT_FORMATS,
+    DOWFLOW_COOKIES_DIR,
 )
 from utils import has_ffmpeg, is_http_url
 from playlist import download_media, get_frontend_config
@@ -58,9 +56,6 @@ if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
     from music_stream_api import music_stream_api
 
     app.register_blueprint(music_stream_api)
-_EXPORT_JOBS: dict[str, dict[str, Any]] = {}
-_EXPORT_LOCK = threading.Lock()
-_EXPORT_RUNNING = False
 # Track in-flight music downloads so repeated clicks reuse the same job.
 _MUSIC_DOWNLOAD_JOBS: dict[str, tuple[str, float]] = {}
 _MUSIC_DOWNLOAD_LOCK = threading.Lock()
@@ -183,25 +178,6 @@ def enforce_export_scope():
     if IS_FROZEN and not _scope_allows_path(APP_SCOPE, request.path):
         abort(404)
 
-
-@app.context_processor
-def export_template_context():
-    path = request.path
-    if path == "/":
-        export_scope = "all"
-    elif path.startswith("/music"):
-        export_scope = "music"
-    elif path == "/video":
-        export_scope = "video"
-    elif path.strip("/") in COMING_SOON_CATEGORIES:
-        export_scope = path.strip("/")
-    else:
-        export_scope = "all"
-    return {
-        "app_scope": APP_SCOPE,
-        "can_export": not IS_FROZEN,
-        "export_scope": export_scope,
-    }
 
 # Categories not available yet in the main menu
 COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
@@ -520,6 +496,55 @@ def music_folder_location():
     return jsonify({"success": True, "path": str(folder)})
 
 
+@app.get("/api/music/settings")
+def music_settings():
+    """Return the single download root and the imported cookie exports."""
+    folder = get_download_path(required=False)
+    return jsonify(
+        {
+            "success": True,
+            "download_root": str(folder) if folder else None,
+            "cookies_dir": str(DOWFLOW_COOKIES_DIR),
+            "cookies": download_manager.list_imported_cookies(DOWFLOW_COOKIES_DIR),
+        }
+    )
+
+
+@app.post("/api/music/cookies/import")
+def music_cookies_import():
+    """Pick a Netscape cookie export and copy it into DowFlow's cookie folder."""
+    initial = (
+        DOWFLOW_COOKIES_DIR
+        if DOWFLOW_COOKIES_DIR.is_dir()
+        else Path.home() / "Downloads"
+    )
+    try:
+        selected = select_cookie_file(str(initial))
+    except Exception as exc:
+        log.error("[music] Cookie picker failed: %s", exc, exc_info=True)
+        return jsonify({"success": False, "error": str(exc)}), 500
+    if not selected:
+        return jsonify({"success": False, "cancelled": True}), 200
+    try:
+        imported = download_manager.import_cookie_file(selected, DOWFLOW_COOKIES_DIR)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    log.success("[music] Cookies imported for %s", ", ".join(imported["domains"]))
+    return jsonify({"success": True, **imported})
+
+
+@app.get("/api/music/cookies")
+def music_cookies_list():
+    """List the cookie exports already imported into DowFlow."""
+    return jsonify(
+        {
+            "success": True,
+            "dir": str(DOWFLOW_COOKIES_DIR),
+            "items": download_manager.list_imported_cookies(DOWFLOW_COOKIES_DIR),
+        }
+    )
+
+
 @app.post("/api/music/covers")
 def music_covers_backfill():
     """Write the cover art missing for tracks already in the Music folder."""
@@ -613,28 +638,22 @@ def local_videos():
         return jsonify({"success": False, "error": "Choose a download folder first."}), 409
 
     items = []
-    known_media_folders = {
-        "youtube", "instagram", "snapchat", "tiktok", "twitter", "x",
-        "facebook", "vimeo", "dailymotion", "reddit", "franime", "music",
-    }
+    # Every file lives directly in the download root: there are no per-domain
+    # or per-series subfolders to scan.
     try:
-        media_roots = [
-            child for child in folder.iterdir()
-            if child.is_dir() and child.name.casefold() in known_media_folders
-        ]
+        files = list(folder.iterdir())
     except OSError:
-        media_roots = []
+        files = []
 
-    for media_root in media_roots:
-        for path in media_root.rglob("*"):
-            if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
-                continue
-            try:
-                stat = path.stat()
-            except OSError:
-                continue
-            relative = path.relative_to(folder).as_posix()
-            items.append(
+    for path in files:
+        if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        relative = path.name
+        items.append(
                 {
                     "filename": path.name,
                     "relative_path": relative,
@@ -645,189 +664,6 @@ def local_videos():
             )
     items.sort(key=lambda item: item["modified"], reverse=True)
     return jsonify({"success": True, "items": items})
-
-
-def _run_export_job(job_id: str, scope: str, name: str, output_path: Path) -> None:
-    global _EXPORT_RUNNING
-    try:
-        if importlib.util.find_spec("PyInstaller") is None:
-            requirements_file = BASE_DIR / "requirements-build.txt"
-            if not requirements_file.is_file():
-                raise RuntimeError("requirements-build.txt was not found in the project folder.")
-            with _EXPORT_LOCK:
-                _EXPORT_JOBS[job_id].update(
-                    stage="Installing build dependencies",
-                    progress=1,
-                    eta_seconds=None,
-                    eta_updated_at=time.time(),
-                )
-            install = subprocess.Popen(
-                [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
-                cwd=BASE_DIR,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-                creationflags=SUBPROCESS_CREATION_FLAGS,
-            )
-            install_output: list[str] = []
-            if install.stdout is not None:
-                for line in install.stdout:
-                    install_output.append(line.rstrip())
-                    install_output = install_output[-100:]
-            if install.wait() != 0:
-                detail = "\n".join(install_output)[-5000:]
-                raise RuntimeError(detail or "Unable to install build dependencies.")
-            if importlib.util.find_spec("PyInstaller") is None:
-                raise RuntimeError("PyInstaller is still unavailable after installing build dependencies.")
-
-        build_script = BASE_DIR / "build_export.py"
-        process = subprocess.Popen(
-            [sys.executable, str(build_script), scope, name, "--json-progress"],
-            cwd=BASE_DIR,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-            creationflags=SUBPROCESS_CREATION_FLAGS,
-        )
-        recent_output: list[str] = []
-        if process.stdout is not None:
-            for line in process.stdout:
-                try:
-                    event = json.loads(line)
-                except ValueError:
-                    recent_output.append(line.rstrip())
-                    recent_output = recent_output[-100:]
-                    continue
-                if event.get("type") != "progress":
-                    continue
-                with _EXPORT_LOCK:
-                    job = _EXPORT_JOBS.get(job_id)
-                    if job:
-                        job.update(
-                            progress=event.get("percent", job.get("progress", 0)),
-                            stage=event.get("stage", job.get("stage")),
-                            elapsed_seconds=event.get("elapsed_seconds", job.get("elapsed_seconds", 0)),
-                            eta_seconds=event.get("eta_seconds"),
-                            eta_updated_at=event.get("eta_updated_at", time.time()),
-                        )
-        return_code = process.wait()
-        with _EXPORT_LOCK:
-            job = _EXPORT_JOBS[job_id]
-            if return_code == 0 and output_path.is_file():
-                job.update(
-                    status="success",
-                    progress=100,
-                    stage="Complete",
-                    eta_seconds=0,
-                    eta_updated_at=time.time(),
-                    path=str(output_path),
-                    error=None,
-                )
-            else:
-                detail = "\n".join(recent_output)[-5000:]
-                job.update(
-                    status="failed",
-                    stage="Build failed",
-                    eta_seconds=None,
-                    eta_updated_at=time.time(),
-                    path=None,
-                    error=detail.strip() or "PyInstaller failed.",
-                )
-    except Exception as exc:
-        with _EXPORT_LOCK:
-            _EXPORT_JOBS[job_id].update(status="failed", path=None, error=str(exc))
-    finally:
-        with _EXPORT_LOCK:
-            _EXPORT_RUNNING = False
-
-
-@app.post("/api/export")
-def start_export():
-    global _EXPORT_RUNNING
-    if IS_FROZEN:
-        return jsonify({"success": False, "error": "Export is available from the source project only."}), 409
-    if request.remote_addr not in {"127.0.0.1", "::1"}:
-        return jsonify({"success": False, "error": "Export is restricted to the local computer."}), 403
-    data = request.get_json(silent=True) or {}
-    scope = str(data.get("scope") or "")
-    allowed_scopes = {"all", "video", "music", "film", "anime"}
-    if scope not in allowed_scopes:
-        return jsonify({"success": False, "error": "Unsupported export scope."}), 400
-
-    dist_dir = BASE_DIR / "dist"
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    picker = Path(__file__).with_name("folder_picker.py")
-    try:
-        picker_result = subprocess.run(
-            [sys.executable, str(picker), "--save-exe", scope, str(dist_dir)],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=600,
-            check=False,
-            creationflags=SUBPROCESS_CREATION_FLAGS,
-        )
-    except Exception as exc:
-        return jsonify({"success": False, "error": f"Unable to open the save dialog: {exc}"}), 500
-    selected = picker_result.stdout.strip()
-    if picker_result.returncode != 0:
-        return jsonify({"success": False, "error": picker_result.stderr.strip() or "Save dialog failed."}), 500
-    if not selected:
-        return jsonify({"success": False, "cancelled": True}), 200
-
-    target_path = Path(selected).expanduser().resolve()
-    if target_path.parent != dist_dir.resolve() or target_path.suffix.lower() != ".exe":
-        return jsonify({"success": False, "error": "Choose an .exe name directly inside the dist folder."}), 400
-
-    from build_export import sanitize_exe_name
-
-    try:
-        name = sanitize_exe_name(target_path.name)
-    except ValueError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 400
-    target_path = dist_dir / f"{name}.exe"
-
-    with _EXPORT_LOCK:
-        if _EXPORT_RUNNING:
-            return jsonify({"success": False, "error": "Another executable is already being built."}), 409
-        _EXPORT_RUNNING = True
-        job_id = uuid.uuid4().hex[:12]
-        _EXPORT_JOBS[job_id] = {
-            "id": job_id,
-            "scope": scope,
-            "name": name,
-            "status": "running",
-            "progress": 1,
-            "stage": "Preparing build",
-            "elapsed_seconds": 0,
-            "eta_seconds": None,
-            "eta_updated_at": time.time(),
-            "path": None,
-            "error": None,
-        }
-
-    threading.Thread(
-        target=_run_export_job,
-        args=(job_id, scope, name, target_path),
-        name=f"export-{job_id}",
-        daemon=True,
-    ).start()
-    return jsonify({"success": True, "job_id": job_id, "name": name})
-
-
-@app.get("/api/export/<job_id>")
-def export_status(job_id: str):
-    with _EXPORT_LOCK:
-        job = _EXPORT_JOBS.get(job_id)
-        if job is None:
-            return jsonify({"success": False, "error": "Export job not found."}), 404
-        return jsonify({"success": True, "job": dict(job)})
 
 
 @app.route("/history")
@@ -1246,9 +1082,9 @@ def _start_network_detection() -> None:
 
 
 # ── Parent watchdog ────────────────────────────────────────────────────
-# ``startup.py`` spawns this server with CREATE_NO_WINDOW, so it owns a hidden
-# console that survives the one the user closes: without a watchdog every
-# launch left one more Flask server listening on 5001, 5002, ... forever.
+# ``launcher.py`` spawns this server from its console. If that console closes
+# or the launcher crashes, the server would keep the port forever: without a
+# watchdog every launch left one more Flask server on 5001, 5002, ... forever.
 _WATCHDOG_POLL_SECONDS = 1.0
 _SYNCHRONIZE = 0x00100000
 _WAIT_TIMEOUT = 0x00000102

@@ -28,37 +28,32 @@ def select_download_folder(
         root.destroy()
 
 
+def select_cookie_file(
+    initial_directory: str | None = None,
+    title: str = "Select a Netscape cookie export",
+) -> str | None:
+    """Open a native file picker for a cookies.txt export."""
+    from tkinter import Tk, filedialog
+
+    root = Tk()
+    root.withdraw()
+    try:
+        try:
+            root.attributes("-topmost", True)
+        except Exception:
+            pass
+        return filedialog.askopenfilename(
+            parent=root,
+            title=title,
+            initialdir=initial_directory or str(Path.home() / "Downloads"),
+            filetypes=[("Cookie exports", "*.txt"), ("All files", "*.*")],
+        ) or None
+    finally:
+        root.destroy()
+
+
 def main(arguments: list[str] | None = None) -> int:
     values = arguments if arguments is not None else sys.argv[1:]
-    if values and values[0] == "--save-exe":
-        if len(values) < 3:
-            return 2
-        scope, initial_directory = values[1], values[2]
-        default_name = "DowFlow.exe" if scope == "all" else f"DowFlow-{scope.title()}.exe"
-        from tkinter import Tk, filedialog
-
-        root = Tk()
-        root.withdraw()
-        try:
-            try:
-                root.attributes("-topmost", True)
-            except Exception:
-                pass
-            selected = filedialog.asksaveasfilename(
-                parent=root,
-                title="Export DowFlow as a Windows executable",
-                initialdir=initial_directory,
-                initialfile=default_name,
-                defaultextension=".exe",
-                filetypes=[("Windows executable", "*.exe")],
-                confirmoverwrite=True,
-            )
-        finally:
-            root.destroy()
-        if selected:
-            print(selected)
-        return 0
-
     initial_directory = values[0] if values else None
     selected = select_download_folder(initial_directory)
     if selected:

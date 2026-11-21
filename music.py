@@ -15,27 +15,27 @@ import re
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
 
 import requests
 
-from config import AUDIO_EXTENSIONS, DOWNLOAD_FOLDER, get_download_path
+import download_manager
+from config import AUDIO_EXTENSIONS, get_download_path
 from logger import get_logger
 from music_dataset import get_dataset
 from utils import yt_dlp_runtime_options
 
 log = get_logger("music")
 
-MUSIC_SUBFOLDER = "music"
-_DEFAULT_MUSIC_FOLDER = DOWNLOAD_FOLDER / MUSIC_SUBFOLDER
-MUSIC_FOLDER = _DEFAULT_MUSIC_FOLDER
+# Tests and the desktop player can override the folder; otherwise Music uses
+# the single download root directly.
+MUSIC_FOLDER: Path | None = None
 
 
-def _music_folder():
-    if MUSIC_FOLDER != _DEFAULT_MUSIC_FOLDER:
-        return MUSIC_FOLDER
-    return get_download_path() / MUSIC_SUBFOLDER
+def _music_folder() -> Path:
+    return MUSIC_FOLDER or get_download_path()
 
 COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 DEEZER_SEARCH_URL = "https://api.deezer.com/search"
@@ -84,6 +84,23 @@ def _video_id_from_url(url: str) -> str | None:
             if marker in parsed.path:
                 return parsed.path.split(marker, 1)[1].split("/")[0] or None
     return None
+
+
+def _music_track_payload(folder: Path, path: Path, artist: str, title: str) -> dict[str, Any]:
+    """Describe an audio file served through /media/ with its optional cover."""
+    cover_name = None
+    for ext in COVER_EXTENSIONS:
+        candidate = folder / f"{path.stem}{ext}"
+        if candidate.is_file():
+            cover_name = candidate.name
+            break
+    return {
+        "filename": path.name,
+        "title": title or path.stem,
+        "artist": artist,
+        "audio_url": f"/media/{quote(path.name)}",
+        "cover_url": f"/media/{quote(cover_name)}" if cover_name else None,
+    }
 
 
 def _library_track_metadata(stem: str) -> tuple[str, str, str]:
@@ -348,7 +365,7 @@ def download_music_track(
     artist: str | None = None,
     progress_hook=None,
 ) -> dict[str, Any]:
-    """Download a track as audio (with optional cover) into `downloads/music`."""
+    """Download a track as audio (with optional cover) directly into the root."""
     from playlist import download_media
 
     base_output = output_path or str(get_download_path())
@@ -358,24 +375,37 @@ def download_music_track(
         download_type="audio",
         audio_format=audio_format,
         progress_hook=progress_hook,
-        force_folder=MUSIC_SUBFOLDER,
     )
 
     filepath = result.get("filepath")
-    cover_source = fetch_cover_url(artist, title or result.get("title"))
-    if cover_source:
-        result["cover_url"] = cover_source
+    video_id = _video_id_from_url(url)
+    cover_source = None
 
     if filepath and os.path.isfile(filepath):
-        video_id = _video_id_from_url(url)
+        download_manager.record_download(
+            url,
+            title or result.get("title"),
+            artist,
+            filepath,
+        )
         if with_cover:
-            cover_path = _save_cover_image(filepath, cover_source, video_id)
+            # The YouTube thumbnail is immediate. Only fall back to Deezer for
+            # non-YouTube URLs (or when the thumbnail is unavailable): waiting
+            # on a 10-second Deezer request made finished downloads look stuck.
+            cover_path = _save_cover_image(filepath, None, video_id)
+            if not cover_path:
+                cover_source = fetch_cover_url(artist, title or result.get("title"))
+                if cover_source:
+                    result["cover_url"] = cover_source
+                    cover_path = _save_cover_image(filepath, cover_source, None)
             if cover_path:
                 cover_relative = os.path.relpath(cover_path, base_output).replace("\\", "/")
                 result["cover_path"] = cover_path
                 result["cover_url"] = f"/media/{cover_relative}"
-        elif not result.get("cover_path") and cover_source:
-            result["cover_path"] = cover_source
+        elif not result.get("cover_path"):
+            cover_source = fetch_cover_url(artist, title or result.get("title"))
+            if cover_source:
+                result["cover_path"] = cover_source
 
     return result
 
@@ -390,6 +420,25 @@ def find_library_track(title: str | None, artist: str | None = None) -> dict[str
         return None
     wanted_artist = _normalize_text(artist or "")
     folder = _music_folder()
+
+    def artist_matches(candidate: str) -> bool:
+        normalized = _normalize_text(candidate)
+        if not wanted_artist or not normalized:
+            return True
+        return wanted_artist in normalized or normalized in wanted_artist
+
+    # Indexed downloads first: they carry the original artist/title metadata.
+    for entry in download_manager.present_entries(folder):
+        path = Path(entry["path"])
+        if not path.is_file() or path.suffix.lower() not in AUDIO_EXTENSIONS:
+            continue
+        if _normalize_text(entry["title"] or path.stem) != wanted_title:
+            continue
+        if not artist_matches(entry["artist"]):
+            continue
+        return _music_track_payload(folder, path, entry["artist"], entry["title"])
+
+    # Files downloaded before the index existed, or copied by hand.
     try:
         entries = list(folder.iterdir())
     except OSError:
@@ -400,29 +449,9 @@ def find_library_track(title: str | None, artist: str | None = None) -> dict[str
         file_artist, file_title, _ = _library_track_metadata(path.stem)
         if _normalize_text(file_title or path.stem) != wanted_title:
             continue
-        if wanted_artist:
-            normalized_file_artist = _normalize_text(file_artist)
-            if (
-                normalized_file_artist
-                and wanted_artist not in normalized_file_artist
-                and normalized_file_artist not in wanted_artist
-            ):
-                continue
-        cover_name = None
-        for ext in COVER_EXTENSIONS:
-            candidate = folder / f"{path.stem}{ext}"
-            if candidate.is_file():
-                cover_name = candidate.name
-                break
-        return {
-            "filename": path.name,
-            "title": file_title or path.stem,
-            "artist": file_artist,
-            "audio_url": f"/media/{MUSIC_SUBFOLDER}/{quote(path.name)}",
-            "cover_url": (
-                f"/media/{MUSIC_SUBFOLDER}/{quote(cover_name)}" if cover_name else None
-            ),
-        }
+        if not artist_matches(file_artist):
+            continue
+        return _music_track_payload(folder, path, file_artist, file_title)
     return None
 
 
@@ -453,9 +482,10 @@ def ensure_covers(limit: int = 60) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def list_library(limit: int = 200) -> list[dict[str, Any]]:
-    """List tracks in `downloads/music` with any associated cover art."""
+    """List the audio files in the download root with their cover art."""
     music_folder = _music_folder()
     music_folder.mkdir(parents=True, exist_ok=True)
+    download_manager.mark_missing(music_folder)
     try:
         entries = [p for p in music_folder.iterdir() if p.is_file()]
     except OSError:
@@ -479,9 +509,7 @@ def list_library(limit: int = 200) -> list[dict[str, Any]]:
                 cover_name = candidate.name
                 break
 
-        cover_url = (
-            f"/media/{MUSIC_SUBFOLDER}/{quote(cover_name)}" if cover_name else None
-        )
+        cover_url = f"/media/{quote(cover_name)}" if cover_name else None
         if not cover_url:
             cover_url = fetch_cover_url_cached(None, path.stem)
 
@@ -491,7 +519,7 @@ def list_library(limit: int = 200) -> list[dict[str, Any]]:
                 "filename": path.name,
                 "title": title or path.stem,
                 "artist": artist,
-                "audio_url": f"/media/{MUSIC_SUBFOLDER}/{quote(path.name)}",
+                "audio_url": f"/media/{quote(path.name)}",
                 "cover_url": cover_url,
                 "size": stat.st_size,
                 "mtime": stat.st_mtime,
@@ -522,6 +550,7 @@ def delete_track(filename: str) -> bool:
             cover_path = music_folder / f"{base_name}{ext}"
             if cover_path.is_file():
                 cover_path.unlink()
+        download_manager.mark_deleted(filename=safe_name, path=audio_path)
         return True
     except Exception as exc:
         log.error("[music] Failed to delete %s: %s", filename, exc)

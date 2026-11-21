@@ -13,16 +13,16 @@ if BUILD_SCOPE not in {"all", "video", "music", "film", "anime"}:
 template_sets = {
     "all": [
         "menu.html", "download.html", "coming_soon.html",
-        "stats.html", "export_controls.html",
+        "stats.html",
     ],
-    "video": ["download.html", "stats.html", "export_controls.html"],
-    "music": ["export_controls.html"],
-    "film": ["coming_soon.html", "export_controls.html"],
-    "anime": ["coming_soon.html", "export_controls.html"],
+    "video": ["download.html", "stats.html"],
+    "music": [],
+    "film": ["coming_soon.html"],
+    "anime": ["coming_soon.html"],
 }
 templates = [(str(PROJECT_ROOT / "templates" / name), "templates") for name in template_sets[BUILD_SCOPE]]
 static_files = [
-    "favicon.svg", "dowflow.ico", "app.css", "export.js", "export.css",
+    "favicon.svg", "dowflow.ico", "app.css",
     "dependencies-loading.js", "dependencies-loading.css",
 ]
 datas = templates + [(str(PROJECT_ROOT / "static" / name), "static") for name in static_files]
@@ -72,7 +72,7 @@ for source, target in portable_files:
         datas.append((str(source), target))
 
 a = Analysis(
-    [str(PROJECT_ROOT / "startup.py")],
+    [str(PROJECT_ROOT / "launcher.py")],
     pathex=[str(PROJECT_ROOT)],
     binaries=binaries,
     datas=datas,

@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import download_manager
 import music
 import playlist
 
@@ -93,15 +94,15 @@ class MusicCoverTests(unittest.TestCase):
 
 
 class MusicDownloadTests(unittest.TestCase):
-    def test_download_uses_music_folder_and_saves_cover(self):
+    def test_download_writes_into_root_and_records_the_index(self):
         with tempfile.TemporaryDirectory() as output:
-            media_path = Path(output) / "music" / "Track.mp3"
-            media_path.parent.mkdir(parents=True)
+            media_path = Path(output) / "Track.mp3"
             media_path.write_bytes(b"audio")
 
             def fake_download_media(url, **kwargs):
-                self.assertEqual(kwargs["force_folder"], music.MUSIC_SUBFOLDER)
+                self.assertNotIn("force_folder", kwargs)
                 self.assertEqual(kwargs["download_type"], "audio")
+                self.assertEqual(Path(kwargs["output_path"]), Path(output))
                 return {"filepath": str(media_path), "filename": "Track.mp3"}
 
             cover_payload = {"data": [{"album": {"cover_xl": "https://cdn/cover.jpg"}}]}
@@ -113,17 +114,50 @@ class MusicDownloadTests(unittest.TestCase):
 
             with patch.object(playlist, "download_media", side_effect=fake_download_media):
                 with patch.object(music.requests, "get", side_effect=fake_get):
-                    result = music.download_music_track(
-                        "https://www.youtube.com/watch?v=abc123",
-                        output_path=output,
-                        audio_format="mp3",
-                        with_cover=True,
-                        title="Track",
-                        artist="Artist",
-                    )
+                    with patch.object(
+                        download_manager,
+                        "get_data_root",
+                        return_value=Path(output),
+                    ):
+                        result = music.download_music_track(
+                            "https://www.youtube.com/watch?v=abc123",
+                            output_path=output,
+                            audio_format="mp3",
+                            with_cover=True,
+                            title="Track",
+                            artist="Artist",
+                        )
 
             self.assertTrue(Path(result["cover_path"]).is_file())
-            self.assertEqual(result["cover_url"], "/media/music/Track.jpg")
+            self.assertEqual(result["cover_url"], "/media/Track.jpg")
+            index = download_manager.load_index(index_root=Path(output))
+            self.assertEqual(len(index), 1)
+            self.assertEqual(index[0]["url"], "https://www.youtube.com/watch?v=abc123")
+            self.assertEqual(index[0]["title"], "Track")
+            self.assertEqual(index[0]["status"], "present")
+
+    def test_deleting_a_track_marks_it_deleted_in_the_index(self):
+        with tempfile.TemporaryDirectory() as folder:
+            music_dir = Path(folder)
+            track = music_dir / "Track.mp3"
+            track.write_bytes(b"audio")
+            with patch.object(
+                download_manager, "get_data_root", return_value=music_dir
+            ):
+                download_manager.record_download(
+                    "https://www.youtube.com/watch?v=abc123",
+                    "Track",
+                    "Artist",
+                    track,
+                )
+
+                with patch.object(music, "MUSIC_FOLDER", music_dir):
+                    self.assertTrue(music.delete_track("Track.mp3"))
+
+                entry = download_manager.find_entry(
+                    "https://www.youtube.com/watch?v=abc123"
+                )
+        self.assertEqual(entry["status"], "deleted")
 
 
 class MusicLibraryTests(unittest.TestCase):

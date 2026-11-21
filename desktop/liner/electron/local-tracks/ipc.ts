@@ -10,7 +10,14 @@ import { handleLocalTrackScheme } from "./protocol.js";
 import type { SavedTrackLibrary } from "../saved-tracks/library.js";
 import { LOCAL_AUDIO_EXTENSIONS } from "./types.js";
 
-const DOWFLOW_SYNC_INTERVAL_MS = 10_000;
+const DOWFLOW_SYNC_INTERVAL_MS = 5_000;
+
+let requestSync: (() => void) | null = null;
+
+/** Ask the local library to import new DowFlow downloads right now. */
+export function syncLocalTracksNow(): void {
+  requestSync?.();
+}
 
 const stringList = (value: unknown): string[] =>
   Array.isArray(value)
@@ -78,7 +85,14 @@ export function setupLocalTracks(saved: SavedTrackLibrary) {
       syncing = false;
     }
   };
-  const timer = setInterval(() => void syncDowflowMusic(), DOWFLOW_SYNC_INTERVAL_MS);
+  requestSync = () => void syncDowflowMusic();
+  const timer = setInterval(
+    () => void syncDowflowMusic(),
+    DOWFLOW_SYNC_INTERVAL_MS,
+  );
   void syncDowflowMusic();
-  app.on("before-quit", () => clearInterval(timer));
+  app.on("before-quit", () => {
+    requestSync = null;
+    clearInterval(timer);
+  });
 }

@@ -60,7 +60,9 @@ def _initial_data_root() -> Path:
 
 
 BASE_DIR = _initial_data_root()
-DOWNLOAD_FOLDER = BASE_DIR / "downloads"
+# Every download lands directly in this folder; the default is the Windows
+# user's Downloads folder (%USERPROFILE%\Downloads).
+DOWNLOAD_FOLDER = Path.home() / "Downloads"
 CONFIG_FILE = BASE_DIR / "config.json"
 BIN_FOLDER = BASE_DIR / "bin"
 APP_SCOPE_FILE = (
@@ -77,7 +79,7 @@ def get_data_root() -> Path:
 def _set_data_root(root: Path) -> None:
     global BASE_DIR, DOWNLOAD_FOLDER, CONFIG_FILE, BIN_FOLDER
     BASE_DIR = root
-    DOWNLOAD_FOLDER = root / "downloads"
+    DOWNLOAD_FOLDER = root
     CONFIG_FILE = root / "config.json"
     BIN_FOLDER = root / "bin"
 
@@ -100,7 +102,7 @@ def get_runtime_build_id() -> str:
         build_files = (Path(sys.executable).resolve(),)
     else:
         build_files = tuple(
-            SOURCE_DIR / name for name in ("app.py", "startup.py", "playlist.py", "config.py")
+            SOURCE_DIR / name for name in ("app.py", "launcher.py", "playlist.py", "config.py")
         )
     stamps = []
     for path in build_files:
@@ -152,12 +154,7 @@ def _saved_download_path() -> Path | None:
         return None
     if not isinstance(value, str) or not value.strip():
         return None
-    candidate = Path(value).expanduser()
-    # Migrate configurations created before the portable root and the media
-    # folder were separated: those stored the selected root itself.
-    if candidate == BASE_DIR or (candidate / "config.json").is_file():
-        return candidate / "downloads"
-    return candidate
+    return Path(value).expanduser()
 
 
 @overload
@@ -215,16 +212,18 @@ def set_download_path(path: str | Path) -> Path:
         raise ValueError("The selected download folder does not exist.")
 
     with _CONFIG_LOCK:
-        if not ELECTRON_SHELL:
+        # Only the portable build relocates its data root with the media root.
+        # In source mode, logs/database/config stay in the project; only the
+        # download root changes.
+        if IS_FROZEN and not ELECTRON_SHELL:
             _set_data_root(selected_path)
             _remember_data_root(selected_path)
-        (selected_path / "downloads").mkdir(parents=True, exist_ok=True)
         bin_root = BASE_DIR if ELECTRON_SHELL else selected_path
         (bin_root / "bin").mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         temporary_file = CONFIG_FILE.with_suffix(".json.tmp")
         temporary_file.write_text(
-            json.dumps({"download_path": str(selected_path / "downloads")}, indent=2),
+            json.dumps({"download_path": str(selected_path)}, indent=2),
             encoding="utf-8",
         )
         temporary_file.replace(CONFIG_FILE)
@@ -448,6 +447,17 @@ DOWFLOW_MUSIC_DATA_DIR = Path(_music_data_root)
 LINER_COOKIES_DIR = Path(
     os.environ.get("DOWFLOW_COOKIES_DIR", "").strip()
     or (DOWFLOW_MUSIC_DATA_DIR / "cookies")
+)
+
+# Cookie exports imported from the Music settings are stored per user, outside
+# the download root, so they survive a root change.
+_APPDATA_ROOT = Path(
+    os.environ.get("APPDATA", "").strip()
+    or (Path.home() / "AppData" / "Roaming")
+)
+DOWFLOW_COOKIES_DIR = Path(
+    os.environ.get("DOWFLOW_COOKIES_IMPORT_DIR", "").strip()
+    or (_APPDATA_ROOT / "DowFlow" / "cookies")
 )
 
 # ── Performance: number of parallel connections ──────────────────────────────

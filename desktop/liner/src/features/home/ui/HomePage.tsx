@@ -140,15 +140,6 @@ function HomeFeed({ onRetry }: { onRetry: () => void }) {
               />
             )}
 
-            {recentlyPlayed && recentlyPlayed.length > 0 && (
-              <PopularTracksSection
-                title={t("home.jumpBackIn")}
-                icon={<TimeFill />}
-                items={recentlyPlayed}
-                headingMarginTop="mt-[22px]"
-              />
-            )}
-
             {popularTracksAllTime && popularTracksAllTime.length > 0 && (
               <PopularTracksSection
                 title={t("home.mostListened")}
@@ -163,6 +154,15 @@ function HomeFeed({ onRetry }: { onRetry: () => void }) {
                 title={t("home.mostSaved")}
                 icon={<BookmarkFill />}
                 items={mostSaved}
+                headingMarginTop="mt-[22px]"
+              />
+            )}
+
+            {recentlyPlayed && recentlyPlayed.length > 0 && (
+              <PopularTracksSection
+                title={t("home.jumpBackIn")}
+                icon={<TimeFill />}
+                items={recentlyPlayed}
                 headingMarginTop="mt-[22px]"
               />
             )}

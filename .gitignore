@@ -61,3 +61,6 @@ build-work/
 
 # DowFlow runtime update marker
 .dowflow-commit
+
+# Music download index
+dowflow_music_index.json

@@ -40,8 +40,8 @@
     ],
     "extraResources": [
       {
-        "from": "../../dist/DowFlow.exe",
-        "to": "backend/DowFlow.exe"
+        "from": "../../build/out/DowFlow",
+        "to": "backend"
       },
       {
         "from": "../../static/dowflow.ico",

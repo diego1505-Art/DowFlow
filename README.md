@@ -21,7 +21,7 @@ Use DowFlow only for personal purposes and with content you have the right to do
 - Git for automatic updates when running a clone; ZIP updates use GitHub directly.
 - Internet connection.
 
-`launcher.py` (started by `start.bat`) detects or installs Playwright Chromium and FFmpeg via WinGet when they are missing in source mode. A ZIP downloaded from GitHub has no `.git` folder, so the launcher checks GitHub's latest `main` commit through the API, compares the project files, and can replace only project files while preserving `.venv`, `downloads`, `config.json`, `dowflow.db`, and `logs`. Node.js LTS can provide more YouTube formats. yt-dlp handles fragment parallelism natively; no additional download accelerator is installed. The portable EXE opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
+`launcher.py` (started by `start.bat`) detects or installs Playwright Chromium and FFmpeg via WinGet when they are missing in source mode. A ZIP downloaded from GitHub has no `.git` folder, so the launcher checks GitHub's latest `main` commit through the API, compares the project files, and can replace only project files while preserving `.venv`, `downloads`, `config.json`, `dowflow.db`, and `logs`. Node.js LTS can provide more YouTube formats. yt-dlp handles fragment parallelism natively; no additional download accelerator is installed. DowFlow opens in a native `pywebview` window; on Windows, the Microsoft Edge WebView2 Runtime is required. The Edge browser application is not opened.
 
 ## Getting started
 
@@ -53,25 +53,39 @@ python -m playwright install chromium
 python launcher.py
 ```
 
-On the first launch of the portable EXE, or when its saved media drive is unavailable, choose a media root when prompted. DowFlow saves this path in `config.json` beside the EXE and reuses it on later launches. The `+` folder control changes it. In a source checkout, downloads default to `%USERPROFILE%\Downloads` and every file is written directly there, without a per-site, per-artist or per-album subfolder. Portable media tools are installed under `<media root>/bin/`; the EXE opens its window while the tools are checked in the background and shows their progress in the loading screen.
+Downloads default to `%USERPROFILE%\Downloads` and every file is written directly there, without a per-site, per-artist or per-album subfolder. The `+` folder control changes it and the choice is saved in `config.json`. Installed editions keep their configuration, database, logs and native tools in `%LOCALAPPDATA%\DowFlow\data\`, shared by the menu and every submenu; a source checkout keeps them in the project.
 
-## Portable Windows build
+## Windows build and installers
 
-Build the one-file, no-console executable from Windows with the project's virtual environment:
+DowFlow is built as a **one-directory** application (`DowFlow.exe` plus `_internal/`) and shipped through per-edition Inno Setup installers. Nothing is extracted to `%TEMP%` at launch, which is what made the old one-file executable slow and memory-hungry.
+
+Prerequisites: Python 3.10+, PyInstaller (installed automatically by `build.bat`), and [Inno Setup 6](https://jrsoftware.org/isdl.php). `ISCC.exe` must be in the default install location or in `PATH`.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-build.txt
 python -m pip install setuptools==42.0.1
-python -m PyInstaller --clean --noconfirm build.spec
+python -m build_export all DowFlow --installer
 ```
 
 Install the pinned `setuptools` version after the build requirements and before starting PyInstaller. This works around the `ModuleNotFoundError: No module named 'jaraco'` compatibility issue seen in some build environments. The build is windowed (`console=False`) and uses `pywebview` with WebView2 instead of launching a browser window. Tkinter is included for the native folder picker.
 
-Executables are built only from the command line, through `build.bat` (or, manually, the PyInstaller commands above). The interface has no export button, so a build always goes through `build.bat`. It asks for a scope — the whole menu, Video, Music, Movies / Series or Anime — and for the EXE name, then writes `dist/<name>.exe`. Scoped editions open directly on their selected page and do not include the general menu. `build_export.py` installs `requirements-build.txt` automatically when PyInstaller is missing from the build environment.
+`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. Each choice writes `build/out/<Edition>/` and `build-output/<Edition>-Setup.exe`:
 
-Close DowFlow before building so the included database and its SQLite write-ahead log form a consistent snapshot. The EXE embeds the current `dowflow.db`, a blank `config.json` template, the scoped `app_scope.json`, and `youtube.com_cookies.txt` when present. On first launch, choose an existing portable root; DowFlow creates `config.json`, `dowflow.db`, `logs/dowflow.log` and `bin/` there, and writes downloads directly into that root. The large Playwright Node runtime is no longer embedded in the EXE; a verified portable `node.exe` is installed in `<portable root>/bin/` on first launch and used by Playwright. This substantially reduces the EXE size while keeping the application independent of a system Node installation. The EXE may be moved anywhere and does not require the `dist/` folder on the target PC. FFmpeg, its DLLs, Node.js, and Playwright Chromium are installed or updated in `<portable root>/bin/` after the window opens. A small Windows registry pointer remembers the selected root without placing configuration beside the EXE. Cookie exports grant access to personal accounts: an EXE built with `youtube.com_cookies.txt` contains that signed-in session. Do not distribute that EXE; remove the cookie file before building a shareable copy.
+| Choice | Installer |
+| --- | --- |
+| Whole menu | `DowFlow-Setup.exe` |
+| Video | `DowFlow-Video-Setup.exe` |
+| Music | `DowFlow-Music-Setup.exe` |
+| Movies / Series | `DowFlow-Films-Setup.exe` |
+| Anime | `DowFlow-Anime-Setup.exe` |
+
+The installers are the release assets; a one-directory build cannot be distributed as a lone executable. Each installer copies its edition into `%LOCALAPPDATA%\DowFlow\menu\` or `%LOCALAPPDATA%\DowFlow\submenus\<edition>\`, while `%LOCALAPPDATA%\DowFlow\data\` is shared by every edition and holds `config.json`, `dowflow.db`, `logs\` and `tools\` (FFmpeg, Node, Chromium, WebView2). Installing a single submenu is therefore enough: it brings the shared tools and data, and installing another edition later does not overwrite it.
+
+`python build/fetch_tools.py` downloads the native tools once into `build/tools/` and caches them across editions. The installers copy them to `data\tools`, so DowFlow never downloads FFmpeg, Node.js or Chromium at startup. WebView2 is required for the native window; the installer runs the bundled bootstrapper when the runtime is missing.
+
+Close DowFlow before building. Installer builds never embed the developer's `dowflow.db`, `config.json` or cookie exports. Deleting an edition keeps `data\` and the other editions intact.
 
 ## Tests
 

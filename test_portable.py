@@ -53,6 +53,56 @@ class PortableConfigurationTests(unittest.TestCase):
         with patch.object(config, "IS_FROZEN", False):
             self.assertEqual(config.get_bin_folder(), config.BIN_FOLDER)
 
+    def test_installed_layout_shares_data_between_menu_and_submenus(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            install = Path(temporary) / "DowFlow"
+            data = install / "data"
+            data.mkdir(parents=True)
+            menu_exe = install / "menu"
+            video_exe = install / "submenus" / "video"
+            menu_exe.mkdir()
+            video_exe.mkdir(parents=True)
+
+            self.assertEqual(config.find_installed_data_root(menu_exe), data.resolve())
+            self.assertEqual(config.find_installed_data_root(video_exe), data.resolve())
+
+    def test_frozen_install_prefers_the_shared_tools_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data_root = Path(temporary) / "DowFlow" / "data"
+            (data_root / "tools").mkdir(parents=True)
+
+            with patch.object(config, "IS_FROZEN", True), patch.object(
+                config, "BASE_DIR", data_root
+            ):
+                self.assertEqual(config.get_bin_folder(), data_root / "tools")
+                self.assertEqual(
+                    config.get_chromium_folder(), data_root / "tools" / "chromium"
+                )
+
+    def test_bundled_tools_skip_runtime_downloads(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tools = root / "tools"
+            tools.mkdir()
+            (tools / ".tools.ready").write_text("{}", encoding="utf-8")
+            (tools / "ffmpeg.exe").write_bytes(b"ffmpeg")
+            (tools / "ffprobe.exe").write_bytes(b"ffprobe")
+            progress = []
+
+            with patch.object(bootstrap, "IS_FROZEN", True), patch.object(
+                bootstrap, "get_bin_folder", return_value=tools
+            ), patch.object(
+                bootstrap, "get_download_path", return_value=root
+            ), patch.object(bootstrap, "configure_runtime_paths"), patch.object(
+                bootstrap, "_read_url"
+            ) as read_url:
+                bootstrap.ensure_external_dependencies(
+                    lambda percent, stage, **kwargs: progress.append((percent, stage))
+                )
+
+            read_url.assert_not_called()
+            self.assertEqual(progress[-1], (100, "Media tools ready"))
+
     def test_first_frozen_launch_creates_the_download_folder_without_prompting(self):
         import folder_picker
         import launcher
@@ -395,7 +445,9 @@ class LocalVideoApiTests(unittest.TestCase):
     def test_build_helper_passes_scope_and_removes_temporary_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            expected = root / "dist" / "Music Edition.exe"
+            expected = (
+                root / "build" / "out" / "Music Edition" / "Music Edition.exe"
+            )
             progress_events = []
 
             class FakeProcess:
@@ -424,6 +476,9 @@ class LocalVideoApiTests(unittest.TestCase):
                 def assert_build_arguments(self):
                     self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_SCOPE"], "music")
                     self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_NAME"], "Music Edition")
+                    self_unit.assertIn(str(root / "build" / "dowflow.spec"), self.command)
+                    self_unit.assertIn("--distpath", self.command)
+                    self_unit.assertNotIn("--clean", self.command)
                     profile = root / "build" / "app_scope.json"
                     self_unit.assertEqual(json.loads(profile.read_text(encoding="utf-8"))["scope"], "music")
 
@@ -442,6 +497,46 @@ class LocalVideoApiTests(unittest.TestCase):
             self.assertEqual(progress_events[0]["percent"], 1)
             self.assertEqual(progress_events[-1]["percent"], 100)
             self.assertTrue(any(event["stage"] == "Compressing Python modules" for event in progress_events))
+
+    def test_installer_compresses_each_edition_into_its_own_setup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            edition = build_export.EDITIONS["video"]
+            source = root / "build" / "out" / edition["name"]
+            source.mkdir(parents=True)
+            (source / f"{edition['name']}.exe").write_bytes(b"exe")
+            tools = root / "build" / "tools"
+            tools.mkdir(parents=True)
+            (tools / ".tools.ready").write_text("{}", encoding="utf-8")
+            (root / "static").mkdir()
+            (root / "static" / "dowflow.ico").write_bytes(b"icon")
+            setup = root / "build-output" / f"{edition['setup']}.exe"
+            captured = {}
+
+            class FakeCompleted:
+                returncode = 0
+                stdout = "ok"
+                stderr = ""
+
+            def fake_run(command, **kwargs):
+                captured["command"] = command
+                setup.parent.mkdir(parents=True, exist_ok=True)
+                setup.write_bytes(b"setup")
+                return FakeCompleted()
+
+            with patch.object(build_export, "_find_iscc", return_value="iscc"), patch.object(
+                build_export.subprocess, "run", side_effect=fake_run
+            ):
+                result = build_export.build_installer("video", root)
+
+            self.assertEqual(result, setup)
+            command = captured["command"]
+            self.assertIn("/DDestDir=submenus\\video", command)
+            self.assertIn("/DOutputBase=DowFlow-Video-Setup", command)
+            self.assertIn(str(root / "build" / "installer.iss"), command)
+            self.assertTrue(
+                any(item.startswith("/DSourceDir=") and edition["name"] in item for item in command)
+            )
 
     def test_folder_picker_route_saves_the_selected_path(self):
         import app as app_module

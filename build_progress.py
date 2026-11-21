@@ -1,7 +1,7 @@
 """Animated console progress for the DowFlow PyInstaller build.
 
 ``build.bat`` calls this module instead of ``build_export.py`` so a long
-one-file build shows a moving, coloured progress bar instead of a silent
+long build shows a moving, coloured progress bar instead of a silent
 window. The real build still runs in ``build_export.py``; its JSON progress
 events are consumed here.
 """
@@ -388,7 +388,7 @@ def _pump(stream: object, messages: queue.Queue[tuple[str, object]]) -> None:
         messages.put(("eof", None))
 
 
-def run_animated(scope: str, name: str) -> int:
+def run_animated(scope: str, name: str, installer: bool = True) -> int:
     display = BuildDisplay(scope, name)
     display.start()
     command = [
@@ -398,6 +398,8 @@ def run_animated(scope: str, name: str) -> int:
         name,
         "--json-progress",
     ]
+    if installer:
+        command.append("--installer")
     try:
         process = subprocess.Popen(
             command,
@@ -481,10 +483,16 @@ def main(argv: list[str] | None = None) -> int:
                 pass
     if not sys.stdout.isatty():
         return subprocess.call(
-            [sys.executable, str(ROOT / "build_export.py"), args[0], args[1]],
+            [
+                sys.executable,
+                str(ROOT / "build_export.py"),
+                args[0],
+                args[1],
+                "--installer",
+            ],
             cwd=ROOT,
         )
-    return run_animated(args[0], args[1])
+    return run_animated(args[0], args[1], installer=True)
 
 
 if __name__ == "__main__":

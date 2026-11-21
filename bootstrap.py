@@ -262,13 +262,38 @@ def _install_chromium(browser_dir: Path, progress_callback=None) -> None:
         raise RuntimeError("Playwright completed without installing Chromium.")
 
 
+def bundled_tools_ready() -> bool:
+    """Return True when the installer already shipped the native tools.
+
+    Installer builds place FFmpeg, Node and Chromium in <data>/tools and write
+    a .tools.ready marker. In that case startup must never hit the network.
+    """
+    if not IS_FROZEN:
+        return False
+    bin_folder = get_bin_folder()
+    if not (bin_folder / ".tools.ready").is_file():
+        return False
+    return all(
+        (bin_folder / name).is_file() for name in ("ffmpeg.exe", "ffprobe.exe")
+    )
+
+
 def ensure_external_dependencies(progress_callback=None) -> None:
-    """Verify or update FFmpeg and Chromium under the media root's bin/."""
+    """Verify or update FFmpeg and Chromium under the active tools folder."""
     download_root = get_download_path()
     bin_folder = get_bin_folder()
-    bin_folder.mkdir(parents=True, exist_ok=True)
     configure_runtime_paths(download_root)
-    browser_dir = bin_folder / "ms-playwright"
+    if bundled_tools_ready():
+        log.info("Bundled media tools are ready in %s", bin_folder)
+        if progress_callback:
+            progress_callback(100, "Media tools ready")
+        return
+    bin_folder.mkdir(parents=True, exist_ok=True)
+    browser_dir = (
+        bin_folder / "chromium"
+        if bin_folder.name.casefold() == "tools"
+        else bin_folder / "ms-playwright"
+    )
 
     if progress_callback:
         progress_callback(5, "Checking FFmpeg")

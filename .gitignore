@@ -55,7 +55,10 @@ dowflow.db
 *.db-wal
 *.db-shm
 dist/
-build/
+build/*
+!build/dowflow.spec
+!build/installer.iss
+!build/fetch_tools.py
 build-output/
 build-work/
 

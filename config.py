@@ -46,6 +46,23 @@ def _legacy_data_root() -> Path | None:
         return None
 
 
+def find_installed_data_root(executable_dir: Path | None = None) -> Path | None:
+    """Return the shared <install>/data folder used by the installers.
+
+    The layout is: %LOCALAPPDATA%\\DowFlow\\data next to menu/ and
+    submenus/<edition>/. "data" is shared by every edition so a submenu
+    installed on its own finds its configuration, database and tools.
+    """
+    current = (executable_dir or EXECUTABLE_DIR).resolve()
+    for candidate in (current, current.parent, current.parent.parent):
+        if candidate.name.casefold() != "dowflow":
+            continue
+        data_root = candidate / "data"
+        if data_root.is_dir():
+            return data_root
+    return None
+
+
 def _initial_data_root() -> Path:
     if ELECTRON_SHELL:
         raw_root = os.environ.get("DOWFLOW_DATA_ROOT", "").strip()
@@ -56,7 +73,12 @@ def _initial_data_root() -> Path:
         return root
     if not IS_FROZEN:
         return SOURCE_DIR
-    return _registry_data_root() or _legacy_data_root() or EXECUTABLE_DIR
+    return (
+        find_installed_data_root()
+        or _registry_data_root()
+        or _legacy_data_root()
+        or EXECUTABLE_DIR
+    )
 
 
 BASE_DIR = _initial_data_root()
@@ -177,10 +199,25 @@ def get_download_path(*, required: bool = True) -> Path | None:
 
 
 def get_bin_folder() -> Path:
-    """Return the tools folder inside the portable media root when frozen."""
+    """Return the native tools folder for the active data layout.
+
+    Installer builds keep FFmpeg/Node/Chromium in <data>/tools, shared by all
+    editions. Portable/Electron builds keep using <data>/bin.
+    """
     if IS_FROZEN:
+        tools_folder = BASE_DIR / "tools"
+        if tools_folder.is_dir():
+            return tools_folder
         return BASE_DIR / "bin"
     return BIN_FOLDER
+
+
+def get_chromium_folder() -> Path:
+    """Return the Chromium folder that matches the active tools layout."""
+    bin_folder = get_bin_folder()
+    if bin_folder.name.casefold() == "tools":
+        return bin_folder / "chromium"
+    return bin_folder / "ms-playwright"
 
 
 def configure_runtime_paths(download_path: str | Path | None = None) -> Path:
@@ -188,10 +225,12 @@ def configure_runtime_paths(download_path: str | Path | None = None) -> Path:
     if download_path is None:
         download_path = get_download_path(required=False)
     if IS_FROZEN or ELECTRON_SHELL:
-        bin_folder = BASE_DIR / "bin"
+        bin_folder = get_bin_folder()
+        browser_folder = get_chromium_folder()
     else:
         bin_folder = (Path(download_path) if download_path else BASE_DIR) / "bin"
-    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bin_folder / "ms-playwright")
+        browser_folder = bin_folder / "ms-playwright"
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browser_folder)
     current_entries = os.environ.get("PATH", "").split(os.pathsep)
     if str(bin_folder) not in current_entries:
         os.environ["PATH"] = str(bin_folder) + os.pathsep + os.environ.get("PATH", "")
@@ -211,11 +250,17 @@ def set_download_path(path: str | Path) -> Path:
         # Only the portable build relocates its data root with the media root.
         # In source mode, logs/database/config stay in the project; only the
         # download root changes.
-        if IS_FROZEN and not ELECTRON_SHELL:
+        # Only a truly portable frozen build relocates its data root with the
+        # media folder. Installed editions keep data/config/db/logs in
+        # %LOCALAPPDATA%\\DowFlow\\data and only record the download path.
+        installed = find_installed_data_root() is not None
+        if IS_FROZEN and not ELECTRON_SHELL and not installed:
             _set_data_root(selected_path)
             _remember_data_root(selected_path)
-        bin_root = BASE_DIR if ELECTRON_SHELL else selected_path
-        (bin_root / "bin").mkdir(parents=True, exist_ok=True)
+        if IS_FROZEN or ELECTRON_SHELL:
+            get_bin_folder().mkdir(parents=True, exist_ok=True)
+        else:
+            (selected_path / "bin").mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         temporary_file = CONFIG_FILE.with_suffix(".json.tmp")
         temporary_file.write_text(

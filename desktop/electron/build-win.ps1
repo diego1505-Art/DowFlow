@@ -16,7 +16,7 @@ function Invoke-Checked {
 $electronRoot = (Resolve-Path $PSScriptRoot).Path
 $linerRoot = (Resolve-Path (Join-Path $PSScriptRoot "../liner")).Path
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
-$backendExe = Join-Path $repoRoot "dist/DowFlow.exe"
+$backendExe = Join-Path $repoRoot "build/out/DowFlow/DowFlow.exe"
 
 Push-Location $repoRoot
 try {

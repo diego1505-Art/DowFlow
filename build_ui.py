@@ -20,11 +20,11 @@ import build_progress as bp
 ROOT = Path(__file__).resolve().parent
 
 SCOPES = (
-    ("1", "all", "Whole menu", "DowFlow"),
-    ("2", "video", "Video", "DowFlow-Video"),
-    ("3", "music", "Music", "DowFlow-Music"),
-    ("4", "film", "Movies / Series", "DowFlow-Films"),
-    ("5", "anime", "Anime", "DowFlow-Anime"),
+    ("1", "all", "Whole menu", "DowFlow", "DowFlow-Setup.exe"),
+    ("2", "video", "Video", "DowFlow-Video", "DowFlow-Video-Setup.exe"),
+    ("3", "music", "Music", "DowFlow-Music", "DowFlow-Music-Setup.exe"),
+    ("4", "film", "Movies / Series", "DowFlow-Films", "DowFlow-Films-Setup.exe"),
+    ("5", "anime", "Anime", "DowFlow-Anime", "DowFlow-Anime-Setup.exe"),
 )
 
 WAVE = "▁▂▃▄▅▆▇█▇▆▅▄▃▂"
@@ -109,9 +109,9 @@ class Console:
 
     def menu(self) -> None:
         self.write("\n  " + self.rule() + "\n\n")
-        for index, (key, _scope, label, name) in enumerate(SCOPES):
+        for index, (key, _scope, label, _name, setup) in enumerate(SCOPES):
             number = self.paint(key, bp._STOPS[index % len(bp._STOPS)], bold=True)
-            target = f"dist\\{name}.exe"
+            target = f"build-output\\{setup}"
             self.write(
                 f"    {number}  {self.paint(f'{label:<18}', WHITE, bold=True)}"
                 f"{self.paint(target, PATH_BLUE)}\n"
@@ -213,9 +213,9 @@ def run_build(console: Console, scope: str, name: str) -> int:
     console.write("\n")
     sys.stdout.flush()
     if console.is_tty:
-        return bp.run_animated(scope, name)
+        return bp.run_animated(scope, name, installer=True)
     return subprocess.call(
-        [sys.executable, str(ROOT / "build_export.py"), scope, name],
+        [sys.executable, str(ROOT / "build_export.py"), scope, name, "--installer"],
         cwd=ROOT,
     )
 
@@ -253,13 +253,13 @@ def main() -> int:
                 time.sleep(0.7)
                 continue
 
-            _key, scope, label, name = match
+            _key, scope, label, name, setup = match
             console.write("\n")
-            console.note(f"Édition « {label} » → dist\\{name}.exe", CYAN)
+            console.note(f"Édition « {label} » → build-output\\{setup}", CYAN)
             console.note(
-                "Ferme DowFlow : l'exécutable embarque la base actuelle.",
-                AMBER,
-                "!",
+                "Les données iront dans %LOCALAPPDATA%\\DowFlow\\data.",
+                MUTED,
+                "◆",
             )
             console.write("\n")
 
@@ -269,7 +269,7 @@ def main() -> int:
                 continue
 
             code = run_build(console, scope, name)
-            target = ROOT / "dist" / f"{name}.exe"
+            target = ROOT / "build-output" / setup
             console.write("\n")
             if code == 0 and target.is_file():
                 console.note(str(target), GREEN, "✓")

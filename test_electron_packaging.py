@@ -26,8 +26,8 @@ class ElectronPackagingTests(unittest.TestCase):
         self.assertEqual(build["nsis"]["deleteAppDataOnUninstall"], False)
         self.assertNotIn("publish", build)
         self.assertEqual(
-            next(item for item in build["extraResources"] if item["to"] == "backend/DowFlow.exe")["from"],
-            "../../dist/DowFlow.exe",
+            next(item for item in build["extraResources"] if item["to"] == "backend")["from"],
+            "../../build/out/DowFlow",
         )
         self.assertEqual(
             next(item for item in build["extraResources"] if item["to"] == "liner")["from"],
@@ -44,6 +44,7 @@ class ElectronPackagingTests(unittest.TestCase):
         self.assertIn('release/win-unpacked/dowflow-music.exe', script)
         self.assertIn('resources/liner/dowflow-music.exe', script)
         self.assertIn('"pnpm" @("exec", "electron-builder", "--win", "nsis", "--x64")', script)
+        self.assertIn('build/out/DowFlow/DowFlow.exe', script)
         self.assertLess(script.index('"pnpm" @("check")'), script.index('"python" @("-m", "build_export", "all", "DowFlow")'))
         self.assertLess(script.index('"python" @("-m", "build_export", "all", "DowFlow")'), script.index('"pnpm" @("exec", "electron-builder", "--win", "nsis", "--x64")'))
         self.assertIn('$env:DOWFLOW_ELECTRON_BUILD = "1"', script)
@@ -61,8 +62,9 @@ class ElectronPackagingTests(unittest.TestCase):
         self.assertIn("window.location.assign(musicEntry.href)", template)
 
     def test_electron_build_does_not_embed_personal_portable_seeds(self):
-        spec = (PROJECT_ROOT / "build.spec").read_text(encoding="utf-8")
-        self.assertIn('portable_files = [] if os.environ.get("DOWFLOW_ELECTRON_BUILD") == "1" else [', spec)
+        spec = (PROJECT_ROOT / "build" / "dowflow.spec").read_text(encoding="utf-8")
+        self.assertIn('os.environ.get("DOWFLOW_EMBED_PORTABLE_DATA") == "1"', spec)
+        self.assertNotIn("DOWFLOW_ELECTRON_BUILD", spec)
         for seed in ("dowflow.db", "dowflow.db-wal", "config.json", "youtube.com_cookies.txt"):
             self.assertIn(seed, spec)
 

@@ -3,7 +3,10 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
 
-PROJECT_ROOT = Path(SPECPATH).resolve()
+# The spec lives in build/. PROJECT_ROOT is the repository checkout so that
+# templates, static assets and the temporary app_scope profile keep their
+# existing locations.
+PROJECT_ROOT = Path(SPECPATH).resolve().parent
 BUILD_SCOPE = os.environ.get("DOWFLOW_BUILD_SCOPE", "all")
 BUILD_NAME = os.environ.get("DOWFLOW_BUILD_NAME", "DowFlow")
 
@@ -45,8 +48,8 @@ for package in ("flask", "jinja2", "werkzeug", "waitress", "yt_dlp", "playwright
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
     if package == "playwright":
         # The bundled Node runtime is about 120 MB in the build environment.
-        # DowFlow installs a verified portable node.exe in the selected root/bin
-        # on first launch and points Playwright to it at runtime.
+        # Installed builds use the shared node.exe in <data>/tools; the
+        # portable fallback downloads one into <data>/bin.
         def is_playwright_node(item):
             source = str(item[0]).lower()
             return Path(source).name in {"node", "node.exe"} and "playwright" in source and "driver" in source
@@ -59,14 +62,16 @@ for package in ("flask", "jinja2", "werkzeug", "waitress", "yt_dlp", "playwright
     binaries += package_binaries
     hiddenimports += package_hiddenimports
 
-# Portable exports retain their existing seed-data behavior. Electron builds
-# start with a clean per-user profile and must never embed checkout credentials.
-portable_files = [] if os.environ.get("DOWFLOW_ELECTRON_BUILD") == "1" else [
-    (PROJECT_ROOT / "dowflow.db", "portable_data"),
-    (PROJECT_ROOT / "dowflow.db-wal", "portable_data"),
-    (PROJECT_ROOT / "portable_data" / "config.json", "portable_data"),
-    (PROJECT_ROOT / "youtube.com_cookies.txt", "portable_data"),
-]
+# Installer builds must never embed the developer's database, configuration or
+# cookie exports. Portable seed data is opt-in so a release stays clean.
+portable_files = []
+if os.environ.get("DOWFLOW_EMBED_PORTABLE_DATA") == "1":
+    portable_files = [
+        (PROJECT_ROOT / "dowflow.db", "portable_data"),
+        (PROJECT_ROOT / "dowflow.db-wal", "portable_data"),
+        (PROJECT_ROOT / "portable_data" / "config.json", "portable_data"),
+        (PROJECT_ROOT / "youtube.com_cookies.txt", "portable_data"),
+    ]
 for source, target in portable_files:
     if source.is_file():
         datas.append((str(source), target))
@@ -90,14 +95,28 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+def is_playwright_runtime(item) -> bool:
+    # PyInstaller's own Playwright hook can pull driver/node.exe back in after
+    # collect_all(); installed builds use the shared tools/node/node.exe.
+    for part in item[:2]:
+        source = str(part).lower()
+        if Path(source).name in {"node", "node.exe"} and "playwright" in source and "driver" in source:
+            return True
+    return False
+
+
+a.datas = [item for item in a.datas if not is_playwright_runtime(item)]
+a.binaries = [item for item in a.binaries if not is_playwright_runtime(item)]
+
 pyz = PYZ(a.pure)
 
+# One directory install: DowFlow.exe is the bootloader and everything else
+# stays in _internal/. Nothing is extracted to %TEMP% at launch.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name=BUILD_NAME,
     icon=str(PROJECT_ROOT / "static" / "dowflow.ico"),
     debug=False,
@@ -112,4 +131,13 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name=BUILD_NAME,
 )

@@ -618,7 +618,7 @@ def download_folder_status():
         {
             "configured": has_configured_download_path(),
             "path": str(folder) if folder else None,
-            "required": IS_FROZEN and (folder is None or not folder.is_dir()),
+            "required": IS_FROZEN and folder is None,
         }
     )
 

@@ -171,12 +171,8 @@ def get_download_path(*, required: bool = True) -> Path | None:
         saved_path = _saved_download_path()
         if saved_path is not None:
             return saved_path
-        if IS_FROZEN:
-            if required:
-                raise DownloadPathNotConfigured(
-                    "Choose a download folder before using DowFlow."
-                )
-            return None
+        # Every edition starts in the Windows Downloads folder; the in-app
+        # buttons change it later, so the first launch never has to ask.
         return DOWNLOAD_FOLDER
 
 

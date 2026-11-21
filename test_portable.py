@@ -53,44 +53,47 @@ class PortableConfigurationTests(unittest.TestCase):
         with patch.object(config, "IS_FROZEN", False):
             self.assertEqual(config.get_bin_folder(), config.BIN_FOLDER)
 
-    def test_first_frozen_launch_prompts_and_saves_the_media_root(self):
+    def test_first_frozen_launch_creates_the_download_folder_without_prompting(self):
         import folder_picker
         import launcher
 
-        selected = Path("C:/media-root")
-        with patch.object(launcher.sys, "frozen", True, create=True), patch.object(
-            config, "get_download_path", return_value=None
-        ), patch.object(config, "set_download_path") as save_path, patch.object(
-            folder_picker, "select_download_folder", return_value=str(selected)
-        ) as picker:
-            self.assertTrue(launcher._ensure_portable_download_folder())
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary) / "Downloads"
+            with patch.object(launcher.sys, "frozen", True, create=True), patch.object(
+                config, "get_download_path", return_value=folder
+            ), patch.object(config, "configure_runtime_paths") as configure, patch.object(
+                folder_picker, "select_download_folder"
+            ) as picker:
+                self.assertTrue(launcher._ensure_portable_download_folder())
 
-        picker.assert_called_once_with(None)
-        save_path.assert_called_once_with(str(selected))
+            self.assertTrue(folder.is_dir())
+            picker.assert_not_called()
+            configure.assert_called_once_with(folder)
 
-    def test_missing_saved_media_root_prompts_for_a_replacement(self):
+    def test_missing_download_folder_is_recreated_without_prompting(self):
         import folder_picker
         import launcher
 
-        missing_root = Path("Z:/disconnected-media")
-        replacement = Path("C:/replacement-media")
-        with patch.object(launcher.sys, "frozen", True, create=True), patch.object(
-            config, "get_download_path", return_value=missing_root
-        ), patch.object(config, "set_download_path") as save_path, patch.object(
-            folder_picker, "select_download_folder", return_value=str(replacement)
-        ) as picker, patch.object(Path, "is_dir", return_value=False):
-            self.assertTrue(launcher._ensure_portable_download_folder())
+        with tempfile.TemporaryDirectory() as temporary:
+            missing_root = Path(temporary) / "gone"
+            with patch.object(launcher.sys, "frozen", True, create=True), patch.object(
+                config, "get_download_path", return_value=missing_root
+            ), patch.object(config, "configure_runtime_paths"), patch.object(
+                folder_picker, "select_download_folder"
+            ) as picker:
+                self.assertTrue(launcher._ensure_portable_download_folder())
 
-        picker.assert_called_once_with(None)
-        save_path.assert_called_once_with(str(replacement))
+            self.assertTrue(missing_root.is_dir())
+            picker.assert_not_called()
 
-    def test_frozen_mode_requires_a_saved_download_folder(self):
+    def test_frozen_mode_defaults_to_the_windows_downloads_folder(self):
         with patch.object(config, "IS_FROZEN", True), patch.object(
             config, "_saved_download_path", return_value=None
         ):
-            self.assertIsNone(config.get_download_path(required=False))
-            with self.assertRaises(config.DownloadPathNotConfigured):
-                config.get_download_path()
+            self.assertEqual(
+                config.get_download_path(required=False), config.DOWNLOAD_FOLDER
+            )
+            self.assertEqual(config.get_download_path(), config.DOWNLOAD_FOLDER)
 
     def test_selected_folder_is_saved_without_copying_bundled_media(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -306,7 +309,7 @@ class LocalVideoApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), expected)
 
-    def test_download_folder_status_only_requires_a_path_in_frozen_mode(self):
+    def test_download_folder_status_never_forces_a_choice(self):
         import app as app_module
 
         missing_root = Path("Z:/disconnected-media")
@@ -319,7 +322,7 @@ class LocalVideoApiTests(unittest.TestCase):
                 portable_status = app_module.app.test_client().get("/api/download-folder").get_json()
 
         self.assertFalse(source_status["required"])
-        self.assertTrue(portable_status["required"])
+        self.assertFalse(portable_status["required"])
 
     def test_menu_shows_dependency_loader_only_in_frozen_mode(self):
         import app as app_module

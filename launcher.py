@@ -740,22 +740,21 @@ def _stop_server(process: subprocess.Popen | None, timeout: float = 5.0) -> None
 
 
 def _ensure_portable_download_folder() -> bool:
+    """Create the download folder silently; the UI changes it later."""
     if not getattr(sys, "frozen", False):
         return True
 
-    from config import configure_runtime_paths, get_download_path, set_download_path
-    from folder_picker import select_download_folder
+    from config import configure_runtime_paths, get_download_path
 
-    current_path = get_download_path(required=False)
-    if current_path is not None and current_path.is_dir():
-        configure_runtime_paths(current_path)
+    folder = get_download_path(required=False)
+    if folder is None:
         return True
-    selected = select_download_folder(
-        str(current_path) if current_path and current_path.is_dir() else None
-    )
-    if not selected:
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        _log(f"[ERROR] Could not create the download folder: {error}")
         return False
-    set_download_path(selected)
+    configure_runtime_paths(folder)
     return True
 
 

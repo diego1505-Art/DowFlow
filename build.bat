@@ -58,7 +58,7 @@ if errorlevel 1 (
     if errorlevel 1 goto :failed
 )
 
-"%PYTHON%" build_export.py %SCOPE% "%NAME%"
+"%PYTHON%" build_progress.py %SCOPE% "%NAME%"
 if errorlevel 1 goto :failed
 
 echo.

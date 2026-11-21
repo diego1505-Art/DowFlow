@@ -149,7 +149,7 @@ def build_executable(
                     percent,
                     analysis_events,
                 )
-                if next_percent > percent:
+                if next_percent > percent or next_stage != stage:
                     report_progress(next_percent, next_stage)
         return_code = process.wait()
         if return_code:

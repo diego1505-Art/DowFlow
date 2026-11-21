@@ -71,6 +71,31 @@ class BotCheckLockedChromeYoutubeDL(FakeYoutubeDL):
 class DownloadStabilityTests(unittest.TestCase):
     def setUp(self):
         FakeYoutubeDL.instances.clear()
+        # Keep the developer's real cookie exports out of these tests; the
+        # default paths live under %APPDATA% and would otherwise change which
+        # file _resolve_cookie_file() picks.
+        self._cookie_temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._cookie_temp.cleanup)
+        cookie_root = Path(self._cookie_temp.name)
+        for name, value in {
+            "YOUTUBE_COOKIES_FILE": cookie_root / "youtube_cookies.txt",
+            "LINER_COOKIES_DIR": cookie_root / "DowFlow Music" / "cookies",
+            "DOWFLOW_COOKIES_DIR": cookie_root / "DowFlow" / "cookies",
+        }.items():
+            patcher = patch.object(playlist, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        environment = patch.dict(
+            os.environ,
+            {
+                "DOWFLOW_YOUTUBE_COOKIES": "",
+                "DOWFLOW_INSTAGRAM_COOKIES": "",
+                "DOWFLOW_TIKTOK_COOKIES": "",
+                "DOWFLOW_COOKIES": "",
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
 
     def test_yt_dlp_progress_hook_logs_percent_speed_and_eta(self):
         hook = playlist._make_download_progress_log_hook()

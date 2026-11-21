@@ -39,6 +39,7 @@ PRESERVED_NAMES = frozenset(
         "downloads",
         "logs",
         "build-work",
+        "build-output",
         "dist",
         "build",
         "__pycache__",

@@ -142,6 +142,12 @@ def _rainbow_text(text: str, colour: bool, phase: float = 0.0) -> str:
     return "".join(painted)
 
 
+paint = _paint
+gradient = _gradient
+rainbow_text = _rainbow_text
+enable_vt = _enable_vt
+
+
 def render_frame(
     state: ProgressState,
     tick: int,

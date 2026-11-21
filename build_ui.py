@@ -2,16 +2,16 @@
 
 ``build.bat`` only bootstraps the virtual environment and then hands over to
 this module so the menu, the prompts, the status lines and the progress bar all
-share one coloured console with a looping flow animation instead of plain
-``echo`` text.
+share one coloured console. The wave banner keeps flowing for as long as the
+menu waits for a choice.
 """
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -20,19 +20,16 @@ import build_progress as bp
 ROOT = Path(__file__).resolve().parent
 
 SCOPES = (
-    ("1", "all", "Whole menu", "dist\\DowFlow.exe"),
-    ("2", "video", "Video", "dist\\DowFlow-Video.exe"),
-    ("3", "music", "Music", "dist\\DowFlow-Music.exe"),
-    ("4", "film", "Movies / Series", "dist\\DowFlow-Films.exe"),
-    ("5", "anime", "Anime", "dist\\DowFlow-Anime.exe"),
+    ("1", "all", "Whole menu", "DowFlow"),
+    ("2", "video", "Video", "DowFlow-Video"),
+    ("3", "music", "Music", "DowFlow-Music"),
+    ("4", "film", "Movies / Series", "DowFlow-Films"),
+    ("5", "anime", "Anime", "DowFlow-Anime"),
 )
 
 WAVE = "▁▂▃▄▅▆▇█▇▆▅▄▃▂"
 
 CYAN = (34, 211, 238)
-BLUE = (96, 165, 250)
-VIOLET = (167, 139, 250)
-PINK = (244, 114, 182)
 AMBER = (251, 191, 36)
 GREEN = (74, 222, 128)
 RED = (248, 113, 113)
@@ -40,24 +37,9 @@ MUTED = (148, 163, 184)
 WHITE = (241, 245, 249)
 PATH_BLUE = (129, 140, 248)
 
-_INVALID_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-_RESERVED_NAMES = {
-    "CON",
-    "PRN",
-    "AUX",
-    "NUL",
-    *(f"COM{index}" for index in range(1, 10)),
-    *(f"LPT{index}" for index in range(1, 10)),
-}
-
-
-def clean_name(value: str) -> str:
-    """Sanitise an executable name the same way the build export does."""
-    name = Path(value).stem.strip()
-    name = _INVALID_NAME.sub("_", name).strip(" .")
-    if not name or name.upper() in _RESERVED_NAMES:
-        raise ValueError("Choisis un nom d'exécutable Windows valide.")
-    return name[:100]
+SAVE_CURSOR = "\x1b7"
+RESTORE_CURSOR = "\x1b8"
+FLOW_INTERVAL = 0.045
 
 
 class Console:
@@ -68,6 +50,7 @@ class Console:
         self.vt = bp.enable_vt() if self.is_tty else False
         self.colour = self.vt and not os.environ.get("NO_COLOR")
         self.width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 140))
+        self._write_lock = threading.Lock()
 
     def paint(self, text: str, colour: tuple[int, int, int], bold: bool = False) -> str:
         if not self.colour:
@@ -76,14 +59,19 @@ class Console:
         return f"\x1b[1m{painted}" if bold else painted
 
     def write(self, text: str = "") -> None:
-        sys.stdout.write(text)
-        sys.stdout.flush()
+        with self._write_lock:
+            sys.stdout.write(text)
+            sys.stdout.flush()
 
     def clear(self) -> None:
         if self.vt:
             self.write("\x1b[2J\x1b[H")
         elif self.is_tty:
             os.system("cls")
+
+    def clear_below(self, rows: int) -> None:
+        """Clear everything under the animated banner without touching it."""
+        self.write(f"\x1b[{rows + 1};1H\x1b[0J")
 
     def wave(self, tick: int) -> str:
         span = max(10, self.width - 4)
@@ -94,26 +82,22 @@ class Console:
             cells.append(bp.paint(char, shade, True))
         return "  " + "".join(cells)
 
-    def show_flow(self, subtitle: str, duration: float = 2.0) -> None:
-        """Loop a flowing wave banner, then leave the last frame on screen."""
+    def banner(self, tick: int, subtitle: str) -> list[str]:
+        title = "  " + bp.rainbow_text("DOWFLOW BUILD", True, tick * 0.015)
+        return [
+            self.wave(tick),
+            f"{title}  {self.paint(subtitle, CYAN, True)}",
+            self.wave(-tick * 2),
+        ]
+
+    def start_flow(self, subtitle: str) -> "Flow | None":
+        """Reserve the banner rows and animate them for the whole session."""
         if not (self.is_tty and self.colour):
-            self.write(f"\n  DOWFLOW BUILD  {subtitle}\n\n")
-            return
-        frames = max(12, int(duration / 0.045))
-        self.write("\n" + bp.HIDE_CURSOR)
-        for frame in range(frames):
-            title = "  " + bp.rainbow_text("DOWFLOW BUILD", True, frame * 0.015)
-            block = [
-                self.wave(frame),
-                f"{title}  {self.paint(subtitle, CYAN, True)}",
-                self.wave(-frame * 2),
-            ]
-            if frame:
-                self.write("\x1b[3A")
-            for line in block:
-                self.write("\x1b[2K" + line + "\n")
-            time.sleep(0.045)
-        self.write(bp.SHOW_CURSOR)
+            self.write(f"\n\n\n  DOWFLOW BUILD  {subtitle}\n")
+            return None
+        flow = Flow(self, subtitle)
+        flow.start()
+        return flow
 
     def rule(self, span: int = 46) -> str:
         return "".join(
@@ -125,13 +109,14 @@ class Console:
 
     def menu(self) -> None:
         self.write("\n  " + self.rule() + "\n\n")
-        for index, (key, _scope, label, target) in enumerate(SCOPES):
+        for index, (key, _scope, label, name) in enumerate(SCOPES):
             number = self.paint(key, bp._STOPS[index % len(bp._STOPS)], bold=True)
+            target = f"dist\\{name}.exe"
             self.write(
                 f"    {number}  {self.paint(f'{label:<18}', WHITE, bold=True)}"
                 f"{self.paint(target, PATH_BLUE)}\n"
             )
-        zero = self.paint("0", PINK, bold=True)
+        zero = self.paint("0", (244, 114, 182), bold=True)
         self.write(f"    {zero}  {self.paint('Quit', MUTED)}\n\n")
         self.write("  " + self.rule() + "\n")
 
@@ -155,6 +140,47 @@ class Console:
 
     def pause(self, label: str = "Entrée pour revenir au menu") -> None:
         self.ask(label)
+
+
+class Flow:
+    """Loop the wave banner on its own thread, above the prompt."""
+
+    def __init__(self, console: Console, subtitle: str, rows: int = 3) -> None:
+        self.console = console
+        self.subtitle = subtitle
+        self.rows = rows
+        self.tick = 0
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def draw(self) -> None:
+        frame = [SAVE_CURSOR]
+        for row, line in enumerate(self.console.banner(self.tick, self.subtitle), start=1):
+            frame.append(f"\x1b[{row};1H\x1b[2K{line}")
+        frame.append(RESTORE_CURSOR)
+        self.console.write("".join(frame))
+
+    def _loop(self) -> None:
+        while not self._stop.wait(FLOW_INTERVAL):
+            self.tick += 1
+            self.draw()
+
+    def start(self) -> None:
+        self.console.write("\n" * self.rows)
+        self.draw()
+        self._thread = threading.Thread(
+            target=self._loop,
+            name="menu-flow",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1)
+            self._thread = None
+        self.draw()
 
 
 def ensure_build_requirements(console: Console) -> bool:
@@ -203,12 +229,20 @@ def main() -> int:
                 pass
 
     console = Console()
+    console.clear()
+    flow = console.start_flow("PyInstaller · Windows")
     try:
         while True:
-            console.clear()
-            console.show_flow("PyInstaller · Windows")
+            if flow is not None:
+                console.clear_below(flow.rows)
+            else:
+                console.clear()
             console.menu()
-            choice = console.ask("Choix [0-5] :").strip()
+            try:
+                choice = console.ask("Choix [0-5] :").strip()
+            except EOFError:
+                console.write("\n")
+                return 0
 
             if choice == "0":
                 console.write("\n  " + console.paint("À bientôt.", MUTED) + "\n\n")
@@ -219,23 +253,15 @@ def main() -> int:
                 time.sleep(0.7)
                 continue
 
-            _key, scope, label, default_name = match
+            _key, scope, label, name = match
             console.write("\n")
-            console.note(f"Édition « {label} »", CYAN)
+            console.note(f"Édition « {label} » → dist\\{name}.exe", CYAN)
             console.note(
                 "Ferme DowFlow : l'exécutable embarque la base actuelle.",
                 AMBER,
                 "!",
             )
             console.write("\n")
-            while True:
-                raw = console.ask(f"Nom de l'exécutable [{default_name}] :").strip()
-                try:
-                    name = clean_name(raw or default_name)
-                except ValueError as exc:
-                    console.note(str(exc), RED, "×")
-                    continue
-                break
 
             if not ensure_build_requirements(console):
                 console.write("\n")
@@ -258,6 +284,9 @@ def main() -> int:
     except KeyboardInterrupt:
         sys.stdout.write("\n  " + console.paint("Interrompu.", MUTED) + "\n\n")
         return 130
+    finally:
+        if flow is not None:
+            flow.stop()
 
 
 if __name__ == "__main__":

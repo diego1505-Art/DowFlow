@@ -533,6 +533,21 @@ def music_cookies_import():
     return jsonify({"success": True, **imported})
 
 
+@app.post("/api/music/cookies/import-path")
+def music_cookies_import_path():
+    """Import a cookie export picked by the desktop app's native file dialog."""
+    data = request.get_json(silent=True) or {}
+    source = str(data.get("path") or "").strip()
+    if not source:
+        return jsonify({"success": False, "error": "Cookie file path is required."}), 400
+    try:
+        imported = download_manager.import_cookie_file(source, DOWFLOW_COOKIES_DIR)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    log.success("[music] Cookies imported for %s", ", ".join(imported["domains"]))
+    return jsonify({"success": True, **imported})
+
+
 @app.get("/api/music/cookies")
 def music_cookies_list():
     """List the cookie exports already imported into DowFlow."""
@@ -628,6 +643,20 @@ def choose_download_folder():
     except Exception as exc:
         log.error("[download-folder] Could not select folder: %s", exc, exc_info=True)
         return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/music/download-root")
+def music_download_root():
+    """Set the single download root from the desktop music app."""
+    data = request.get_json(silent=True) or {}
+    selected = str(data.get("path") or "").strip()
+    if not selected:
+        return jsonify({"success": False, "error": "A folder path is required."}), 400
+    try:
+        folder = set_download_path(selected)
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    return jsonify({"success": True, "path": str(folder)})
 
 
 @app.get("/api/local-videos")

@@ -384,6 +384,9 @@ class PlayerEngine {
           this.lastPreloadKey = null;
           if (state.currentTrack) {
             recordListeningHistory(state.currentTrack);
+            // Keep metadata even for tracks that were never preloaded, so the
+            // cached "jump back in" row can always render them.
+            void linerDb.putTrack(state.currentTrack);
             this.telemetry.startTrack(
               state.currentTrack,
               state.playbackContext,

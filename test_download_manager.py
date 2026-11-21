@@ -179,6 +179,34 @@ class CookieImportTests(unittest.TestCase):
                 ["youtube_cookies.txt"],
             )
 
+    def test_import_names_a_plain_youtube_export_for_ytdlp(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "cooki youtube.txt"
+            source.write_text(NETSCAPE, encoding="utf-8")
+            destination = base / "cookies"
+
+            imported = download_manager.import_cookie_file(source, destination)
+
+            self.assertEqual(imported["filename"], "youtube_cookies.txt")
+            self.assertTrue((destination / "youtube_cookies.txt").is_file())
+
+    def test_import_prefers_youtube_in_a_combined_export(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "export.txt"
+            source.write_text(
+                "# Netscape HTTP Cookie File\n"
+                ".instagram.com\tTRUE\t/\tTRUE\t1893456000\tsessionid\tdef\n"
+                ".youtube.com\tTRUE\t/\tTRUE\t1893456000\tSID\tabc\n",
+                encoding="utf-8",
+            )
+            destination = base / "cookies"
+
+            imported = download_manager.import_cookie_file(source, destination)
+
+            self.assertEqual(imported["filename"], "youtube_cookies.txt")
+
     def test_import_rejects_an_invalid_export(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -223,6 +251,40 @@ class MusicSettingsApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(payload["filename"], "youtube_cookies.txt")
             self.assertTrue((destination / "youtube_cookies.txt").is_file())
+
+    def test_cookie_import_path_route_accepts_the_native_picker_result(self):
+        import app as app_module
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "cooki youtube.txt"
+            source.write_text(NETSCAPE, encoding="utf-8")
+            destination = base / "DowFlow" / "cookies"
+            with patch.object(app_module, "DOWFLOW_COOKIES_DIR", destination):
+                response = app_module.app.test_client().post(
+                    "/api/music/cookies/import-path", json={"path": str(source)}
+                )
+
+            payload = response.get_json()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(payload["filename"], "youtube_cookies.txt")
+            self.assertTrue((destination / "youtube_cookies.txt").is_file())
+
+    def test_download_root_route_updates_the_single_root(self):
+        import app as app_module
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(
+                app_module, "set_download_path", return_value=root
+            ) as setter:
+                response = app_module.app.test_client().post(
+                    "/api/music/download-root", json={"path": str(root)}
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json()["path"], str(root))
+            setter.assert_called_once_with(str(root))
 
 
 if __name__ == "__main__":

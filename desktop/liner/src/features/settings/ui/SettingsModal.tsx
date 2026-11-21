@@ -230,8 +230,13 @@ const SETTING_ITEMS: { tabId: TabId; titleKey: string; descKey?: string }[] = [
   },
   {
     tabId: "Storage",
-    titleKey: "settings.storage.sign_out_choice",
-    descKey: "settings.storage.sign_out_choice_ask",
+    titleKey: "settings.storage.download_root",
+    descKey: "settings.storage.download_root_desc",
+  },
+  {
+    tabId: "Storage",
+    titleKey: "settings.storage.cookies_title",
+    descKey: "settings.storage.cookies_desc",
   },
   { tabId: "Storage", titleKey: "settings.storage.downloads_title" },
   { tabId: "Storage", titleKey: "settings.storage.categories.liked" },

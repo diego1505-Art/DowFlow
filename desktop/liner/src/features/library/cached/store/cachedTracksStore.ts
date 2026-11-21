@@ -28,12 +28,6 @@ interface CachedTracksState {
   remove: (trackId: string) => Promise<void>;
 }
 
-function hasArtistIds(track: Track): boolean {
-  return Boolean(
-    track.artistId || track.artistList?.some((artist) => artist.id),
-  );
-}
-
 async function readCachedTracks(): Promise<CachedTrack[]> {
   const entries = await linerDb.listAudioEntries();
   const items = await Promise.all(
@@ -60,13 +54,11 @@ async function readCachedTracks(): Promise<CachedTrack[]> {
       };
     }),
   );
-  const kept = items.filter((item): item is CachedTrack => item !== null);
-  const stale = kept.filter((item) => !hasArtistIds(item.track));
-  await Promise.all(
-    stale.map((item) => audioCache.deleteAudio(item.track.id).catch(() => {})),
-  );
-  return kept
-    .filter((item) => hasArtistIds(item.track))
+  // Older cached tracks (especially YouTube imports) can lack artist IDs.
+  // They still play, and deleting them here made the "jump back in" row and
+  // the cache list silently empty, so keep every playable cached track.
+  return items
+    .filter((item): item is CachedTrack => item !== null)
     .sort((a, b) => b.lastPlayedAt - a.lastPlayedAt);
 }
 

@@ -1,20 +1,21 @@
-import type { ReactNode } from "react";
-import { HeartFill, Download2Line } from "@mingcute/react";
-import { ToggleSwitch } from "@/shared/ui";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  HeartFill,
+  Download2Line,
+  FolderOpenLine,
+  YoutubeFill,
+} from "@mingcute/react";
+import Button from "@/shared/ui/Button";
+import { ToggleSwitch, useToast } from "@/shared/ui";
 import { PresetPills } from "@/shared/ui/PresetPills";
 import { useTranslation } from "@/languages";
 import { LocalFilesIcon, useLocalLibraryStore } from "@/features/library/local";
-import {
-  SIGN_OUT_CHOICES,
-  useSavedTracksStore,
-  type SignOutChoice,
-} from "@/features/library/saved";
+import { useSavedTracksStore } from "@/features/library/saved";
 import {
   formatStorageBytes,
-  openDownloadsFolder,
   type StorageCategoryItem,
 } from "@/shared/utils/cacheManager";
-import { SegmentedControl, SettingRow, SettingSection } from "../controls";
+import { SettingRow, SettingSection } from "../controls";
 import { StorageSizeAction } from "./StorageSizeAction";
 import { StorageFolderButton } from "./StorageFolderButton";
 import { useSongEstimate } from "./StorageOverview";
@@ -52,6 +53,10 @@ export function StorageDownloadsSection({
   searchQuery?: string;
 }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const [downloadRoot, setDownloadRoot] = useState<string | null>(null);
+  const [cookies, setCookies] = useState<string[]>([]);
+  const [busy, setBusy] = useState<"cookies" | "root" | null>(null);
   const enabled = useSavedTracksStore((state) => state.enabled);
   const limitBytes = useSavedTracksStore((state) => state.limitBytes);
   const status = useSavedTracksStore((state) => state.status);
@@ -62,10 +67,6 @@ export function StorageDownloadsSection({
   const removeLocal = useLocalLibraryStore((state) => state.removeAll);
   const removeShared = useSavedTracksStore((state) => state.removeShared);
   const sharedCount = useSavedTracksStore((state) => state.sharedCount);
-  const signOutChoice = useSavedTracksStore((state) => state.signOutChoice);
-  const setSignOutChoice = useSavedTracksStore(
-    (state) => state.setSignOutChoice,
-  );
 
   const limitSongs = useSongEstimate(limitBytes, songBytes);
   const savedCount = records.length;
@@ -76,6 +77,67 @@ export function StorageDownloadsSection({
   const sharedBytes = sharedCount > 0 ? (shared?.bytes ?? 0) : 0;
   const localBytes = local?.bytes ?? 0;
   const localCount = local?.count ?? 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const result = await window.linerElectron?.musicSettings?.();
+      if (cancelled || !result?.success) return;
+      setDownloadRoot(result.downloadRoot ?? null);
+      setCookies(result.cookies ?? []);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const changeDownloadRoot = async () => {
+    setBusy("root");
+    try {
+      const result = await window.linerElectron?.chooseDownloadRoot?.();
+      if (result?.success && result.path) {
+        setDownloadRoot(result.path);
+        toast(t("settings.storage.download_root_changed"), "success");
+        return;
+      }
+      if (!result?.cancelled) {
+        toast(
+          result?.error || t("settings.storage.download_root_error"),
+          "error",
+        );
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const importCookies = async () => {
+    setBusy("cookies");
+    try {
+      const result = await window.linerElectron?.importCookies?.();
+      if (result?.success) {
+        const filename = result.filename || "cookies.txt";
+        setCookies((current) =>
+          Array.from(new Set([...current, filename])).sort(),
+        );
+        toast(t("settings.storage.cookies_imported", { filename }), "success");
+        return;
+      }
+      if (!result?.cancelled) {
+        toast(result?.error || t("settings.storage.cookies_error"), "error");
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openDownloadRoot = async () => {
+    const result = await window.linerElectron?.openDownloadRoot?.();
+    if (!result?.success) {
+      toast(result?.error || t("settings.storage.open_folder_failed"), "error");
+    }
+  };
 
   const likedDescription = (() => {
     if (!enabled) return t("settings.storage.liked_status.disabled");
@@ -114,7 +176,7 @@ export function StorageDownloadsSection({
       action={
         <StorageFolderButton
           label={t("settings.storage.open_folder_short")}
-          onOpen={() => void openDownloadsFolder()}
+          onOpen={() => void openDownloadRoot()}
         />
       }
     >
@@ -207,6 +269,66 @@ export function StorageDownloadsSection({
       />
 
       <SettingRow
+        icon={
+          <RowIcon>
+            <FolderOpenLine size={17} />
+          </RowIcon>
+        }
+        title={t("settings.storage.download_root")}
+        description={
+          downloadRoot
+            ? downloadRoot
+            : t("settings.storage.download_root_missing")
+        }
+        explained
+        titleKey="settings.storage.download_root"
+        descKey="settings.storage.download_root_desc"
+        searchQuery={searchQuery}
+        control={
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={busy === "root"}
+            onClick={() => void changeDownloadRoot()}
+          >
+            {t("settings.storage.download_root_change")}
+          </Button>
+        }
+      />
+
+      <SettingRow
+        icon={
+          <RowIcon>
+            <YoutubeFill size={17} />
+          </RowIcon>
+        }
+        title={t("settings.storage.cookies_title")}
+        description={
+          cookies.length > 0
+            ? t("settings.storage.cookies_current", {
+                files: cookies.join(", "),
+              })
+            : t("settings.storage.cookies_desc")
+        }
+        explained
+        titleKey="settings.storage.cookies_title"
+        descKey="settings.storage.cookies_desc"
+        searchQuery={searchQuery}
+        control={
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={busy === "cookies"}
+            onClick={() => void importCookies()}
+          >
+            {t("settings.storage.cookies_import")}
+          </Button>
+        }
+      />
+
+      <SettingRow
         title={t("settings.storage.downloads_limit")}
         description={
           limitBytes > 0
@@ -229,25 +351,6 @@ export function StorageDownloadsSection({
             options={LIMIT_OPTIONS.map((gb) => ({
               value: gb * GB,
               label: gb === 0 ? t("settings.storage.no_limit") : `${gb} GB`,
-            }))}
-          />
-        }
-      />
-
-      <SettingRow
-        title={t("settings.storage.sign_out_choice")}
-        description={t(`settings.storage.sign_out_choice_${signOutChoice}`)}
-        explained
-        titleKey="settings.storage.sign_out_choice"
-        searchQuery={searchQuery}
-        control={
-          <SegmentedControl<SignOutChoice>
-            ariaLabel={t("settings.storage.sign_out_choice")}
-            value={signOutChoice}
-            onChange={setSignOutChoice}
-            options={SIGN_OUT_CHOICES.map((choice) => ({
-              value: choice,
-              label: t(`settings.storage.sign_out_option_${choice}`),
             }))}
           />
         }

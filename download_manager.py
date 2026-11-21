@@ -25,6 +25,40 @@ STATUS_DELETED = "deleted"
 _LOCK = threading.RLock()
 _UNSAFE_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+_COOKIE_SITE_NAMES = {
+    "youtube.com": "youtube_cookies.txt",
+    "instagram.com": "instagram_cookies.txt",
+    "tiktok.com": "tiktok_cookies.txt",
+}
+
+
+def _cookie_target_name(source_name: str, domains: list[str]) -> str:
+    """Keep recognised names, otherwise name the export after its site.
+
+    yt-dlp only looks for ``youtube_cookies.txt`` (or ``cookies.txt``), so a
+    file the user saved as ``youtube.txt`` would be imported but never used.
+    """
+    name = _UNSAFE_FILENAME.sub("_", source_name).strip() or "cookies.txt"
+    if not name.casefold().endswith(".txt"):
+        name = f"{name}.txt"
+    lowered = name.casefold()
+    # A generic export is already picked up for every site by yt-dlp.
+    if lowered == "cookies.txt":
+        return name
+    for site, canonical in _COOKIE_SITE_NAMES.items():
+        if any(
+            domain.removeprefix("www.") == site
+            or domain.removeprefix("www.").endswith(f".{site}")
+            for domain in domains
+        ):
+            return canonical
+    # Keep custom per-site names (mysite_cookies.txt) that yt-dlp can match.
+    if lowered.endswith("_cookies.txt"):
+        return name
+    if len(domains) == 1:
+        return f"{domains[0].removeprefix('www.')}_cookies.txt"
+    return "cookies.txt"
+
 
 # ── Download root ────────────────────────────────────────────────────────────
 
@@ -275,9 +309,7 @@ def import_cookie_file(source: str | Path, destination_dir: str | Path | None = 
 
     target_dir = Path(destination_dir or DOWFLOW_COOKIES_DIR)
     target_dir.mkdir(parents=True, exist_ok=True)
-    name = _UNSAFE_FILENAME.sub("_", source_path.name).strip() or "cookies.txt"
-    if not name.casefold().endswith(".txt"):
-        name = f"{name}.txt"
+    name = _cookie_target_name(source_path.name, domains)
     target = target_dir / name
     temporary = target.with_suffix(".tmp")
     shutil.copyfile(source_path, temporary)

@@ -2,6 +2,7 @@ import {
   app,
   BaseWindow,
   BrowserWindow,
+  dialog,
   globalShortcut,
   ipcMain,
   shell,
@@ -10,7 +11,7 @@ import {
   nativeImage,
   powerSaveBlocker,
 } from "electron";
-import type { Display, Rectangle } from "electron";
+import type { Display, OpenDialogOptions, Rectangle } from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
@@ -2151,6 +2152,197 @@ if (!gotTheLock) {
         }
       },
     );
+
+    // DowFlow download settings: cookie export and the single download root.
+    handleTrusted("dowflow:music-settings", async () => {
+      const backend = await findDowflowBackend();
+      if (!backend) {
+        return {
+          success: false,
+          error:
+            "DowFlow is not running: open the DowFlow app (start.bat) and try again.",
+        };
+      }
+      try {
+        const response = await fetch(`${backend}/api/music/settings`, {
+          signal: AbortSignal.timeout(8_000),
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          success?: boolean;
+          download_root?: string | null;
+          cookies_dir?: string;
+          cookies?: unknown;
+          error?: string;
+        };
+        if (!response.ok || data.success !== true) {
+          return {
+            success: false,
+            error: data.error || `DowFlow answered HTTP ${response.status}.`,
+          };
+        }
+        return {
+          success: true,
+          downloadRoot:
+            typeof data.download_root === "string"
+              ? data.download_root
+              : null,
+          cookiesDir:
+            typeof data.cookies_dir === "string" ? data.cookies_dir : "",
+          cookies: Array.isArray(data.cookies)
+            ? data.cookies.filter(
+                (name): name is string => typeof name === "string",
+              )
+            : [],
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
+
+    handleTrusted("dowflow:import-cookies", async (event) => {
+      const backend = await findDowflowBackend();
+      if (!backend) {
+        return {
+          success: false,
+          error:
+            "DowFlow is not running: open the DowFlow app (start.bat) and try again.",
+        };
+      }
+      const options: OpenDialogOptions = {
+        title: "Importer un fichier cookies",
+        properties: ["openFile"],
+        filters: [{ name: "Cookies Netscape", extensions: ["txt"] }],
+      };
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const selection = owner
+        ? await dialog.showOpenDialog(owner, options)
+        : await dialog.showOpenDialog(options);
+      const source = selection.filePaths[0];
+      if (selection.canceled || !source) {
+        return { success: false, cancelled: true };
+      }
+      try {
+        const response = await fetch(
+          `${backend}/api/music/cookies/import-path`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: source }),
+            signal: AbortSignal.timeout(15_000),
+          },
+        );
+        const data = (await response.json().catch(() => ({}))) as {
+          success?: boolean;
+          filename?: string;
+          domains?: unknown;
+          error?: string;
+        };
+        if (!response.ok || data.success !== true) {
+          return {
+            success: false,
+            error: data.error || `DowFlow answered HTTP ${response.status}.`,
+          };
+        }
+        return {
+          success: true,
+          filename: data.filename,
+          domains: Array.isArray(data.domains)
+            ? data.domains.filter(
+                (domain): domain is string => typeof domain === "string",
+              )
+            : [],
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
+
+    handleTrusted("dowflow:choose-download-root", async (event) => {
+      const backend = await findDowflowBackend();
+      if (!backend) {
+        return {
+          success: false,
+          error:
+            "DowFlow is not running: open the DowFlow app (start.bat) and try again.",
+        };
+      }
+      const options: OpenDialogOptions = {
+        title: "Choisir le dossier de téléchargement",
+        properties: ["openDirectory", "createDirectory"],
+      };
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const selection = owner
+        ? await dialog.showOpenDialog(owner, options)
+        : await dialog.showOpenDialog(options);
+      const folder = selection.filePaths[0];
+      if (selection.canceled || !folder) {
+        return { success: false, cancelled: true };
+      }
+      try {
+        const response = await fetch(`${backend}/api/music/download-root`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: folder }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          success?: boolean;
+          path?: string;
+          error?: string;
+        };
+        if (!response.ok || data.success !== true || !data.path) {
+          return {
+            success: false,
+            error: data.error || `DowFlow answered HTTP ${response.status}.`,
+          };
+        }
+        syncLocalTracksNow();
+        return { success: true, path: data.path };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
+
+    handleTrusted("dowflow:open-download-root", async () => {
+      const backend = await findDowflowBackend();
+      if (!backend) {
+        return { success: false, error: "DowFlow is not running." };
+      }
+      try {
+        const response = await fetch(`${backend}/api/music/settings`, {
+          signal: AbortSignal.timeout(8_000),
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          success?: boolean;
+          download_root?: string | null;
+          error?: string;
+        };
+        const root =
+          typeof data.download_root === "string" ? data.download_root : "";
+        if (!response.ok || data.success !== true || !root) {
+          return {
+            success: false,
+            error: data.error || "Choisis d'abord un dossier de téléchargement.",
+          };
+        }
+        const error = await shell.openPath(root);
+        return { success: error === "", error: error || undefined };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
 
     // OTA bundle updater IPC handlers
     ipcMain.handle("bundle:check", async () => {

@@ -86,6 +86,27 @@ export interface LinerElectronApi {
     message?: string;
     error?: string;
   }>;
+  musicSettings: () => Promise<{
+    success: boolean;
+    downloadRoot?: string | null;
+    cookiesDir?: string;
+    cookies?: string[];
+    error?: string;
+  }>;
+  importCookies: () => Promise<{
+    success: boolean;
+    cancelled?: boolean;
+    filename?: string;
+    domains?: string[];
+    error?: string;
+  }>;
+  chooseDownloadRoot: () => Promise<{
+    success: boolean;
+    cancelled?: boolean;
+    path?: string;
+    error?: string;
+  }>;
+  openDownloadRoot: () => Promise<{ success: boolean; error?: string }>;
   fetchLyrics: (request: {
     path: string;
     params?: Record<string, string>;
@@ -344,6 +365,11 @@ const api: LinerElectronApi = {
     ipcRenderer.invoke("dowflow:download-music", payload),
   downloadMusicStatus: (jobId) =>
     ipcRenderer.invoke("dowflow:download-status", jobId),
+  musicSettings: () => ipcRenderer.invoke("dowflow:music-settings"),
+  importCookies: () => ipcRenderer.invoke("dowflow:import-cookies"),
+  chooseDownloadRoot: () =>
+    ipcRenderer.invoke("dowflow:choose-download-root"),
+  openDownloadRoot: () => ipcRenderer.invoke("dowflow:open-download-root"),
   fetchLyrics: (request) => ipcRenderer.invoke("lyrics:fetch", request),
   openExportFolder: () => ipcRenderer.invoke("shell:open-export-folder"),
   setAppIcon: (dataUrl, options) =>

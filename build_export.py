@@ -86,6 +86,17 @@ _WINDOWS_RESERVED = {
 }
 
 
+# The overlay of the app plus its media tools takes the build to 86 %, and the
+# Inno Setup compression afterwards owns the last stretch of the bar: it runs for
+# minutes while the setup file is written, so it must not already sit at 99 %.
+_INSTALLER_PERCENT_START = 90
+_INSTALLER_PERCENT_SPAN = 7
+# Input bytes are roughly this many times the compressed setup size. Only used
+# until a finished build of the same edition records the exact numbers.
+_DEFAULT_INSTALLER_RATIO = 3.5
+_AUTO_ETA = object()
+
+
 def progress_from_log_line(
     line: str,
     current_percent: int,
@@ -93,25 +104,25 @@ def progress_from_log_line(
 ) -> tuple[int, str, int]:
     message = line.lower()
     if "checking analysis" in message:
-        return max(current_percent, 5), "Scanning dependencies", analysis_events
+        return max(current_percent, 4), "Scanning dependencies", analysis_events
     if "building analysis" in message:
-        return max(current_percent, 10), "Analyzing application", analysis_events
+        return max(current_percent, 8), "Analyzing application", analysis_events
     if "processing standard module hook" in message or message.startswith("info: analyzing "):
         analysis_events += 1
-        percent = min(45, 10 + analysis_events // 2)
+        percent = min(38, 8 + analysis_events // 2)
         return max(current_percent, percent), "Analyzing application", analysis_events
     if "looking for dynamic libraries" in message:
-        return max(current_percent, 46), "Collecting runtime libraries", analysis_events
+        return max(current_percent, 40), "Collecting runtime libraries", analysis_events
     if "building pyz" in message:
-        return max(current_percent, 55), "Compressing Python modules", analysis_events
+        return max(current_percent, 46), "Compressing Python modules", analysis_events
     if "building pkg" in message:
-        return max(current_percent, 72), "Packing application files", analysis_events
+        return max(current_percent, 62), "Packing application files", analysis_events
     if "building exe" in message:
-        return max(current_percent, 86), "Creating executable", analysis_events
+        return max(current_percent, 74), "Creating executable", analysis_events
     if "building collect" in message:
-        return max(current_percent, 92), "Assembling application folder", analysis_events
+        return max(current_percent, 82), "Assembling application folder", analysis_events
     if "completed successfully" in message:
-        return max(current_percent, 99), "Finalizing application folder", analysis_events
+        return max(current_percent, 86), "Finalizing application folder", analysis_events
     return current_percent, "Building executable", analysis_events
 
 
@@ -225,41 +236,131 @@ def prepare_tools(
     return tools_dir
 
 
-def _watch_installer_size(
+def _tree_size(*paths: Path) -> int:
+    total = 0
+    for path in paths:
+        if not path.exists():
+            continue
+        for base, _directories, files in os.walk(path):
+            for name in files:
+                try:
+                    total += (Path(base) / name).stat().st_size
+                except OSError:
+                    continue
+    return total
+
+
+def _load_build_history(root: Path) -> dict[str, Any]:
+    try:
+        history = json.loads(
+            (root / "build" / ".export_history.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+    return history if isinstance(history, dict) else {}
+
+
+def estimate_installer_size(root: Path, scope: str, input_bytes: int) -> int | None:
+    """Guess the compressed setup size so the compression shows a percentage."""
+    if input_bytes <= 0:
+        return None
+    measured = _load_build_history(root).get("installer")
+    ratios: list[float] = []
+    ratio: float | None = None
+    if isinstance(measured, dict):
+        for key, entry in measured.items():
+            if not isinstance(entry, dict):
+                continue
+            try:
+                size = int(entry.get("size") or 0)
+                source = int(entry.get("input") or 0)
+            except (TypeError, ValueError):
+                continue
+            if size <= 0 or source <= 0:
+                continue
+            ratios.append(source / size)
+            if key == scope:
+                ratio = source / size
+    if ratio is None and ratios:
+        ratio = sum(ratios) / len(ratios)
+    return int(input_bytes / (ratio or _DEFAULT_INSTALLER_RATIO))
+
+
+def _remember_installer_size(
+    root: Path,
+    scope: str,
+    input_bytes: int,
+    setup_size: int,
+) -> None:
+    history = _load_build_history(root)
+    measured = history.get("installer")
+    if not isinstance(measured, dict):
+        measured = {}
+    measured[scope] = {"input": input_bytes, "size": setup_size}
+    history["installer"] = measured
+    try:
+        (root / "build" / ".export_history.json").write_text(
+            json.dumps(history, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def _watch_installer(
     staging: Path,
-    started: float,
-    callback: Callable[[dict[str, Any]], None] | None,
+    output_name: str,
+    expected_bytes: int | None,
+    report: Callable[[int, str, int | None], None] | None,
     stop: threading.Event,
 ) -> None:
-    """Report the growing Setup.exe so the bar moves during compression."""
-    while not stop.wait(2.0):
-        total = 0
+    """Follow the setup Inno Setup writes so the compression shows live numbers."""
+    written = 0
+    previous_size = 0
+    previous_at = time.monotonic()
+    speed = 0.0
+    while not stop.wait(0.5):
         try:
-            for path in staging.glob("*.exe*"):
-                total += path.stat().st_size
+            size = (staging / output_name).stat().st_size
         except OSError:
+            size = previous_size
+        now = time.monotonic()
+        elapsed = now - previous_at
+        if elapsed > 0 and size >= previous_size:
+            sample = (size - previous_size) / elapsed / (1024 * 1024)
+            speed = sample if speed <= 0 else speed * 0.7 + sample * 0.3
+        previous_size, previous_at = size, now
+        written = max(written, size)
+        if report is None:
             continue
-        if callback is None:
+        megabytes = written / (1024 * 1024)
+        percent = _INSTALLER_PERCENT_START
+        eta_seconds: int | None = None
+        if written == 0:
+            # Inno Setup inspects every file before it writes the first byte.
+            report(percent, "Compression · préparation des fichiers", None)
             continue
-        elapsed = int(max(0.0, time.time() - started))
-        callback(
-            {
-                "percent": 98,
-                "stage": (
-                    f"Compressing the installer · {total / (1024 * 1024):.0f} MB"
-                    f" · {elapsed // 60}:{elapsed % 60:02d}"
-                ),
-                "eta_seconds": None,
-                "elapsed_seconds": elapsed,
-            }
-        )
+        if expected_bytes:
+            share = min(1.0, written / expected_bytes)
+            percent = _INSTALLER_PERCENT_START + int(_INSTALLER_PERCENT_SPAN * share)
+            if speed > 0.05:
+                eta_seconds = max(
+                    0, int((expected_bytes - written) / (speed * 1024 * 1024))
+                )
+            stage = (
+                f"Compression · {megabytes:.0f}"
+                f"/{expected_bytes / (1024 * 1024):.0f} MB · {speed:.1f} MB/s"
+            )
+        else:
+            stage = f"Compression · {megabytes:.0f} MB · {speed:.1f} MB/s"
+        report(percent, stage, eta_seconds)
 
 
 def build_installer(
     scope: str,
     project_root: Path | None = None,
     output_dir: Path | None = None,
-    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    progress_callback: Callable[[int, str, int | None], None] | None = None,
 ) -> Path:
     """Compress an already-built edition folder with Inno Setup."""
     if scope not in EXPORT_SCOPES:
@@ -278,6 +379,14 @@ def build_installer(
     if not (tools_dir / ".tools.ready").is_file():
         raise RuntimeError("Media tools are missing; run prepare_tools() first.")
     iscc = _find_iscc()
+    input_bytes = _tree_size(
+        source_dir,
+        tools_dir / "ffmpeg",
+        tools_dir / "node",
+        tools_dir / "chromium",
+        tools_dir / "webview2",
+    )
+    expected_bytes = estimate_installer_size(root, scope, input_bytes)
     # Compile into the build folder and move the finished Setup afterwards, so
     # Downloads never shows a half-written installer.
     staging = root / "build" / "work" / "installer"
@@ -296,13 +405,18 @@ def build_installer(
         f"/DIconFile={root / 'static' / 'dowflow.ico'}",
         str(root / "build" / "installer.iss"),
     ]
-    started = time.time()
     stop = threading.Event()
     watcher: threading.Thread | None = None
     if progress_callback is not None:
         watcher = threading.Thread(
-            target=_watch_installer_size,
-            args=(staging, started, progress_callback, stop),
+            target=_watch_installer,
+            args=(
+                staging,
+                f"{edition['setup']}.exe",
+                expected_bytes,
+                progress_callback,
+                stop,
+            ),
             name="installer-size",
             daemon=True,
         )
@@ -329,6 +443,7 @@ def build_installer(
         raise RuntimeError("Inno Setup completed without creating the installer.")
     setup = destination / f"{edition['setup']}.exe"
     os.replace(staged, setup)
+    _remember_installer_size(root, scope, input_bytes, setup.stat().st_size)
     return setup
 
 
@@ -390,21 +505,26 @@ def build_executable(
     analysis_events = 0
     recent_output: deque[str] = deque(maxlen=200)
 
-    def report_progress(next_percent: int, next_stage: str) -> None:
+    def report_progress(
+        next_percent: int,
+        next_stage: str,
+        eta_seconds: int | None | object = _AUTO_ETA,
+    ) -> None:
         nonlocal percent, stage
         limit = 100 if next_stage == "Complete" else 99
         percent = max(percent, min(limit, next_percent))
         stage = next_stage
         elapsed = max(0.0, time.time() - started_at)
-        eta_seconds = None
-        if percent >= 10 and elapsed >= 2:
-            measured_total = elapsed * 100 / percent
-            estimated_total = (
-                previous_duration * 0.7 + measured_total * 0.3
-                if previous_duration is not None
-                else measured_total
-            )
-            eta_seconds = max(0, int(estimated_total - elapsed))
+        if eta_seconds is _AUTO_ETA:
+            eta_seconds = None
+            if percent >= 10 and elapsed >= 2:
+                measured_total = elapsed * 100 / percent
+                estimated_total = (
+                    previous_duration * 0.7 + measured_total * 0.3
+                    if previous_duration is not None
+                    else measured_total
+                )
+                eta_seconds = max(0, int(estimated_total - elapsed))
         event = {
             "percent": percent,
             "stage": stage,
@@ -457,9 +577,15 @@ def build_executable(
 
     result = executable
     if installer:
-        report_progress(90, "Preparing media tools")
-        prepare_tools(root, progress_callback=report_progress)
-        report_progress(97, "Compressing the installer")
+        report_progress(87, "Preparing media tools")
+        prepare_tools(
+            root,
+            progress_callback=lambda value, stage: report_progress(
+                88 + min(1, value // 100),
+                stage,
+            ),
+        )
+        report_progress(_INSTALLER_PERCENT_START, "Compressing the installer")
         result = build_installer(
             scope,
             root,

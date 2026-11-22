@@ -2,6 +2,7 @@ import io
 import json
 import os
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -543,6 +544,61 @@ class LocalVideoApiTests(unittest.TestCase):
             self.assertTrue(
                 any(item.startswith("/DSourceDir=") and edition["name"] in item for item in command)
             )
+
+    def test_installer_reports_live_compression_progress(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            edition = build_export.EDITIONS["music"]
+            source = root / "build" / "out" / edition["name"]
+            source.mkdir(parents=True)
+            (source / f"{edition['name']}.exe").write_bytes(b"x" * (6 * 1024 * 1024))
+            tools = root / "build" / "tools"
+            tools.mkdir(parents=True)
+            (tools / ".tools.ready").write_text("{}", encoding="utf-8")
+            (root / "static").mkdir()
+            (root / "static" / "dowflow.ico").write_bytes(b"icon")
+            events = []
+
+            class FakeCompleted:
+                returncode = 0
+                stdout = "ok"
+                stderr = ""
+
+            def fake_run(command, **kwargs):
+                output_dir = next(
+                    item.split("=", 1)[1]
+                    for item in command
+                    if item.startswith("/DOutputDir=")
+                )
+                staged = Path(output_dir) / f"{edition['setup']}.exe"
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                for _ in range(5):
+                    with staged.open("ab") as handle:
+                        handle.write(b"setup" * (64 * 1024))
+                    time.sleep(0.3)
+                return FakeCompleted()
+
+            with patch.object(build_export, "_find_iscc", return_value="iscc"), patch.object(
+                build_export.subprocess, "run", side_effect=fake_run
+            ):
+                build_export.build_installer(
+                    "music",
+                    root,
+                    output_dir=root / "build-output",
+                    progress_callback=lambda percent, stage, eta: events.append(
+                        (percent, stage, eta)
+                    ),
+                )
+
+            self.assertTrue(events)
+            self.assertTrue(all(percent >= 90 for percent, _stage, _eta in events))
+            self.assertTrue(any("MB/s" in stage for _percent, stage, _eta in events))
+            self.assertTrue(any("MB" in stage and "/" in stage for _percent, stage, _eta in events))
+            self.assertTrue(any(eta is not None for _percent, _stage, eta in events))
+            stored = json.loads(
+                (root / "build" / ".export_history.json").read_text(encoding="utf-8")
+            )
+            self.assertIn("music", stored["installer"])
 
     def test_folder_picker_route_saves_the_selected_path(self):
         import app as app_module

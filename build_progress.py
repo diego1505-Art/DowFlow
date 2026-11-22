@@ -47,6 +47,10 @@ _STAGE_LABELS = {
     "Packing application files": "Assemblage des fichiers",
     "Creating executable": "Création de l'exécutable",
     "Finalizing executable": "Finalisation",
+    "Assembling application folder": "Assemblage des fichiers",
+    "Finalizing application folder": "Finalisation des fichiers",
+    "Preparing media tools": "Préparation des outils",
+    "Compressing the installer": "Compression de l'installeur",
     "Building executable": "Compilation",
     "Complete": "Terminé",
 }

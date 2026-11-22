@@ -9,8 +9,8 @@ describe("LocalTrackLibrary", () => {
   let sources: string;
 
   /** Pretend the file was written a while ago, so it is no longer downloading. */
-  const settle = async (file: string) => {
-    const old = new Date(Date.now() - 60_000);
+  const settle = async (file: string, offsetMs = 60_000) => {
+    const old = new Date(Date.now() - offsetMs);
     await fs.utimes(file, old, old);
     return file;
   };
@@ -171,6 +171,47 @@ describe("LocalTrackLibrary", () => {
 
     expect(result.added.map((record) => record.fileName)).toEqual(["Song.mp4"]);
     expect(result.added[0].mimeType).toBe("audio/mp4");
+  });
+
+  it("keeps a removed download out of the library until it is downloaded again", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    const song = path.join(folder, "Kept---Out.mp3");
+    await fs.writeFile(song, "audio bytes");
+    await settle(song);
+
+    const first = await library.importExternalFolder(folder);
+    expect(first.added).toHaveLength(1);
+    await library.remove([first.added[0].id]);
+
+    const afterRemove = await library.importExternalFolder(folder);
+    expect(afterRemove.added).toEqual([]);
+    expect(await library.list()).toEqual([]);
+
+    // Downloading the same track again replaces the file, so it comes back.
+    await fs.writeFile(song, "audio bytes");
+    await settle(song, 30_000);
+    const afterDownload = await library.importExternalFolder(folder);
+    expect(afterDownload.added.map((record) => record.fileName)).toEqual([
+      "Kept---Out.mp3",
+    ]);
+  });
+
+  it("keeps the whole folder out after clearing the library", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    const song = path.join(folder, "Old---Track.mp3");
+    await fs.writeFile(song, "old bytes");
+    await settle(song);
+    await library.importExternalFolder(folder);
+
+    expect(await library.removeAll()).toBe(1);
+
+    const again = await library.importExternalFolder(folder);
+    expect(again.added).toEqual([]);
+    expect(await library.list()).toEqual([]);
   });
 
   it("backfills a cover saved after the track was imported", async () => {

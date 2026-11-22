@@ -10,6 +10,8 @@ export interface LocalTrackRecord {
   coverFile?: string;
   byteSize: number;
   addedAt: number;
+  /** Which version of the file in the download folder this track came from. */
+  sourceStamp?: string;
 }
 
 export interface LocalLibraryUsage {

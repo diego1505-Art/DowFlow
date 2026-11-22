@@ -38,6 +38,13 @@ const isPartialName = (name: string) => {
   return lowered.startsWith(".") || PARTIAL_SUFFIXES.some((s) => lowered.endsWith(s));
 };
 
+/**
+ * Identify one version of a file in the download folder. The modification date
+ * is part of it, so downloading the same track again is a new source.
+ */
+const stampOf = (name: string, size: number, mtimeMs: number) =>
+  `${name.toLowerCase()}\u0000${size}\u0000${Math.round(mtimeMs)}`;
+
 async function folderBytes(folder: string): Promise<number> {
   try {
     const entries = await fsp.readdir(folder, { withFileTypes: true });
@@ -56,12 +63,17 @@ async function folderBytes(folder: string): Promise<number> {
 
 export class LocalTrackLibrary {
   private records: LocalTrackRecord[] | null = null;
+  private dismissedStamps: Set<string> | null = null;
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly root: string) {}
 
   private get indexPath() {
     return path.join(this.root, "library.json");
+  }
+
+  private get dismissedPath() {
+    return path.join(this.root, "dismissed.json");
   }
 
   private filePath(...parts: string[]) {
@@ -95,6 +107,42 @@ export class LocalTrackLibrary {
     await fsp.writeFile(temp, JSON.stringify(records));
     await fsp.rename(temp, this.indexPath);
     this.records = records;
+  }
+
+  /** Sources the user deleted, so the sync does not import them back. */
+  private async loadDismissed(): Promise<Set<string>> {
+    if (this.dismissedStamps) return this.dismissedStamps;
+    try {
+      const parsed: unknown = JSON.parse(
+        await fsp.readFile(this.dismissedPath, "utf8"),
+      );
+      this.dismissedStamps = new Set(
+        Array.isArray(parsed)
+          ? parsed.filter((entry): entry is string => typeof entry === "string")
+          : [],
+      );
+    } catch {
+      this.dismissedStamps = new Set();
+    }
+    return this.dismissedStamps;
+  }
+
+  private async saveDismissed(stamps: Set<string>) {
+    await fsp.mkdir(this.root, { recursive: true });
+    const temp = `${this.dismissedPath}.tmp`;
+    await fsp.writeFile(temp, JSON.stringify([...stamps]));
+    await fsp.rename(temp, this.dismissedPath);
+    this.dismissedStamps = stamps;
+  }
+
+  private async dismiss(records: LocalTrackRecord[]) {
+    const stamps = records
+      .map((record) => record.sourceStamp)
+      .filter((stamp): stamp is string => Boolean(stamp));
+    if (stamps.length === 0) return;
+    const next = new Set(await this.loadDismissed());
+    for (const stamp of stamps) next.add(stamp);
+    await this.saveDismissed(next);
   }
 
   list(): Promise<LocalTrackRecord[]> {
@@ -157,9 +205,17 @@ export class LocalTrackLibrary {
       const known = new Set(records.map((record) => record.id));
       // Recognise files that are already imported before hashing them: reading
       // every track on each sync tick saturated the disk and slowed the app.
-      const knownSources = new Set(
-        records.map((record) => `${record.fileName}\u0000${record.byteSize}`),
+      const bySource = new Map(
+        records.map((record) => [
+          `${record.fileName}\u0000${record.byteSize}`,
+          record,
+        ]),
       );
+      const knownSources = new Set(bySource.keys());
+      // A track deleted from the library stays deleted: its file is still in
+      // the download folder, so without this every removal undid itself on the
+      // next tick and the page looked like it was resurrecting old tracks.
+      const dismissed = await this.loadDismissed();
       await fsp.mkdir(this.filePath("audio"), { recursive: true });
       await fsp.mkdir(this.filePath("covers"), { recursive: true });
 
@@ -177,7 +233,16 @@ export class LocalTrackLibrary {
           // ago may still be growing. Importing it now copied a truncated track
           // and left a duplicate next to the finished file, so wait one tick.
           if (Date.now() - before.mtimeMs < SETTLE_MS) continue;
+          const stamp = stampOf(entry.name, before.size, before.mtimeMs);
+          if (dismissed.has(stamp)) continue;
           if (knownSources.has(`${entry.name}\u0000${before.size}`)) {
+            // Record the version that is already imported, so deleting it can
+            // silence exactly that one and not a future re-download.
+            const existing = bySource.get(`${entry.name}\u0000${before.size}`);
+            if (existing && !existing.sourceStamp) {
+              existing.sourceStamp = stamp;
+              changed = true;
+            }
             result.duplicates += 1;
             continue;
           }
@@ -202,6 +267,7 @@ export class LocalTrackLibrary {
             }
             continue;
           }
+          record.sourceStamp = stamp;
           known.add(record.id);
           knownSources.add(`${record.fileName}\u0000${record.byteSize}`);
           records.push(record);
@@ -240,6 +306,7 @@ export class LocalTrackLibrary {
       const records = await this.load();
       const gone = records.filter((record) => removing.has(record.id));
       if (gone.length === 0) return;
+      await this.dismiss(gone);
       await this.save(records.filter((record) => !removing.has(record.id)));
       for (const record of gone) {
         await fsp.rm(this.filePath("audio", record.audioFile), { force: true });
@@ -254,7 +321,9 @@ export class LocalTrackLibrary {
 
   removeAll(): Promise<number> {
     return this.serialized(async () => {
-      const count = (await this.load()).length;
+      const records = await this.load();
+      const count = records.length;
+      await this.dismiss(records);
       await this.save([]);
       for (const folder of LIBRARY_FOLDERS) {
         await fsp.rm(this.filePath(folder), { recursive: true, force: true });

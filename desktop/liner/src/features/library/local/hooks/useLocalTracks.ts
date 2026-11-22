@@ -18,6 +18,20 @@ export function useLocalTracks() {
     });
   }, [load]);
 
+  // A track downloaded while the window was in the background still has to be
+  // there when the user comes back to "On this device".
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [load]);
+
   return {
     tracks,
     isLoading: loadState === "idle" || loadState === "loading",

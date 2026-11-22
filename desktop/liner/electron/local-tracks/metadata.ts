@@ -14,6 +14,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   mp3: "audio/mpeg",
   flac: "audio/flac",
   m4a: "audio/mp4",
+  mp4: "audio/mp4",
+  m4v: "audio/mp4",
   aac: "audio/aac",
   ogg: "audio/ogg",
   opus: "audio/ogg",

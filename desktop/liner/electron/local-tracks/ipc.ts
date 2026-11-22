@@ -10,7 +10,7 @@ import { handleLocalTrackScheme } from "./protocol.js";
 import type { SavedTrackLibrary } from "../saved-tracks/library.js";
 import { LOCAL_AUDIO_EXTENSIONS } from "./types.js";
 
-const DOWFLOW_SYNC_INTERVAL_MS = 5_000;
+const DOWFLOW_SYNC_INTERVAL_MS = 3_000;
 
 let requestSync: (() => void) | null = null;
 
@@ -32,7 +32,12 @@ export function setupLocalTracks(saved: SavedTrackLibrary) {
   );
   handleLocalTrackScheme(library, saved);
 
-  handleTrusted("local-tracks:list", () => library.list());
+  handleTrusted("local-tracks:list", () => {
+    // Opening "On this device" should include a track that just finished
+    // downloading, even if the periodic sync has not run yet.
+    requestSync?.();
+    return library.list();
+  });
 
   handleTrusted("local-tracks:import", (_event, paths: unknown) =>
     library.importFiles(stringList(paths)),

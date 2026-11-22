@@ -34,6 +34,10 @@ interface LocalLibraryState {
 const newestFirst = (records: LocalTrackRecord[]) =>
   [...records].sort((a, b) => b.addedAt - a.addedAt);
 
+// A refresh requested while another one is running used to be dropped, which
+// left the page showing the library from before the download landed.
+let loadToken = 0;
+
 const withTracks = (records: LocalTrackRecord[]) => {
   const sorted = newestFirst(records);
   return { records: sorted, tracks: sorted.map(localRecordToTrack) };
@@ -67,13 +71,14 @@ export const useLocalLibraryStore = create<LocalLibraryState>((set, get) => {
         set({ loadState: "unavailable" });
         return;
       }
-      if (get().loadState === "loading") return;
-      set({ loadState: "loading" });
+      const token = ++loadToken;
+      if (get().loadState !== "ready") set({ loadState: "loading" });
       try {
         const records = await bridge.localTracksList();
+        if (token !== loadToken) return;
         set({ ...withTracks(records), loadState: "ready" });
       } catch {
-        set({ loadState: "ready" });
+        if (token === loadToken) set({ loadState: "ready" });
       }
     },
 

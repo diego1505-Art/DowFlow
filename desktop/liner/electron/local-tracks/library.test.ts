@@ -8,10 +8,17 @@ describe("LocalTrackLibrary", () => {
   let root: string;
   let sources: string;
 
+  /** Pretend the file was written a while ago, so it is no longer downloading. */
+  const settle = async (file: string) => {
+    const old = new Date(Date.now() - 60_000);
+    await fs.utimes(file, old, old);
+    return file;
+  };
+
   const source = async (name: string, content: string) => {
     const file = path.join(sources, name);
     await fs.writeFile(file, content);
-    return file;
+    return settle(file);
   };
 
   beforeEach(async () => {
@@ -109,7 +116,9 @@ describe("LocalTrackLibrary", () => {
     const library = new LocalTrackLibrary(root);
     const folder = path.join(sources, "music");
     await fs.mkdir(folder);
-    await fs.writeFile(path.join(folder, "Artist---Song.mp3"), "audio bytes");
+    const song = path.join(folder, "Artist---Song.mp3");
+    await fs.writeFile(song, "audio bytes");
+    await settle(song);
     await fs.writeFile(path.join(folder, "Artist---Song.jpg"), "cover bytes");
 
     const first = await library.importExternalFolder(folder);
@@ -127,11 +136,50 @@ describe("LocalTrackLibrary", () => {
     expect(again.duplicates).toBe(1);
   });
 
+  it("waits for a running download to settle before importing it", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    const file = path.join(folder, "Downloading---Song.mp3");
+    await fs.writeFile(file, "first fragment only");
+
+    const during = await library.importExternalFolder(folder);
+    expect(during.added).toEqual([]);
+
+    await fs.appendFile(file, " and the rest");
+    await settle(file);
+    const after = await library.importExternalFolder(folder);
+
+    expect(after.added).toHaveLength(1);
+    expect(after.added[0].byteSize).toBe(
+      Buffer.byteLength("first fragment only and the rest"),
+    );
+  });
+
+  it("ignores yt-dlp fragments and temporary names", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    const fragment = path.join(folder, "Song.mp3.part");
+    await fs.writeFile(fragment, "part");
+    await settle(fragment);
+    const video = path.join(folder, "Song.mp4");
+    await fs.writeFile(video, "video");
+    await settle(video);
+
+    const result = await library.importExternalFolder(folder);
+
+    expect(result.added.map((record) => record.fileName)).toEqual(["Song.mp4"]);
+    expect(result.added[0].mimeType).toBe("audio/mp4");
+  });
+
   it("backfills a cover saved after the track was imported", async () => {
     const library = new LocalTrackLibrary(root);
     const folder = path.join(sources, "music");
     await fs.mkdir(folder);
-    await fs.writeFile(path.join(folder, "Late---Cover.mp3"), "late bytes");
+    const late = path.join(folder, "Late---Cover.mp3");
+    await fs.writeFile(late, "late bytes");
+    await settle(late);
 
     const first = await library.importExternalFolder(folder);
     expect(first.added[0].coverFile).toBeUndefined();

@@ -20,6 +20,23 @@ const coverKey = (name: string) =>
 
 const ID_PATTERN = /^[a-f0-9]{20}$/;
 const LIBRARY_FOLDERS = ["audio", "covers"] as const;
+/** A file written this recently may still be a download in progress. */
+const SETTLE_MS = 5_000;
+const PARTIAL_SUFFIXES = [
+  ".part",
+  ".ytdl",
+  ".tmp",
+  ".temp",
+  ".crdownload",
+  ".download",
+  ".frag",
+];
+
+/** Temporary names yt-dlp/DowFlow use while a download is still running. */
+const isPartialName = (name: string) => {
+  const lowered = name.toLowerCase();
+  return lowered.startsWith(".") || PARTIAL_SUFFIXES.some((s) => lowered.endsWith(s));
+};
 
 async function folderBytes(folder: string): Promise<number> {
   try {
@@ -149,12 +166,18 @@ export class LocalTrackLibrary {
       let changed = false;
       for (const entry of entries) {
         if (!entry.isFile()) continue;
+        if (isPartialName(entry.name)) continue;
         const extension = path.extname(entry.name).slice(1).toLowerCase();
         if (!SUPPORTED_AUDIO.has(extension)) continue;
         const source = path.join(folder, entry.name);
         try {
-          const { size } = await fsp.stat(source);
-          if (knownSources.has(`${entry.name}\u0000${size}`)) {
+          const before = await fsp.stat(source);
+          if (!before.isFile()) continue;
+          // DowFlow downloads straight into this folder: a file touched moments
+          // ago may still be growing. Importing it now copied a truncated track
+          // and left a duplicate next to the finished file, so wait one tick.
+          if (Date.now() - before.mtimeMs < SETTLE_MS) continue;
+          if (knownSources.has(`${entry.name}\u0000${before.size}`)) {
             result.duplicates += 1;
             continue;
           }
@@ -163,6 +186,20 @@ export class LocalTrackLibrary {
           });
           if (!record) {
             result.duplicates += 1;
+            continue;
+          }
+          // The write may have resumed while the copy ran: drop that copy and
+          // let the next tick import the finished file instead.
+          const after = await fsp.stat(source);
+          if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) {
+            await fsp.rm(this.filePath("audio", record.audioFile), {
+              force: true,
+            });
+            if (record.coverFile) {
+              await fsp.rm(this.filePath("covers", record.coverFile), {
+                force: true,
+              });
+            }
             continue;
           }
           known.add(record.id);

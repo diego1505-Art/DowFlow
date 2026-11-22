@@ -32,4 +32,8 @@ export const LOCAL_AUDIO_EXTENSIONS = [
   "opus",
   "wav",
   "webm",
+  // DowFlow's downloader saves single videos (Shorts included) as mp4/m4v;
+  // they are reported as tracks and played for their audio.
+  "mp4",
+  "m4v",
 ] as const;

@@ -4,7 +4,7 @@
 ;   /DAppName=DowFlow Video /DAppExe=DowFlow-Video.exe
 ;   /DSourceDir=<repo>\build\out\DowFlow-Video
 ;   /DDestDir=submenus\video /DOutputBase=DowFlow-Video-Setup
-;   /DOutputDir=<repo>\build-output /DToolsDir=<repo>\build\tools
+;   /DOutputDir=%USERPROFILE%\Downloads /DToolsDir=<repo>\build\tools
 ;   /DIconFile=<repo>\static\dowflow.ico /DAppId=DowFlow.Video
 
 #ifndef AppName
@@ -23,7 +23,7 @@
   #define OutputBase "DowFlow-Setup"
 #endif
 #ifndef OutputDir
-  #define OutputDir "..\build-output"
+  #define OutputDir "..\..\..\Downloads"
 #endif
 #ifndef ToolsDir
   #define ToolsDir "..\build\tools"

@@ -1,7 +1,8 @@
 """Build a scoped DowFlow onedir application and its Windows installer.
 
 Each scope produces ``build/out/<Edition>/`` (the PyInstaller one-directory
-output) and, with ``installer=True``, ``build-output/<Edition>-Setup.exe``.
+output) and, with ``installer=True``, ``%USERPROFILE%/Downloads/<Edition>-Setup.exe``,
+the Windows Downloads folder unless another output directory is given.
 
 No one-file executable is produced anymore: the installer copies the folder
 once into ``%LOCALAPPDATA%\\DowFlow``, so launching DowFlow never extracts
@@ -24,6 +25,14 @@ from typing import Any, Callable
 from config import SUBPROCESS_CREATION_FLAGS
 
 EXPORT_SCOPES = {"all", "video", "music", "film", "anime"}
+
+
+def default_output_dir() -> Path:
+    """Drop the finished installer straight into the Windows Downloads folder."""
+    profile = Path(os.environ.get("USERPROFILE") or Path.home())
+    downloads = profile / "Downloads"
+    return downloads if downloads.is_dir() else profile
+
 
 # One entry per build.bat choice. ``dest`` is relative to
 # %LOCALAPPDATA%\DowFlow and keeps every edition in its own folder while the
@@ -218,6 +227,7 @@ def prepare_tools(
 def build_installer(
     scope: str,
     project_root: Path | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
     """Compress an already-built edition folder with Inno Setup."""
     if scope not in EXPORT_SCOPES:
@@ -230,8 +240,8 @@ def build_installer(
         raise RuntimeError(
             f"The {edition['name']} folder is missing; build the edition first."
         )
-    output_dir = root / "build-output"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    destination = (output_dir or default_output_dir()).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
     tools_dir = root / "build" / "tools"
     if not (tools_dir / ".tools.ready").is_file():
         raise RuntimeError("Media tools are missing; run prepare_tools() first.")
@@ -243,7 +253,7 @@ def build_installer(
         f"/DSourceDir={source_dir}",
         f"/DDestDir={edition['dest']}",
         f"/DOutputBase={edition['setup']}",
-        f"/DOutputDir={output_dir}",
+        f"/DOutputDir={destination}",
         f"/DAppId={edition['app_id']}",
         f"/DToolsDir={tools_dir}",
         f"/DIconFile={root / 'static' / 'dowflow.ico'}",
@@ -261,7 +271,7 @@ def build_installer(
     if completed.returncode:
         detail = (completed.stdout or "") + (completed.stderr or "")
         raise RuntimeError(detail[-5000:] or "Inno Setup failed.")
-    setup = output_dir / f"{edition['setup']}.exe"
+    setup = destination / f"{edition['setup']}.exe"
     if not setup.is_file():
         raise RuntimeError("Inno Setup completed without creating the installer.")
     return setup
@@ -275,6 +285,7 @@ def build_executable(
     *,
     installer: bool = False,
     clean: bool = False,
+    output_dir: Path | None = None,
 ) -> Path:
     """Build the scope's one-directory app and optionally its installer."""
     if scope not in EXPORT_SCOPES:
@@ -394,7 +405,7 @@ def build_executable(
         report_progress(90, "Preparing media tools")
         prepare_tools(root, progress_callback=report_progress)
         report_progress(97, "Compressing the installer")
-        result = build_installer(scope, root)
+        result = build_installer(scope, root, output_dir)
     report_progress(100, "Complete")
     return result
 
@@ -405,6 +416,11 @@ def main() -> int:
     parser.add_argument("name", nargs="?")
     parser.add_argument("--json-progress", action="store_true")
     parser.add_argument("--installer", action="store_true", help="Also build the Inno Setup installer.")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Where to write <Edition>-Setup.exe (defaults to %USERPROFILE%\\Downloads).",
+    )
     args = parser.parse_args()
     try:
         callback = None
@@ -418,6 +434,7 @@ def main() -> int:
             args.name,
             progress_callback=callback,
             installer=args.installer,
+            output_dir=args.output_dir,
         )
     except Exception as exc:
         print(str(exc), file=sys.stderr)

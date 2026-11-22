@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import build_progress as bp
+from build_export import default_output_dir
 
 ROOT = Path(__file__).resolve().parent
 
@@ -111,7 +112,7 @@ class Console:
         self.write("\n  " + self.rule() + "\n\n")
         for index, (key, _scope, label, _name, setup) in enumerate(SCOPES):
             number = self.paint(key, bp._STOPS[index % len(bp._STOPS)], bold=True)
-            target = f"build-output\\{setup}"
+            target = str(default_output_dir() / setup)
             self.write(
                 f"    {number}  {self.paint(f'{label:<18}', WHITE, bold=True)}"
                 f"{self.paint(target, PATH_BLUE)}\n"
@@ -255,7 +256,7 @@ def main() -> int:
 
             _key, scope, label, name, setup = match
             console.write("\n")
-            console.note(f"Édition « {label} » → build-output\\{setup}", CYAN)
+            console.note(f"Édition « {label} » → {default_output_dir() / setup}", CYAN)
             console.note(
                 "Les données iront dans %LOCALAPPDATA%\\DowFlow\\data.",
                 MUTED,
@@ -269,7 +270,7 @@ def main() -> int:
                 continue
 
             code = run_build(console, scope, name)
-            target = ROOT / "build-output" / setup
+            target = default_output_dir() / setup
             console.write("\n")
             if code == 0 and target.is_file():
                 console.note(str(target), GREEN, "✓")

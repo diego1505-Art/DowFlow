@@ -527,7 +527,7 @@ class LocalVideoApiTests(unittest.TestCase):
             with patch.object(build_export, "_find_iscc", return_value="iscc"), patch.object(
                 build_export.subprocess, "run", side_effect=fake_run
             ):
-                result = build_export.build_installer("video", root)
+                result = build_export.build_installer("video", root, output_dir=root / "build-output")
 
             self.assertEqual(result, setup)
             command = captured["command"]

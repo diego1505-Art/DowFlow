@@ -71,7 +71,7 @@ python -m build_export all DowFlow --installer
 
 Install the pinned `setuptools` version after the build requirements and before starting PyInstaller. This works around the `ModuleNotFoundError: No module named 'jaraco'` compatibility issue seen in some build environments. The build is windowed (`console=False`) and uses `pywebview` with WebView2 instead of launching a browser window. Tkinter is included for the native folder picker.
 
-`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. Each choice writes `build/out/<Edition>/` and `build-output/<Edition>-Setup.exe`:
+`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. Each choice writes `build/out/<Edition>/` and drops the installer straight into the Windows Downloads folder (`%USERPROFILE%\Downloads\<Edition>-Setup.exe`, override with `--output-dir`):
 
 | Choice | Installer |
 | --- | --- |
@@ -80,6 +80,8 @@ Install the pinned `setuptools` version after the build requirements and before 
 | Music | `DowFlow-Music-Setup.exe` |
 | Movies / Series | `DowFlow-Films-Setup.exe` |
 | Anime | `DowFlow-Anime-Setup.exe` |
+
+A build only produces the edition you picked: the other installers in a folder come from earlier builds, not from the current one.
 
 The installers are the release assets; a one-directory build cannot be distributed as a lone executable. Each installer copies its edition into `%LOCALAPPDATA%\DowFlow\menu\` or `%LOCALAPPDATA%\DowFlow\submenus\<edition>\`, while `%LOCALAPPDATA%\DowFlow\data\` is shared by every edition and holds `config.json`, `dowflow.db`, `logs\` and `tools\` (FFmpeg, Node, Chromium, WebView2). Installing a single submenu is therefore enough: it brings the shared tools and data, and installing another edition later does not overwrite it.
 

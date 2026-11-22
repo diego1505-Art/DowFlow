@@ -520,8 +520,14 @@ class LocalVideoApiTests(unittest.TestCase):
 
             def fake_run(command, **kwargs):
                 captured["command"] = command
-                setup.parent.mkdir(parents=True, exist_ok=True)
-                setup.write_bytes(b"setup")
+                output_dir = next(
+                    item.split("=", 1)[1]
+                    for item in command
+                    if item.startswith("/DOutputDir=")
+                )
+                staged = Path(output_dir) / f"{edition['setup']}.exe"
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                staged.write_bytes(b"setup")
                 return FakeCompleted()
 
             with patch.object(build_export, "_find_iscc", return_value="iscc"), patch.object(

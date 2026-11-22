@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -224,10 +225,41 @@ def prepare_tools(
     return tools_dir
 
 
+def _watch_installer_size(
+    staging: Path,
+    started: float,
+    callback: Callable[[dict[str, Any]], None] | None,
+    stop: threading.Event,
+) -> None:
+    """Report the growing Setup.exe so the bar moves during compression."""
+    while not stop.wait(2.0):
+        total = 0
+        try:
+            for path in staging.glob("*.exe*"):
+                total += path.stat().st_size
+        except OSError:
+            continue
+        if callback is None:
+            continue
+        elapsed = int(max(0.0, time.time() - started))
+        callback(
+            {
+                "percent": 98,
+                "stage": (
+                    f"Compressing the installer · {total / (1024 * 1024):.0f} MB"
+                    f" · {elapsed // 60}:{elapsed % 60:02d}"
+                ),
+                "eta_seconds": None,
+                "elapsed_seconds": elapsed,
+            }
+        )
+
+
 def build_installer(
     scope: str,
     project_root: Path | None = None,
     output_dir: Path | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> Path:
     """Compress an already-built edition folder with Inno Setup."""
     if scope not in EXPORT_SCOPES:
@@ -246,6 +278,11 @@ def build_installer(
     if not (tools_dir / ".tools.ready").is_file():
         raise RuntimeError("Media tools are missing; run prepare_tools() first.")
     iscc = _find_iscc()
+    # Compile into the build folder and move the finished Setup afterwards, so
+    # Downloads never shows a half-written installer.
+    staging = root / "build" / "work" / "installer"
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True, exist_ok=True)
     command = [
         iscc,
         f"/DAppName={edition['app_name']}",
@@ -253,27 +290,45 @@ def build_installer(
         f"/DSourceDir={source_dir}",
         f"/DDestDir={edition['dest']}",
         f"/DOutputBase={edition['setup']}",
-        f"/DOutputDir={destination}",
+        f"/DOutputDir={staging}",
         f"/DAppId={edition['app_id']}",
         f"/DToolsDir={tools_dir}",
         f"/DIconFile={root / 'static' / 'dowflow.ico'}",
         str(root / "build" / "installer.iss"),
     ]
-    completed = subprocess.run(
-        command,
-        cwd=root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        creationflags=SUBPROCESS_CREATION_FLAGS,
-    )
+    started = time.time()
+    stop = threading.Event()
+    watcher: threading.Thread | None = None
+    if progress_callback is not None:
+        watcher = threading.Thread(
+            target=_watch_installer_size,
+            args=(staging, started, progress_callback, stop),
+            name="installer-size",
+            daemon=True,
+        )
+        watcher.start()
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
+    finally:
+        stop.set()
+        if watcher is not None:
+            watcher.join(timeout=2)
     if completed.returncode:
         detail = (completed.stdout or "") + (completed.stderr or "")
         raise RuntimeError(detail[-5000:] or "Inno Setup failed.")
-    setup = destination / f"{edition['setup']}.exe"
-    if not setup.is_file():
+    staged = staging / f"{edition['setup']}.exe"
+    if not staged.is_file():
         raise RuntimeError("Inno Setup completed without creating the installer.")
+    setup = destination / f"{edition['setup']}.exe"
+    os.replace(staged, setup)
     return setup
 
 
@@ -405,7 +460,12 @@ def build_executable(
         report_progress(90, "Preparing media tools")
         prepare_tools(root, progress_callback=report_progress)
         report_progress(97, "Compressing the installer")
-        result = build_installer(scope, root, output_dir)
+        result = build_installer(
+            scope,
+            root,
+            output_dir,
+            progress_callback=report_progress,
+        )
     report_progress(100, "Complete")
     return result
 

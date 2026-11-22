@@ -295,7 +295,7 @@ def retry_dependency_setup():
 @app.route("/video")
 def video_page():
     """Generic video and audio downloader (legacy template)."""
-    return render_template("download.html", has_ffmpeg=has_ffmpeg())
+    return render_template("download.html", has_ffmpeg=has_ffmpeg(), app_scope=APP_SCOPE)
 
 
 @app.route("/music", endpoint="music_page")
@@ -324,6 +324,7 @@ def coming_soon_page():
         label=label,
         description=description,
         has_ffmpeg=has_ffmpeg(),
+        app_scope=APP_SCOPE,
     )
 
 

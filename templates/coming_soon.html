@@ -48,7 +48,9 @@
         <p>{{ description }}</p>
         <p>This workspace is not available yet. It will arrive in a future DowFlow update.</p>
         <span class="badge">Coming soon</span>
+        {% if app_scope is not defined or app_scope == "all" %}
         <div><a class="btn" href="/">← Back to menu</a></div>
+        {% endif %}
     </main>
 </body>
 </html>

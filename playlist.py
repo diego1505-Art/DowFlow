@@ -59,8 +59,9 @@ _ADAPTIVE_TIME_THRESHOLDS = {
     "240p": 2100,  # 35 min
 }
 
-# Real-time monitoring: observation period before deciding to lower quality.
-_ADAPTIVE_GRACE_SECONDS = 10.0
+# Never restart a transfer that already wrote more than this much (or 2 % of
+# the file): the progress must not fall back to zero in front of the user.
+_ADAPTIVE_RESTART_BUDGET_BYTES = 8 * 1024 * 1024
 
 
 class _AdaptiveDowngrade(BaseException):
@@ -308,11 +309,19 @@ def _measure_network_speed_mbps(url: str | None = None, timeout_seconds: float =
 # programmatic use).
 _CONNECTION_TIER = 16
 _CONNECTION_TIER_DETECTED = False
+# Download speed measured at startup, in Mbps. Used to pick a quality before a
+# transfer instead of interrupting it later. 0 means "not measured".
+_MEASURED_SPEED_MBPS = 0.0
 
 
 def get_connection_tier() -> int:
     """Return the current connection tier (8/16/32/64/128)."""
     return _CONNECTION_TIER
+
+
+def get_measured_speed_mbps() -> float:
+    """Return the speed measured at startup in Mbps (0 when unavailable)."""
+    return _MEASURED_SPEED_MBPS
 
 
 def detect_connection_tier(speed_mbps: float | None = None, force: bool = False) -> int:
@@ -322,7 +331,7 @@ def detect_connection_tier(speed_mbps: float | None = None, force: bool = False)
     8/16/32/64/128 without overwhelming the machine. Override with the
     DOWFLOW_CONNECTIONS environment variable.
     """
-    global _CONNECTION_TIER, _CONNECTION_TIER_DETECTED
+    global _CONNECTION_TIER, _CONNECTION_TIER_DETECTED, _MEASURED_SPEED_MBPS
     if _CONNECTION_TIER_DETECTED and not force:
         return _CONNECTION_TIER
 
@@ -339,6 +348,7 @@ def detect_connection_tier(speed_mbps: float | None = None, force: bool = False)
     else:
         cores = os.cpu_count() or 2
         measured = speed_mbps if speed_mbps is not None else _measure_network_speed_mbps()
+        _MEASURED_SPEED_MBPS = max(0.0, measured)
         _CONNECTION_TIER = pick_connection_tier(cores, measured)
         log.info(
             "[perf] Connection tier: x%d (%d cores, speed %s)",
@@ -390,84 +400,64 @@ def _progress_resolution(progress: dict[str, Any]) -> int:
 
 
 def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None = None) -> Callable[[dict[str, Any]], None]:
-    """Measure real throughput and stop if the estimated time is too long.
+    """Lower the quality before the transfer, never in the middle of it.
 
-    Observe the video stream's real throughput during the first
-    `_ADAPTIVE_GRACE_SECONDS` seconds. If the projected ETA then exceeds the
-    current tier's threshold, raise `_AdaptiveDowngrade` to retry at lower quality.
+    The speed measured at startup projects how long the selected stream would
+    take. When that projection exceeds the tier's threshold, the download is
+    restarted at the next lower quality while almost nothing has been written,
+    so the progress never drops back to zero after a visible download.
     """
-    state: dict[str, Any] = {
-        "filename": None,
-        "started_at": None,
-        "start_bytes": 0,
-        "decided": False,
-    }
+    state: dict[str, Any] = {"decided": False}
 
     def hook(progress: dict[str, Any]) -> None:
         if user_hook is not None:
             user_hook(progress)
-        if progress.get("status") != "downloading":
+        if state["decided"] or progress.get("status") != "downloading":
+            return
+
+        speed_mbps = get_measured_speed_mbps()
+        total = progress.get("total_bytes") or progress.get("total_bytes_estimate") or 0
+        done = progress.get("downloaded_bytes") or 0
+        if speed_mbps <= 0 or total <= 0:
+            return  # No reliable measurement: keep the requested quality.
+
+        if done > max(_ADAPTIVE_RESTART_BUDGET_BYTES, total * 0.02):
+            # Too much is already written: finishing is better than restarting.
+            state["decided"] = True
             return
 
         tier = _tier_for_resolution(_progress_resolution(progress))
-        if tier is None:
-            return  # Audio stream or unknown resolution; no decision to make.
-
-        now = time.time()
-        filename = progress.get("filename")
-        if state["filename"] != filename:
-            # Start a new observation window for this stream.
-            state["filename"] = filename
-            state["started_at"] = now
-            state["start_bytes"] = progress.get("downloaded_bytes") or 0
-            state["decided"] = False
+        next_quality = _next_lower_quality(tier) if tier else None
+        threshold = _ADAPTIVE_TIME_THRESHOLDS.get(tier or "")
+        if next_quality is None or not threshold:
+            state["decided"] = True  # Audio stream, unknown or lowest tier.
             return
 
-        if state["decided"]:
-            return
-
-        next_quality = _next_lower_quality(tier)
-        if next_quality is None:
-            state["decided"] = True  # Already at the lowest tier.
-            return
-
-        elapsed = now - (state["started_at"] or now)
-        if elapsed < _ADAPTIVE_GRACE_SECONDS:
-            return
-
-        total = progress.get("total_bytes") or progress.get("total_bytes_estimate") or 0
-        done = progress.get("downloaded_bytes") or 0
-        transferred = done - state["start_bytes"]
-        if total <= 0 or transferred <= 0:
-            return
-
-        speed = transferred / elapsed
-        eta = max(total - done, 0) / speed
-        threshold = _ADAPTIVE_TIME_THRESHOLDS.get(tier)
-
-        # Keep the download within the tier's time threshold.
-        # If the ETA is too long, lower quality immediately regardless of throughput.
-        if threshold and eta > threshold:
+        eta = total / (speed_mbps * 1_000_000.0 / 8.0)
+        if eta <= threshold:
             state["decided"] = True
-            note = (
-                f"{tier} -> {next_quality}; ETA {int(eta)} s > {threshold} s; "
-                "retry at 0%."
-            )
-            if user_hook is not None:
-                user_hook({
-                    "status": "adaptive_quality",
-                    "quality_from": tier,
-                    "quality_to": next_quality,
-                    "quality_changed": True,
-                    "quality_used": next_quality,
-                    "adaptive_note": note,
-                    "adaptive_eta_seconds": int(eta),
-                    "adaptive_threshold_seconds": threshold,
-                })
-            raise _AdaptiveDowngrade(
-                next_quality,
-                note,
-            )
+            return
+
+        state["decided"] = True
+        note = (
+            f"{tier} -> {next_quality}; ETA {int(eta)} s > {threshold} s "
+            f"at {speed_mbps:.1f} Mbps; lowered before the transfer."
+        )
+        if user_hook is not None:
+            user_hook({
+                "status": "adaptive_quality",
+                "quality_from": tier,
+                "quality_to": next_quality,
+                "quality_changed": True,
+                "quality_used": next_quality,
+                "adaptive_note": note,
+                "adaptive_eta_seconds": int(eta),
+                "adaptive_threshold_seconds": threshold,
+            })
+        raise _AdaptiveDowngrade(
+            next_quality,
+            note,
+        )
 
     return hook
 
@@ -1122,7 +1112,7 @@ def _ydlp_download(
         extra_bits.append(f"Format: {video_format if download_type == 'video' else audio_format}")
         if download_type == "video":
             extra_bits.append(
-                f"Quality: {current_quality.upper()}" + (" (adaptive 10s)" if monitor_adaptive else "")
+                f"Quality: {current_quality.upper()}" + (" (adaptive)" if monitor_adaptive else "")
             )
         if language:
             extra_bits.append(f"Lang: {language}")
@@ -1132,6 +1122,7 @@ def _ydlp_download(
 
         # Start at the highest quality. Adaptive mode monitors throughput for
         # 10 seconds and retries at a lower quality if the ETA is too long.
+        downgrades = 0
         while True:
             ydl_opts = build_ydl_opts(current_quality)
             hooks: list[Callable[[dict[str, Any]], None]] = [
@@ -1139,7 +1130,8 @@ def _ydlp_download(
             ]
             if progress_hook is not None:
                 hooks.append(progress_hook)
-            if monitor_adaptive:
+            # One single pre-transfer adjustment: a download never restarts twice.
+            if monitor_adaptive and downgrades == 0:
                 hooks.append(_make_adaptive_watch_hook())
             if hooks:
                 ydl_opts["progress_hooks"] = hooks
@@ -1149,6 +1141,7 @@ def _ydlp_download(
                 break
             except _AdaptiveDowngrade as downgrade:
                 log.info("[adaptive] %s", downgrade.note)
+                downgrades += 1
                 adaptive_note = downgrade.note
                 quality_changed = True
                 _cleanup_partial_files(output_path, before_files)

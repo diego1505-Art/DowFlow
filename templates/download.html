@@ -1188,7 +1188,9 @@
                 </div>
 
                 <div class="topbar-right">
+                    {% if app_scope is not defined or app_scope == "all" %}
                     <a href="/" style="padding:9px 16px;border-radius:999px;text-decoration:none;font-size:0.86rem;font-weight:600;color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12)">← Menu</a>
+                    {% endif %}
                     <div class="ffmpeg-status">
                         <span class="dot{% if has_ffmpeg %} online{% endif %}" id="ffmpegDot"></span>
                         <span id="ffmpegText">FFmpeg: {% if has_ffmpeg %}OK{% else %}not installed{% endif %}</span>
@@ -1307,7 +1309,7 @@
                         </div>
 
                         <div class="adaptive-banner" id="adaptiveBanner">
-                            Adaptive mode: the download starts at the highest quality, measures real speed for 10 seconds, then lowers quality automatically if the connection is too slow.
+                            Adaptive mode: the quality is checked against the speed measured at startup. If the file would take too long, DowFlow lowers the quality before the transfer starts — a running download is never restarted.
                         </div>
 
                         <div class="language-selector">
@@ -1649,7 +1651,7 @@ https://example.com/video..."
             const isAdaptiveMode = currentType === "video" && isBestQuality && adaptiveQualityToggle.checked;
             adaptiveBanner.classList.toggle("visible", Boolean(adaptiveBanner.dataset.show === "true" && isAdaptiveMode));
             if (isAdaptiveMode && adaptiveBanner.dataset.show !== "true") {
-                adaptiveBanner.textContent = "Adaptive mode: starts at maximum quality, measures real speed for 10 seconds, then lowers quality if the ETA is too long.";
+                adaptiveBanner.textContent = "Adaptive mode: the quality is chosen from the speed measured at startup, before the transfer begins.";
             }
         }
 

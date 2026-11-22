@@ -312,20 +312,11 @@ class DownloadStabilityTests(unittest.TestCase):
                     "downloaded_bytes": 0,
                     "total_bytes": 1700 * 1024 * 1024,
                 }
-                second = {
-                    **first,
-                    "downloaded_bytes": (11 if type(self).calls == 1 else 700) * 1024 * 1024,
-                }
                 with patch.object(playlist.log, "info"):
-                    with patch.object(
-                        playlist.time,
-                        "time",
-                        side_effect=[1000.0, 1011.0],
-                    ):
-                        for hook in progress_hooks:
-                            hook(first)
-                        for hook in progress_hooks:
-                            hook(second)
+                    # The decision happens on the first progress event, before
+                    # any byte is written: the transfer is never restarted late.
+                    for hook in progress_hooks:
+                        hook(first)
                 output_path = self.options["outtmpl"].replace("%(title).200s.%(ext)s", "clip.mp4")
                 Path(output_path).write_bytes(b"video")
                 return {"title": "clip", "ext": "mp4", "filepath": output_path}
@@ -333,7 +324,7 @@ class DownloadStabilityTests(unittest.TestCase):
         AdaptiveYoutubeDL.calls = 0
         with patch.object(playlist.yt_dlp, "YoutubeDL", AdaptiveYoutubeDL), patch.object(
             playlist, "get_connection_tier", return_value=16
-        ):
+        ), patch.object(playlist, "get_measured_speed_mbps", return_value=1.0):
             with tempfile.TemporaryDirectory() as output:
                 result = playlist._ydlp_download(
                     "https://www.youtube.com/watch?v=123",
@@ -626,7 +617,7 @@ class DownloadStabilityTests(unittest.TestCase):
             )
         )
 
-    def test_adaptive_watch_hook_downgrades_when_eta_is_too_long(self):
+    def test_adaptive_watch_hook_lowers_quality_before_any_transfer(self):
         events = []
         hook = playlist._make_adaptive_watch_hook(events.append)
         first = {
@@ -636,29 +627,20 @@ class DownloadStabilityTests(unittest.TestCase):
             "downloaded_bytes": 0,
             "total_bytes": 1000 * 1024 * 1024,
         }
-        # 11 Mo en 11 s → ~1 Mo/s : ETA ≈ 989 s > seuil 4K (300 s)
-        second = {**first, "downloaded_bytes": 11 * 1024 * 1024}
 
-        base = 1000.0
-        with patch.object(playlist.log, "info") as info:
-            with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
-                hook(first)  # Start the observation window.
-                with self.assertRaises(playlist._AdaptiveDowngrade) as ctx:
-                    hook(second)  # Exceed the 10-second window and trigger a downgrade.
-
-        info.assert_not_called()
+        # 1 Mbps for a 1 GiB stream: ETA ≈ 8388 s > seuil 4K (300 s).
+        with patch.object(playlist, "get_measured_speed_mbps", return_value=1.0):
+            with self.assertRaises(playlist._AdaptiveDowngrade) as ctx:
+                hook(first)
 
         self.assertEqual(ctx.exception.quality, "1440p")
-        self.assertEqual(
-            ctx.exception.note,
-            "2160p -> 1440p; ETA 989 s > 300 s; retry at 0%.",
-        )
+        self.assertIn("lowered before the transfer", ctx.exception.note)
         self.assertEqual(events[-1]["status"], "adaptive_quality")
         self.assertEqual(events[-1]["quality_from"], "2160p")
         self.assertEqual(events[-1]["quality_to"], "1440p")
-        self.assertEqual(events[-1]["adaptive_eta_seconds"], 989)
+        self.assertGreater(events[-1]["adaptive_eta_seconds"], 300)
         self.assertEqual(events[-1]["adaptive_threshold_seconds"], 300)
-        self.assertIn("retry at 0%", events[-1]["adaptive_note"])
+        self.assertNotIn("retry at 0%", events[-1]["adaptive_note"])
 
     def test_adaptive_watch_keeps_720p_when_eta_is_under_twenty_minutes(self):
         hook = playlist._make_adaptive_watch_hook()
@@ -671,7 +653,8 @@ class DownloadStabilityTests(unittest.TestCase):
         }
         second = {**first, "downloaded_bytes": 11 * 1024 * 1024}
 
-        with patch.object(playlist.time, "time", side_effect=[1000.0, 1011.0]):
+        # 20 Mbps: 1 GiB takes ~419 s, under the 20-minute 720p threshold.
+        with patch.object(playlist, "get_measured_speed_mbps", return_value=20.0):
             hook(first)
             hook(second)
 
@@ -686,42 +669,28 @@ class DownloadStabilityTests(unittest.TestCase):
             "downloaded_bytes": 0,
             "total_bytes": 1000 * 1024 * 1024,
         }
-        # 700 MB in 11 seconds is about 64 MB/s: ETA is well below the threshold.
+        # 100 Mbps: 1 GiB takes ~84 s, well below the 4K threshold (300 s).
         second = {**first, "downloaded_bytes": 700 * 1024 * 1024}
 
-        base = 2000.0
-        with patch.object(playlist.log, "info"):
-            with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
-                hook(first)
-                hook(second)  # Must finish without raising an exception.
+        with patch.object(playlist, "get_measured_speed_mbps", return_value=100.0):
+            hook(first)
+            hook(second)  # Must finish without raising an exception.
 
-    def test_adaptive_watch_hook_resets_for_new_file_and_can_retry(self):
+    def test_adaptive_watch_hook_never_restarts_a_started_transfer(self):
         hook = playlist._make_adaptive_watch_hook()
-        first = {
+        started = {
             "status": "downloading",
-            "filename": "video-1.f137.mp4",
+            "filename": "video.f137.mp4",
             "info_dict": {"width": 3840, "height": 2160},
-            "downloaded_bytes": 0,
+            "downloaded_bytes": 40 * 1024 * 1024,
             "total_bytes": 1000 * 1024 * 1024,
         }
-        short = {**first, "downloaded_bytes": 700 * 1024 * 1024}
-        second = {
-            "status": "downloading",
-            "filename": "video-2.f137.mp4",
-            "info_dict": {"width": 3840, "height": 2160},
-            "downloaded_bytes": 0,
-            "total_bytes": 1000 * 1024 * 1024,
-        }
-        slow = {**second, "downloaded_bytes": 11 * 1024 * 1024}
 
-        base = 2500.0
-        with patch.object(playlist.log, "info"):
-            with patch.object(playlist.time, "time", side_effect=[base, base + 11.0, base + 12.0, base + 23.0, base + 24.0]):
-                hook(first)
-                hook(short)
-                hook(second)
-                with self.assertRaises(playlist._AdaptiveDowngrade):
-                    hook(slow)
+        # 40 MB are already written: finishing is better than a visible
+        # restart, even on a connection that is far too slow for 4K.
+        with patch.object(playlist, "get_measured_speed_mbps", return_value=1.0):
+            hook(started)
+            hook({**started, "downloaded_bytes": 80 * 1024 * 1024})
 
     def test_quality_target_uses_resolution_sort_for_portrait_videos(self):
         selector = playlist._build_video_format_string("240p", "mp4", True, prefer_http=True)

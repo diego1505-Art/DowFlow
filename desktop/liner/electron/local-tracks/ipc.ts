@@ -10,7 +10,7 @@ import { handleLocalTrackScheme } from "./protocol.js";
 import type { SavedTrackLibrary } from "../saved-tracks/library.js";
 import { LOCAL_AUDIO_EXTENSIONS } from "./types.js";
 
-const DOWFLOW_SYNC_INTERVAL_MS = 3_000;
+const DOWFLOW_SYNC_INTERVAL_MS = 1_500;
 
 let requestSync: (() => void) | null = null;
 
@@ -66,9 +66,15 @@ export function setupLocalTracks(saved: SavedTrackLibrary) {
 
   // Keep DowFlow's downloaded tracks in sync with "On this device".
   let syncing = false;
+  let queued = false;
   let coversRequested = false;
   const syncDowflowMusic = async () => {
-    if (syncing) return;
+    // A track that just finished downloading must not be missed because a tick
+    // happened to be running: run again as soon as this pass is done.
+    if (syncing) {
+      queued = true;
+      return;
+    }
     syncing = true;
     try {
       const folder = await findDowflowMusicFolder();
@@ -88,6 +94,10 @@ export function setupLocalTracks(saved: SavedTrackLibrary) {
       // DowFlow may be closed; the next tick retries.
     } finally {
       syncing = false;
+      if (queued) {
+        queued = false;
+        void syncDowflowMusic();
+      }
     }
   };
   requestSync = () => void syncDowflowMusic();

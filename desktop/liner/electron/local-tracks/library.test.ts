@@ -173,6 +173,41 @@ describe("LocalTrackLibrary", () => {
     expect(result.added[0].mimeType).toBe("audio/mp4");
   });
 
+  it("picks up a track as soon as it stops downloading", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    const song = path.join(folder, "Fresh---Track.mp3");
+    await fs.writeFile(song, "just finished");
+    // Older than the in-progress guard, far younger than the old five seconds
+    // the sync used to wait, so a finished download appears right away.
+    await settle(song, 1_500);
+
+    const result = await library.importExternalFolder(folder);
+
+    expect(result.added.map((record) => record.fileName)).toEqual([
+      "Fresh---Track.mp3",
+    ]);
+  });
+
+  it("leaves the container DowFlow converts to its own pass", async () => {
+    const library = new LocalTrackLibrary(root);
+    const folder = path.join(sources, "music");
+    await fs.mkdir(folder);
+    const fragment = path.join(folder, "Converting---Song.webm");
+    await fs.writeFile(fragment, "webm bytes");
+    await settle(fragment, 3_000);
+
+    const during = await library.importExternalFolder(folder);
+    expect(during.added).toEqual([]);
+
+    await settle(fragment, 12_000);
+    const after = await library.importExternalFolder(folder);
+    expect(after.added.map((record) => record.fileName)).toEqual([
+      "Converting---Song.webm",
+    ]);
+  });
+
   it("keeps a removed download out of the library until it is downloaded again", async () => {
     const library = new LocalTrackLibrary(root);
     const folder = path.join(sources, "music");

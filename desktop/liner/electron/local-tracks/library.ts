@@ -1,4 +1,4 @@
-import type { Dirent } from "node:fs";
+import type { Dirent, Stats } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { importLocalFile } from "./importer.js";
@@ -20,8 +20,21 @@ const coverKey = (name: string) =>
 
 const ID_PATTERN = /^[a-f0-9]{20}$/;
 const LIBRARY_FOLDERS = ["audio", "covers"] as const;
-/** A file written this recently may still be a download in progress. */
-const SETTLE_MS = 5_000;
+/**
+ * A file written this recently is almost certainly still being downloaded. Kept
+ * short on purpose: the finished track has to show up a second or two after the
+ * download ends, not ten minutes later.
+ */
+const SETTLE_MS = 1_000;
+/** How long to watch a candidate before trusting that nothing writes to it. */
+const STABILITY_PROBE_MS = 250;
+/**
+ * yt-dlp fills this container first and DowFlow converts it to the requested
+ * audio format right after the download, removing the original. Importing it
+ * would add a duplicate of the track the conversion is about to produce.
+ */
+const CONVERTED_EXTENSIONS = new Set(["webm"]);
+const CONVERTED_SETTLE_MS = 10_000;
 const PARTIAL_SUFFIXES = [
   ".part",
   ".ytdl",
@@ -44,6 +57,13 @@ const isPartialName = (name: string) => {
  */
 const stampOf = (name: string, size: number, mtimeMs: number) =>
   `${name.toLowerCase()}\u0000${size}\u0000${Math.round(mtimeMs)}`;
+
+/** True once the file stopped changing, i.e. no download writes to it anymore. */
+async function isSettled(file: string, first: Stats): Promise<boolean> {
+  await new Promise((resolve) => setTimeout(resolve, STABILITY_PROBE_MS));
+  const again = await fsp.stat(file);
+  return again.size === first.size && again.mtimeMs === first.mtimeMs;
+}
 
 async function folderBytes(folder: string): Promise<number> {
   try {
@@ -230,9 +250,12 @@ export class LocalTrackLibrary {
           const before = await fsp.stat(source);
           if (!before.isFile()) continue;
           // DowFlow downloads straight into this folder: a file touched moments
-          // ago may still be growing. Importing it now copied a truncated track
-          // and left a duplicate next to the finished file, so wait one tick.
-          if (Date.now() - before.mtimeMs < SETTLE_MS) continue;
+          // ago may still be growing, and importing it copied a truncated track.
+          const age = Date.now() - before.mtimeMs;
+          if (age < SETTLE_MS) continue;
+          if (CONVERTED_EXTENSIONS.has(extension) && age < CONVERTED_SETTLE_MS) {
+            continue;
+          }
           const stamp = stampOf(entry.name, before.size, before.mtimeMs);
           if (dismissed.has(stamp)) continue;
           if (knownSources.has(`${entry.name}\u0000${before.size}`)) {
@@ -246,6 +269,9 @@ export class LocalTrackLibrary {
             result.duplicates += 1;
             continue;
           }
+          // Reading the size twice catches a download that is still running
+          // without making a finished track wait for an arbitrary age.
+          if (!(await isSettled(source, before))) continue;
           const record = await importLocalFile(source, this.root, known, {
             sidecarCover: covers.get(coverKey(entry.name)),
           });

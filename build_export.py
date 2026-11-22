@@ -419,7 +419,7 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        help="Where to write <Edition>-Setup.exe (defaults to %USERPROFILE%\\Downloads).",
+        help="Where to write <Edition>-Setup.exe (defaults to the Windows Downloads folder).",
     )
     args = parser.parse_args()
     try:

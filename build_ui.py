@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 import build_progress as bp
-from build_export import blank_output_dir, default_output_dir
+from build_export import default_output_dir
 
 ROOT = Path(__file__).resolve().parent
 
@@ -277,12 +277,12 @@ def main() -> int:
                 console.write("\n")
                 return 0
             blank = answer in BLANK_ANSWERS
-            target = (blank_output_dir() if blank else default_output_dir()) / setup
+            target = default_output_dir() / setup
             console.write("\n")
             if blank:
                 console.note(f"Build à blanc (release) → {target}", CYAN)
                 console.note(
-                    "Reste dans build\\release, pas dans Téléchargements.",
+                    "Sans cache ni données locales, pour la release.",
                     MUTED,
                     "◆",
                 )

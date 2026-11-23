@@ -14,7 +14,9 @@ import build_export
 
 
 class BlankBuildTests(unittest.TestCase):
-    def test_blank_build_cleans_stale_output_and_writes_to_release(self) -> None:
+    def test_blank_build_cleans_stale_output_and_keeps_the_setup_in_downloads(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             stale = root / "build" / "out" / "DowFlow-Films" / "leftover.txt"
@@ -53,12 +55,20 @@ class BlankBuildTests(unittest.TestCase):
             self.assertFalse(
                 stale.exists(), "a blank build must not reuse the previous output"
             )
-            output_dir = Path(installer.call_args[0][2])
-            self.assertEqual(output_dir, root / "build" / "release")
+            self.assertIsNone(
+                installer.call_args[0][2],
+                "a blank setup must land in the default Downloads folder",
+            )
 
-    def test_blank_output_dir_stays_inside_the_build_folder(self) -> None:
-        root = Path(tempfile.gettempdir()) / "dowflow-blank-check"
-        self.assertEqual(build_export.blank_output_dir(root), root / "build" / "release")
+    def test_every_setup_lands_in_downloads(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            profile = Path(folder)
+            downloads = profile / "Downloads"
+            downloads.mkdir()
+            with mock.patch.dict(
+                build_export.os.environ, {"USERPROFILE": str(profile)}
+            ):
+                self.assertEqual(build_export.default_output_dir(), downloads)
 
 
 class MusicBundlingTests(unittest.TestCase):

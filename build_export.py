@@ -35,16 +35,6 @@ def default_output_dir() -> Path:
     return downloads if downloads.is_dir() else profile
 
 
-def blank_output_dir(project_root: Path | None = None) -> Path:
-    """Where the blank (release) installers are written.
-
-    They are kept out of the Windows Downloads folder so a blank setup for the
-    release can never be confused with the everyday build.
-    """
-    root = (project_root or Path(__file__).resolve().parent).resolve()
-    return root / "build" / "release"
-
-
 # One entry per build.bat choice. ``dest`` is relative to
 # %LOCALAPPDATA%\DowFlow and keeps every edition in its own folder while the
 # data/ folder stays shared.
@@ -621,7 +611,7 @@ def build_executable(
     developer's machine is copied (no database, no saved music, no configured
     download root, no cookies), the previous output folder is deleted first so
     no file from an earlier build survives, and PyInstaller starts with a clean
-    cache. Normal builds keep their behaviour and write to Downloads.
+    cache. Every setup, blank or not, is written to the Windows Downloads folder.
     """
     if scope not in EXPORT_SCOPES:
         raise ValueError("Unsupported export scope.")
@@ -775,8 +765,6 @@ def build_executable(
                 progress_callback=lambda value, stage: report_progress(value, stage),
             )
             liner_dir = liner_app_dir(root)
-        if blank and output_dir is None:
-            output_dir = blank_output_dir(root)
         report_progress(87, "Preparing media tools")
         prepare_tools(
             root,
@@ -806,7 +794,7 @@ def main() -> int:
     parser.add_argument(
         "--blank",
         action="store_true",
-        help="Build the clean setup for the release (no local data, defaults to build/release).",
+        help="Build the clean setup for the release (no local data; written to Downloads like every other build).",
     )
     parser.add_argument(
         "--output-dir",

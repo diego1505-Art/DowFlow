@@ -166,13 +166,12 @@ class PortableConfigurationTests(unittest.TestCase):
                 self.assertEqual(config.get_download_path(), selected.resolve())
 
             self.assertEqual(
-                json.loads(selected_config.read_text(encoding="utf-8"))["download_path"],
+                json.loads(config_file.read_text(encoding="utf-8"))["download_path"],
                 str(selected.resolve()),
             )
-            self.assertFalse(config_file.exists())
-            self.assertFalse((selected / "downloads").exists())
-            self.assertTrue((selected / "bin").is_dir())
-            self.assertFalse((selected / "music").exists())
+            self.assertFalse(selected_config.exists())
+            self.assertTrue((app_dir / "bin").is_dir())
+            self.assertEqual(list(selected.iterdir()), [])
 
     def test_source_folder_selection_keeps_data_in_the_project(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -191,8 +190,42 @@ class PortableConfigurationTests(unittest.TestCase):
                 self.assertEqual(config.get_download_path(), selected.resolve())
 
             self.assertTrue((project / "config.json").is_file())
-            self.assertTrue((selected / "bin").is_dir())
-            self.assertFalse((selected / "config.json").exists())
+            self.assertTrue((project / "bin").is_dir())
+            self.assertEqual(list(selected.iterdir()), [])
+
+    def test_a_frozen_build_never_writes_its_data_into_the_download_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            app_dir = root / "app"
+            downloads = root / "Downloads"
+            app_dir.mkdir()
+            downloads.mkdir()
+
+            with patch.object(config, "IS_FROZEN", True), patch.object(
+                config, "ELECTRON_SHELL", False
+            ), patch.object(config, "BASE_DIR", app_dir), patch.object(
+                config, "CONFIG_FILE", app_dir / "config.json"
+            ), patch.object(config, "BIN_FOLDER", app_dir / "bin"):
+                config.set_download_path(downloads)
+
+            self.assertTrue((app_dir / "config.json").is_file())
+            self.assertTrue((app_dir / "bin").is_dir())
+            self.assertEqual(list(downloads.iterdir()), [])
+
+    def test_an_unpacked_build_keeps_data_in_the_local_app_data_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable_dir = root / "out" / "DowFlow-Music"
+            executable_dir.mkdir(parents=True)
+            local_app_data = root / "LocalAppData"
+
+            with patch.object(config, "IS_FROZEN", True), patch.object(
+                config, "EXECUTABLE_DIR", executable_dir
+            ), patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}):
+                data_root = config._initial_data_root()
+
+            self.assertEqual(data_root, (local_app_data / "DowFlow" / "data").resolve())
+            self.assertTrue(data_root.is_dir())
 
     def test_portable_data_extraction_never_overwrites_existing_files(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -15,35 +15,26 @@ EXECUTABLE_DIR = Path(sys.executable).resolve().parent if IS_FROZEN else SOURCE_
 BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", SOURCE_DIR))
 SUBPROCESS_CREATION_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 _CONFIG_LOCK = threading.RLock()
-_REGISTRY_KEY = r"Software\DowFlow"
 
 
-def _registry_data_root() -> Path | None:
-    if not IS_FROZEN or os.name != "nt":
+def _local_app_data_root() -> Path | None:
+    """The per-user folder that holds config, database, logs and tools.
+
+    It is the same ``%LOCALAPPDATA%\\DowFlow\\data`` the installers share, so a
+    build started straight from its unpacked folder keeps its data there too
+    instead of writing it next to the media it downloaded.
+    """
+    if os.name != "nt":
         return None
+    base = os.environ.get("LOCALAPPDATA", "").strip()
+    if not base:
+        return None
+    root = Path(base) / "DowFlow" / "data"
     try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY) as key:
-            value, _ = winreg.QueryValueEx(key, "DataRoot")
-        candidate = Path(str(value)).expanduser()
-        return candidate if candidate.is_dir() else None
-    except (OSError, ValueError, TypeError):
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
         return None
-
-
-def _legacy_data_root() -> Path | None:
-    """Find the pre-root-selection config beside an older portable EXE."""
-    if not IS_FROZEN:
-        return None
-    legacy_config = EXECUTABLE_DIR / "config.json"
-    try:
-        with legacy_config.open("r", encoding="utf-8") as handle:
-            value = json.load(handle).get("download_path")
-        candidate = Path(value).expanduser() if isinstance(value, str) and value.strip() else None
-        return candidate if candidate is not None and candidate.is_dir() else None
-    except (OSError, ValueError, AttributeError, TypeError):
-        return None
+    return root
 
 
 def find_installed_data_root(executable_dir: Path | None = None) -> Path | None:
@@ -73,12 +64,8 @@ def _initial_data_root() -> Path:
         return root
     if not IS_FROZEN:
         return SOURCE_DIR
-    return (
-        find_installed_data_root()
-        or _registry_data_root()
-        or _legacy_data_root()
-        or EXECUTABLE_DIR
-    )
+    # The download folder only receives media: data never follows it.
+    return find_installed_data_root() or _local_app_data_root() or EXECUTABLE_DIR
 
 
 BASE_DIR = _initial_data_root()
@@ -96,26 +83,6 @@ APP_SCOPE_FILE = (
 
 def get_data_root() -> Path:
     return BASE_DIR
-
-
-def _set_data_root(root: Path) -> None:
-    global BASE_DIR, DOWNLOAD_FOLDER, CONFIG_FILE, BIN_FOLDER
-    BASE_DIR = root
-    DOWNLOAD_FOLDER = root
-    CONFIG_FILE = root / "config.json"
-    BIN_FOLDER = root / "bin"
-
-
-def _remember_data_root(root: Path) -> None:
-    if not IS_FROZEN or os.name != "nt":
-        return
-    try:
-        import winreg
-
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY) as key:
-            winreg.SetValueEx(key, "DataRoot", 0, winreg.REG_SZ, str(root))
-    except OSError:
-        pass
 
 
 def get_runtime_build_id() -> str:
@@ -221,15 +188,15 @@ def get_chromium_folder() -> Path:
 
 
 def configure_runtime_paths(download_path: str | Path | None = None) -> Path:
-    """Point native tools and Playwright at the selected media root."""
-    if download_path is None:
-        download_path = get_download_path(required=False)
-    if IS_FROZEN or ELECTRON_SHELL:
-        bin_folder = get_bin_folder()
-        browser_folder = get_chromium_folder()
-    else:
-        bin_folder = (Path(download_path) if download_path else BASE_DIR) / "bin"
-        browser_folder = bin_folder / "ms-playwright"
+    """Point the native tools and Playwright at the application's own folder.
+
+    ``download_path`` is still accepted from older callers, but the media root
+    never hosts tools: they stay in ``<data>/bin`` (or ``<data>/tools`` on an
+    installed edition), so choosing a download folder writes nothing into it.
+    """
+    del download_path
+    bin_folder = get_bin_folder()
+    browser_folder = get_chromium_folder()
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browser_folder)
     current_entries = os.environ.get("PATH", "").split(os.pathsep)
     if str(bin_folder) not in current_entries:
@@ -247,20 +214,10 @@ def set_download_path(path: str | Path) -> Path:
         raise ValueError("The selected download folder does not exist.")
 
     with _CONFIG_LOCK:
-        # Only the portable build relocates its data root with the media root.
-        # In source mode, logs/database/config stay in the project; only the
-        # download root changes.
-        # Only a truly portable frozen build relocates its data root with the
-        # media folder. Installed editions keep data/config/db/logs in
-        # %LOCALAPPDATA%\\DowFlow\\data and only record the download path.
-        installed = find_installed_data_root() is not None
-        if IS_FROZEN and not ELECTRON_SHELL and not installed:
-            _set_data_root(selected_path)
-            _remember_data_root(selected_path)
-        if IS_FROZEN or ELECTRON_SHELL:
-            get_bin_folder().mkdir(parents=True, exist_ok=True)
-        else:
-            (selected_path / "bin").mkdir(parents=True, exist_ok=True)
+        # Only the download path is recorded. Config, database, logs and tools
+        # stay in the shared data root (%LOCALAPPDATA%\\DowFlow\\data for an
+        # installed edition), so the chosen folder never receives app files.
+        get_bin_folder().mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         temporary_file = CONFIG_FILE.with_suffix(".json.tmp")
         temporary_file.write_text(
@@ -269,8 +226,7 @@ def set_download_path(path: str | Path) -> Path:
         )
         temporary_file.replace(CONFIG_FILE)
         initialize_portable_data()
-        if IS_FROZEN or ELECTRON_SHELL:
-            configure_runtime_paths(selected_path)
+        configure_runtime_paths()
 
     return selected_path
 

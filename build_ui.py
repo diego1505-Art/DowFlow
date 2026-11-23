@@ -52,7 +52,9 @@ class Console:
         self.is_tty = bool(getattr(sys.stdout, "isatty", lambda: False)())
         self.vt = bp.enable_vt() if self.is_tty else False
         self.colour = self.vt and not os.environ.get("NO_COLOR")
-        self.width = max(40, min(shutil.get_terminal_size((100, 24)).columns, 140))
+        size = shutil.get_terminal_size((100, 24))
+        self.width = max(40, min(size.columns, 140))
+        self.height = max(12, size.lines)
         self._write_lock = threading.Lock()
 
     def paint(self, text: str, colour: tuple[int, int, int], bold: bool = False) -> str:
@@ -311,7 +313,7 @@ def main() -> int:
                 scope,
                 name,
                 blank=blank,
-                top_row=flow.rows + 5 if flow is not None else None,
+                top_row=console.height if flow is not None else None,
             )
             console.write("\n")
             if code == 0 and target.is_file():

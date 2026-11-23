@@ -73,6 +73,7 @@ class BuildDisplayRowTests(unittest.TestCase):
         self.assertNotIn(
             "DOWFLOW BUILD", stream.out.getvalue(), "the menu owns the banner"
         )
+        self.assertIn("\x1b7", stream.out.getvalue(), "the cursor must be saved")
         display.render()
         self.assertIn("\x1b[8;1H", stream.out.getvalue())
         display.stop(True)

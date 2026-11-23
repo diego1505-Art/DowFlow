@@ -26,6 +26,8 @@ RESET = "\x1b[0m"
 BOLD = "\x1b[1m"
 HIDE_CURSOR = "\x1b[?25l"
 SHOW_CURSOR = "\x1b[?25h"
+SAVE_CURSOR = "\x1b7"
+RESTORE_CURSOR = "\x1b8"
 
 _STOPS = (
     (244, 63, 94),
@@ -297,6 +299,10 @@ class BuildDisplay:
             return
         if self.vt:
             self._write(HIDE_CURSOR)
+        if self.top_row is not None:
+            # Keep the caller's cursor position: the progress line is drawn at
+            # the bottom of the window and the messages resume where they were.
+            self._write(SAVE_CURSOR)
         if self.top_row is None:
             rule = "".join(
                 _paint("─", _gradient(index / 51), self.colour) for index in range(52)
@@ -376,9 +382,8 @@ class BuildDisplay:
             self.tick += 1
         self.render()
         if self.top_row is not None:
-            # Park the cursor under the progress line so later messages do not
-            # land on top of the banner rows.
-            self._write(f"\x1b[{self.top_row + 1};1H" + (SHOW_CURSOR if self.vt else ""))
+            # Back to the line the caller was on before the build started.
+            self._write((RESTORE_CURSOR + SHOW_CURSOR) if self.vt else "")
         else:
             self._write("\n" + (SHOW_CURSOR if self.vt else ""))
         self._started = False

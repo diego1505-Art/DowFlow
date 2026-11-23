@@ -52,6 +52,7 @@ import {
   usePlaylistsList,
   useLikedTracks,
   useReorderPlaylistTracks,
+  useTrackDurations,
   reloadLikedTracks,
 } from "../hooks";
 import { statusOf } from "@/features/connectivity";
@@ -257,6 +258,9 @@ function LibraryPlaylistContent() {
       revision: playlistDetail.revision,
     };
   })();
+  // Tracks stored without a length are resolved from the catalog, so the
+  // playlist total is not stuck at "0 min 0 s".
+  const trackDurations = useTrackDurations(viewData?.tracks ?? []);
   const likesCover = useLikesCover();
   const { data: playlistList } = usePlaylistsList();
   const summary = isLikesMode
@@ -748,7 +752,9 @@ function LibraryPlaylistContent() {
                           const totalMs =
                             viewData.durationMs ||
                             viewData.tracks.reduce(
-                              (acc, t) => acc + (t.durationMs || 0),
+                              (acc, track) =>
+                                acc +
+                                (track.durationMs || trackDurations(track.id)),
                               0,
                             );
                           const totalMins = Math.floor(totalMs / 60000);

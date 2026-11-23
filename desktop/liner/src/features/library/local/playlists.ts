@@ -256,6 +256,31 @@ export function moveLocalPlaylistTrack(
   if (changed) update(next);
 }
 
+/**
+ * Give the tracks already stored in local playlists a length resolved later,
+ * so a playlist no longer sums to "0 min 0 s" because a track was added
+ * without one. Playlists without a missing length are left untouched.
+ */
+export function fillMissingDurations(
+  durationOf: (trackId: string) => number | undefined,
+): void {
+  let changed = false;
+  const next = playlists.map((playlist) => {
+    let filled = false;
+    const tracks = playlist.tracks.map((track) => {
+      if ((track.durationMs ?? 0) > 0) return track;
+      const durationMs = durationOf(track.id);
+      if (!durationMs) return track;
+      filled = true;
+      return { ...track, durationMs };
+    });
+    if (!filled) return playlist;
+    changed = true;
+    return { ...playlist, tracks, revision: playlist.revision + 1 };
+  });
+  if (changed) update(next);
+}
+
 export function deleteLocalPlaylist(id: string): void {
   if (!playlists.some((playlist) => playlist.id === id)) return;
   update(playlists.filter((playlist) => playlist.id !== id));

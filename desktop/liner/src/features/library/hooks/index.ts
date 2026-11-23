@@ -17,6 +17,7 @@ export {
 } from "./useLikedTracks";
 export { useYoutubeLibraryItems } from "./useYoutubeLibraryItems";
 export { useIsTrackLiked } from "./useIsTrackLiked";
+export { useTrackDurations } from "./useTrackDurations";
 export {
   useAddPlaylistTracks,
   useRemovePlaylistTracks,

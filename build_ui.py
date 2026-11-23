@@ -78,6 +78,15 @@ class Console:
         """Clear everything under the animated banner without touching it."""
         self.write(f"\x1b[{rows + 1};1H\x1b[0J")
 
+    def move_to(self, row: int) -> None:
+        """Put the cursor on a given row, clearing it first."""
+        if self.vt:
+            self.write(f"\x1b[{max(1, row)};1H\x1b[2K")
+
+    def progress_row(self, reserved: int) -> int:
+        """Row of the build bar: near the bottom, with room under it."""
+        return max(reserved + 4, self.height - 3)
+
     def wave(self, tick: int) -> str:
         span = max(10, self.width - 4)
         cells = []
@@ -313,9 +322,14 @@ def main() -> int:
                 scope,
                 name,
                 blank=blank,
-                top_row=console.height if flow is not None else None,
+                top_row=console.progress_row(flow.rows) if flow is not None else None,
             )
-            console.write("\n")
+            if flow is not None:
+                # Write the result right under the bar so the end of the build
+                # stays on the same page, with the banner still animating.
+                console.move_to(console.progress_row(flow.rows) + 1)
+            else:
+                console.write("\n")
             if code == 0 and target.is_file():
                 console.note(str(target), GREEN, "✓")
             else:

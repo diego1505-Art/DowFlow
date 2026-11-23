@@ -29,6 +29,7 @@ SCOPES = (
 )
 
 WAVE = "▁▂▃▄▅▆▇█▇▆▅▄▃▂"
+BLANK_ANSWERS = frozenset({"o", "oui", "y", "yes"})
 
 CYAN = (34, 211, 238)
 AMBER = (251, 191, 36)
@@ -117,12 +118,6 @@ class Console:
                 f"    {number}  {self.paint(f'{label:<18}', WHITE, bold=True)}"
                 f"{self.paint(target, PATH_BLUE)}\n"
             )
-        six = self.paint("6", GREEN, bold=True)
-        all_blank = f"{'All editions, blank':<20}"
-        self.write(
-            f"    {six}  {self.paint(all_blank, WHITE, bold=True)}"
-            f"{self.paint(str(blank_output_dir()), PATH_BLUE)}\n"
-        )
         zero = self.paint("0", (244, 114, 182), bold=True)
         self.write(f"    {zero}  {self.paint('Quit', MUTED)}\n\n")
         self.write("  " + self.rule() + "\n")
@@ -227,32 +222,6 @@ def run_build(console: Console, scope: str, name: str, blank: bool = False) -> i
     return subprocess.call(command, cwd=ROOT)
 
 
-def build_all_blank(console: Console) -> None:
-    """Build the five blank setups that are uploaded to the GitHub release."""
-    if not ensure_build_requirements(console):
-        return
-    console.write("\n")
-    console.note(f"Éditions à blanc → {blank_output_dir()}", CYAN)
-    failures: list[str] = []
-    for _key, scope, label, name, setup in SCOPES:
-        console.write("\n")
-        console.note(f"Édition « {label} » → {blank_output_dir() / setup}", CYAN)
-        console.write("\n")
-        code = run_build(console, scope, name, blank=True)
-        target = blank_output_dir() / setup
-        console.write("\n")
-        if code == 0 and target.is_file():
-            console.note(str(target), GREEN, "✓")
-        else:
-            failures.append(label)
-            console.note(f"« {label} » a échoué.", RED, "×")
-    console.write("\n")
-    if failures:
-        console.note("Échecs : " + ", ".join(failures), RED, "×")
-    else:
-        console.note("Les setups à blanc sont prêts pour la release.", GREEN, "✓")
-
-
 def main() -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -272,7 +241,7 @@ def main() -> int:
                 console.clear()
             console.menu()
             try:
-                choice = console.ask("Choix [0-6] :").strip()
+                choice = console.ask("Choix [0-5] :").strip()
             except EOFError:
                 console.write("\n")
                 return 0
@@ -280,11 +249,6 @@ def main() -> int:
             if choice == "0":
                 console.write("\n  " + console.paint("À bientôt.", MUTED) + "\n\n")
                 return 0
-            if choice == "6":
-                build_all_blank(console)
-                console.write("\n")
-                console.pause()
-                continue
             match = next((row for row in SCOPES if row[0] == choice), None)
             if match is None:
                 console.note("Choix invalide, recommence.", RED, "×")
@@ -294,26 +258,25 @@ def main() -> int:
             _key, scope, label, name, setup = match
             console.write("\n")
             console.note(f"Édition « {label} »", CYAN)
-            console.note(
-                "1  Build actuel   → " + str(default_output_dir() / setup),
-                MUTED,
-                "◆",
-            )
-            console.note(
-                "2  Build à blanc  → " + str(blank_output_dir() / setup)
-                + " (sans cache, sans données, pour la release)",
-                MUTED,
-                "◆",
-            )
             try:
-                kind = console.ask("Type [1/2] :").strip() or "1"
+                answer = (
+                    console.ask("Voulez-vous faire un exe à blanc ? [o/N] :")
+                    .strip()
+                    .lower()
+                )
             except EOFError:
                 console.write("\n")
                 return 0
-            blank = kind == "2"
+            blank = answer in BLANK_ANSWERS
             target = (blank_output_dir() if blank else default_output_dir()) / setup
             console.write("\n")
             console.note(f"Sortie → {target}", CYAN)
+            if blank:
+                console.note(
+                    "À blanc : sans cache, sans données, pour la release.",
+                    MUTED,
+                    "◆",
+                )
             console.note(
                 "Les données iront dans %LOCALAPPDATA%\\DowFlow\\data.",
                 MUTED,

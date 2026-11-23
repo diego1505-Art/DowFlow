@@ -168,6 +168,7 @@ class Flow:
             self.draw()
 
     def start(self) -> None:
+        self._stop.clear()
         self.console.write("\n" * self.rows)
         self.draw()
         self._thread = threading.Thread(
@@ -177,11 +178,19 @@ class Flow:
         )
         self._thread.start()
 
-    def stop(self) -> None:
+    def pause(self) -> None:
+        """Freeze the banner so a running build owns the console."""
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=1)
             self._thread = None
+
+    def resume(self) -> None:
+        if self._thread is None:
+            self.start()
+
+    def stop(self) -> None:
+        self.pause()
         self.draw()
 
 
@@ -260,7 +269,7 @@ def main() -> int:
             console.note(f"Édition « {label} »", CYAN)
             try:
                 answer = (
-                    console.ask("Voulez-vous faire un exe à blanc ? [o/N] :")
+                    console.ask("Un exe à blanc, pour la release ? [o/N] :")
                     .strip()
                     .lower()
                 )
@@ -270,13 +279,15 @@ def main() -> int:
             blank = answer in BLANK_ANSWERS
             target = (blank_output_dir() if blank else default_output_dir()) / setup
             console.write("\n")
-            console.note(f"Sortie → {target}", CYAN)
             if blank:
+                console.note(f"Build à blanc (release) → {target}", CYAN)
                 console.note(
-                    "À blanc : sans cache, sans données, pour la release.",
+                    "Reste dans build\\release, pas dans Téléchargements.",
                     MUTED,
                     "◆",
                 )
+            else:
+                console.note(f"Build normal → {target}", CYAN)
             console.note(
                 "Les données iront dans %LOCALAPPDATA%\\DowFlow\\data.",
                 MUTED,
@@ -289,7 +300,13 @@ def main() -> int:
                 console.pause()
                 continue
 
+            if flow is not None:
+                flow.pause()
+                console.clear()
             code = run_build(console, scope, name, blank=blank)
+            if flow is not None:
+                console.clear()
+                flow.resume()
             console.write("\n")
             if code == 0 and target.is_file():
                 console.note(str(target), GREEN, "✓")

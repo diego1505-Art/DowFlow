@@ -8,29 +8,6 @@ import music
 import playlist
 
 
-class FakeSearchYoutubeDL:
-    """Simulate a yt-dlp (extract_flat) search without network access."""
-
-    def __init__(self, options):
-        self.options = options
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-    def extract_info(self, url, download=False):
-        return {
-            "entries": [
-                {"id": "abc123", "title": "Track A", "duration": 215, "uploader": "Artist A"},
-                None,
-                {"id": "abc123", "title": "Doublon", "duration": 215},
-                {"id": "def456", "title": "Track B", "duration": 180, "uploader": "Artist B"},
-            ]
-        }
-
-
 class FakeResponse:
     def __init__(self, payload=None, content=b""):
         self._payload = payload if payload is not None else {}
@@ -49,39 +26,6 @@ class MusicHelperTests(unittest.TestCase):
         self.assertEqual(music._video_id_from_url("https://youtu.be/xyz789"), "xyz789")
         self.assertEqual(music._video_id_from_url("https://www.youtube.com/shorts/short42"), "short42")
         self.assertIsNone(music._video_id_from_url("https://vimeo.com/12345"))
-
-    def test_normalize_entry_builds_thumbnail_and_url(self):
-        track = music._normalize_entry({"id": "vid1", "title": "Son", "duration": 42.7})
-        self.assertEqual(track["url"], "https://www.youtube.com/watch?v=vid1")
-        self.assertEqual(track["duration"], 42)
-        self.assertIn("vid1", track["thumbnail"])
-
-    def test_dedupe_keeps_first_occurrence(self):
-        tracks = [{"id": "1"}, {"id": "2"}, {"id": "1"}]
-        self.assertEqual([t["id"] for t in music._dedupe(tracks)], ["1", "2"])
-
-    def test_dedupe_by_title_when_same_track_has_different_ids(self):
-        tracks = [
-            {"id": "id-a", "title": "Imagine Dragons", "artist": "Night Visions"},
-            {"id": "id-b", "title": "Imagine Dragons", "artist": "Night Visions"},
-            {"id": "id-c", "title": "Other Song", "artist": "Artist"},
-        ]
-        deduped = music._dedupe(tracks)
-        self.assertEqual(len(deduped), 2)
-        self.assertEqual(deduped[0]["title"], "Imagine Dragons")
-        self.assertEqual(deduped[1]["title"], "Other Song")
-
-
-class MusicSearchTests(unittest.TestCase):
-    def test_search_dedupes_and_limits(self):
-        with patch("yt_dlp.YoutubeDL", FakeSearchYoutubeDL):
-            tracks = music.search_music("test", limit=10)
-        self.assertEqual([t["id"] for t in tracks], ["abc123", "def456"])
-        self.assertEqual(tracks[0]["artist"], "Artist A")
-
-    def test_empty_query_returns_nothing(self):
-        self.assertEqual(music.search_music("   "), [])
-
 
 class MusicCoverTests(unittest.TestCase):
     def test_fetch_cover_uses_deezer(self):
@@ -135,62 +79,6 @@ class MusicDownloadTests(unittest.TestCase):
             self.assertEqual(index[0]["url"], "https://www.youtube.com/watch?v=abc123")
             self.assertEqual(index[0]["title"], "Track")
             self.assertEqual(index[0]["status"], "present")
-
-    def test_deleting_a_track_marks_it_deleted_in_the_index(self):
-        with tempfile.TemporaryDirectory() as folder:
-            music_dir = Path(folder)
-            track = music_dir / "Track.mp3"
-            track.write_bytes(b"audio")
-            with patch.object(
-                download_manager, "get_data_root", return_value=music_dir
-            ):
-                download_manager.record_download(
-                    "https://www.youtube.com/watch?v=abc123",
-                    "Track",
-                    "Artist",
-                    track,
-                )
-
-                with patch.object(music, "MUSIC_FOLDER", music_dir):
-                    self.assertTrue(music.delete_track("Track.mp3"))
-
-                entry = download_manager.find_entry(
-                    "https://www.youtube.com/watch?v=abc123"
-                )
-        self.assertEqual(entry["status"], "deleted")
-
-
-class MusicLibraryTests(unittest.TestCase):
-    def test_list_library_pairs_audio_with_cover(self):
-        with tempfile.TemporaryDirectory() as folder:
-            music_dir = Path(folder)
-            (music_dir / "Track.mp3").write_bytes(b"audio")
-            (music_dir / "Track.jpg").write_bytes(b"image")
-            (music_dir / "ignore.txt").write_text("x", encoding="utf-8")
-
-            with patch.object(music, "MUSIC_FOLDER", music_dir):
-                items = music.list_library()
-
-            self.assertEqual(len(items), 1)
-            self.assertEqual(items[0]["title"], "Track")
-            self.assertIn("Track.mp3", items[0]["audio_url"])
-            self.assertIsNotNone(items[0]["cover_url"])
-
-    def test_list_library_deduplicates_lyric_and_official_video_versions(self):
-        with tempfile.TemporaryDirectory() as folder:
-            music_dir = Path(folder)
-            (music_dir / "Imagine-Dragons---Demons-Lyrics.mp3").write_bytes(b"audio-one")
-            (music_dir / "Imagine-Dragons---Demons-Official-Music-Video.mp3").write_bytes(b"audio-two")
-            (music_dir / "Imagine-Dragons---Demons-Lyrics.jpg").write_bytes(b"cover-one")
-            (music_dir / "Imagine-Dragons---Demons-Official-Music-Video.jpg").write_bytes(b"cover-two")
-
-            with patch.object(music, "MUSIC_FOLDER", music_dir):
-                items = music.list_library()
-
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["title"], "Demons")
-        self.assertEqual(items[0]["artist"], "Imagine Dragons")
-
 
 if __name__ == "__main__":
     unittest.main()

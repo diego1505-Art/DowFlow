@@ -365,16 +365,6 @@ def _write_liner_update_config(liner_root: Path, app_dir: Path) -> Path | None:
     return config
 
 
-def liner_update_artifacts(root: Path) -> dict[str, Path]:
-    """Files to upload on the GitHub release so the Music app can update itself."""
-    release = liner_release_dir(root)
-    setups = sorted(release.glob("DowFlow-Music-Setup-*.exe"))
-    return {
-        "setup": setups[-1] if setups else release / "DowFlow-Music-Setup.exe",
-        "latest": release / "latest.yml",
-    }
-
-
 def _node_executable(root: Path) -> str:
     bundled = root / "build" / "tools" / "node" / "node.exe"
     if bundled.is_file():

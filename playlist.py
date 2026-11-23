@@ -1212,28 +1212,6 @@ def _ydlp_download(
 
 # ─── The /config route exposes format and language lists to the frontend ─────
 
-def get_frontend_config() -> dict[str, Any]:
-    """Return static data for initializing frontend selectors."""
-    return {
-        "video_formats": [
-            {"key": k, "label": v["label"], "ext": v["ext"]}
-            for k, v in VIDEO_OUTPUT_FORMATS.items()
-        ],
-        "audio_formats": [
-            {"key": k, "label": v["label"], "ext": v["ext"]}
-            for k, v in AUDIO_OUTPUT_FORMATS.items()
-        ],
-        "video_qualities": [
-            {"key": k, "label": v["label"], "max_height": v["max_height"]}
-            for k, v in VIDEO_QUALITIES.items()
-        ],
-        "languages": [
-            {"code": k, "label": v["label"]}
-            for k, v in LANGUAGES.items()
-        ],
-    }
-
-
 if __name__ == "__main__":
     print("=" * 50)
     print("DowFlow - Multi-Site Media Downloader")

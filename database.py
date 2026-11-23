@@ -8,7 +8,6 @@ Tables :
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import threading
 import time
@@ -120,23 +119,7 @@ def init_db() -> None:
                 value TEXT
             );
 
-            CREATE TABLE IF NOT EXISTS music_favorites (
-                filename   TEXT PRIMARY KEY,
-                created_at REAL NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS music_stream_favorites (
-                source      TEXT NOT NULL,
-                track_id    TEXT NOT NULL,
-                title       TEXT NOT NULL,
-                artist      TEXT NOT NULL,
-                cover_url   TEXT,
-                duration_ms INTEGER,
-                created_at  REAL NOT NULL,
-                PRIMARY KEY (source, track_id)
-            );
-            """
-        )
+                        """)
 
         columns = {row["name"] for row in c.execute("PRAGMA table_info(downloads)").fetchall()}
         if "strategy" not in columns:
@@ -148,10 +131,6 @@ def init_db() -> None:
             "INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)",
             ("schema_version", str(_SCHEMA_VERSION)),
         )
-
-
-def db_is_ready() -> bool:
-    return DB_PATH.is_file() and os.path.getsize(DB_PATH) > 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -319,31 +298,6 @@ def download_stats() -> dict[str, Any]:
     }
 
 
-def favorite_list() -> list[str]:
-    """Return filenames marked as music favorites."""
-    with _conn() as c:
-        rows = c.execute(
-            "SELECT filename FROM music_favorites ORDER BY created_at DESC"
-        ).fetchall()
-    return [str(row["filename"]) for row in rows]
-
-
-def favorite_add(filename: str) -> None:
-    """Add a music file to favorites idempotently."""
-    with _conn() as c:
-        c.execute(
-            "INSERT OR IGNORE INTO music_favorites(filename, created_at) VALUES (?, ?)",
-            (filename, time.time()),
-        )
-
-
-def favorite_remove(filename: str) -> bool:
-    """Remove a favorite and report whether it existed."""
-    with _conn() as c:
-        cursor = c.execute("DELETE FROM music_favorites WHERE filename=?", (filename,))
-        return cursor.rowcount > 0
-
-
 _MUSIC_STREAM_SOURCES = {"youtube", "local"}
 _MUSIC_STREAM_MAX_LENGTHS = {
     "source": 16,
@@ -352,109 +306,6 @@ _MUSIC_STREAM_MAX_LENGTHS = {
     "artist": 500,
     "cover_url": 2048,
 }
-
-
-def validate_music_stream_favorite(
-    source: Any,
-    track_id: Any,
-    title: Any | None = None,
-    artist: Any | None = None,
-    cover_url: Any | None = None,
-    duration_ms: Any | None = None,
-) -> dict[str, Any]:
-    """Validate and normalize streaming favorite fields, raising ValueError on input errors."""
-    values: dict[str, Any] = {}
-    for field, value, required in (
-        ("source", source, True),
-        ("track_id", track_id, True),
-        ("title", title, title is not None),
-        ("artist", artist, artist is not None),
-    ):
-        if not required and value is None:
-            continue
-        if not isinstance(value, str):
-            raise ValueError(f"{field} must be a string")
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError(f"{field} must not be empty")
-        if len(normalized) > _MUSIC_STREAM_MAX_LENGTHS[field]:
-            raise ValueError(f"{field} exceeds {_MUSIC_STREAM_MAX_LENGTHS[field]} characters")
-        values[field] = normalized
-
-    if values.get("source") not in _MUSIC_STREAM_SOURCES:
-        raise ValueError("source must be 'youtube' or 'local'")
-
-    if cover_url is not None:
-        if not isinstance(cover_url, str):
-            raise ValueError("cover_url must be a string or null")
-        cover_url = cover_url.strip() or None
-        if cover_url is not None and len(cover_url) > _MUSIC_STREAM_MAX_LENGTHS["cover_url"]:
-            raise ValueError(
-                f"cover_url exceeds {_MUSIC_STREAM_MAX_LENGTHS['cover_url']} characters"
-            )
-
-    if duration_ms is not None:
-        if isinstance(duration_ms, bool) or not isinstance(duration_ms, int):
-            raise ValueError("duration_ms must be a non-negative integer or null")
-        if duration_ms < 0 or duration_ms > 604_800_000:
-            raise ValueError("duration_ms must be between 0 and 604800000")
-
-    values["cover_url"] = cover_url
-    values["duration_ms"] = duration_ms
-    return values
-
-
-def music_stream_favorite_list() -> list[dict[str, Any]]:
-    """Return streaming favorites, newest first, without touching file favorites."""
-    with _conn() as c:
-        rows = c.execute(
-            """SELECT source, track_id, title, artist, cover_url, duration_ms, created_at
-                 FROM music_stream_favorites
-                ORDER BY created_at DESC, source, track_id"""
-        ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def music_stream_favorite_add(
-    source: Any,
-    track_id: Any,
-    title: Any,
-    artist: Any,
-    cover_url: Any | None = None,
-    duration_ms: Any | None = None,
-) -> None:
-    """Insert a streaming favorite or refresh its metadata while preserving creation time."""
-    if title is None or artist is None:
-        raise ValueError("title and artist are required")
-    item = validate_music_stream_favorite(
-        source, track_id, title, artist, cover_url, duration_ms
-    )
-    with _conn() as c:
-        c.execute(
-            """INSERT INTO music_stream_favorites
-                   (source, track_id, title, artist, cover_url, duration_ms, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(source, track_id) DO UPDATE SET
-                   title=excluded.title,
-                   artist=excluded.artist,
-                   cover_url=excluded.cover_url,
-                   duration_ms=excluded.duration_ms""",
-            (
-                item["source"], item["track_id"], item["title"], item["artist"],
-                item["cover_url"], item["duration_ms"], time.time(),
-            ),
-        )
-
-
-def music_stream_favorite_remove(source: Any, track_id: Any) -> bool:
-    """Remove a streaming favorite and report whether it existed."""
-    item = validate_music_stream_favorite(source, track_id)
-    with _conn() as c:
-        cursor = c.execute(
-            "DELETE FROM music_stream_favorites WHERE source=? AND track_id=?",
-            (item["source"], item["track_id"]),
-        )
-        return cursor.rowcount > 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────

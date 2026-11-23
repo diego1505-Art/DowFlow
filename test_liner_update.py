@@ -97,20 +97,5 @@ class LinerUpdateConfigTests(unittest.TestCase):
             self.assertFalse((app_dir / "resources" / "app-update.yml").exists())
 
 
-class LinerUpdateArtifactTests(unittest.TestCase):
-    def test_names_the_setup_and_latest_yml_to_upload(self) -> None:
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            release = root / "desktop" / "liner" / "release-build"
-            release.mkdir(parents=True)
-            setup = release / "DowFlow-Music-Setup-0.2.202611232145.exe"
-            setup.write_text("setup", encoding="utf-8")
-
-            artifacts = build_export.liner_update_artifacts(root)
-
-            self.assertEqual(artifacts["setup"], setup)
-            self.assertEqual(artifacts["latest"], release / "latest.yml")
-
-
 if __name__ == "__main__":
     unittest.main()

@@ -449,9 +449,7 @@ class LocalVideoApiTests(unittest.TestCase):
         for route in ("/music", "/music/stream", "/music/explore", "/music/liked"):
             with self.subTest(route=route):
                 self.assertEqual(client.get(route).status_code, 404)
-        self.assertTrue(
-            app_module._scope_allows_path("music", "/api/music/stream/favorites")
-        )
+        self.assertTrue(app_module._scope_allows_path("music", "/api/music/download"))
         self.assertFalse(app_module._scope_allows_path("music", "/video"))
 
         category_response = client.get("/film")

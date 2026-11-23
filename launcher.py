@@ -663,22 +663,6 @@ def _read_existing_server_logs(log_path: Path) -> tuple[list[str], int]:
     return lines, offset
 
 
-def _read_appended_server_logs(log_path: Path, offset: int) -> tuple[list[str], int]:
-    try:
-        with log_path.open("r", encoding="utf-8", errors="replace") as handle:
-            handle.seek(offset)
-            appended = handle.readlines()
-            next_offset = handle.tell()
-    except OSError:
-        return [], offset
-    lines = []
-    for raw_line in appended:
-        line = _format_file_log_line(raw_line) or raw_line.rstrip("\r\n")
-        if _is_startup_file_log(line) and not _is_redundant_server_line(line):
-            lines.append(line)
-    return lines, next_offset
-
-
 def _read_appended_runtime_logs(log_path: Path, offset: int) -> tuple[list[str], int]:
     try:
         with log_path.open("r", encoding="utf-8", errors="replace") as handle:

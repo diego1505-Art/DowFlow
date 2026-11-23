@@ -6,12 +6,10 @@ import subprocess
 import sys
 import threading
 import time
-import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory
-from werkzeug.utils import secure_filename
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory
 from folder_picker import select_cookie_file, select_download_folder
 import download_manager
 
@@ -20,31 +18,21 @@ from config import (
     DownloadPathNotConfigured,
     IS_FROZEN,
     SOURCE_DIR,
-    SUBPROCESS_CREATION_FLAGS,
     VIDEO_EXTENSIONS,
     get_download_path,
     get_runtime_build_id,
     has_configured_download_path,
     set_download_path,
-    LOCAL_MEDIA_TTL_SECONDS,
-    LOCAL_MEDIA_MAX_ENTRIES,
     ALLOWED_LOCAL_EXTENSIONS,
     PREVIEWABLE_EXTENSIONS,
     AUDIO_OUTPUT_FORMATS,
     DOWFLOW_COOKIES_DIR,
 )
 from utils import has_ffmpeg, is_http_url
-from playlist import download_media, get_frontend_config
+from playlist import download_media
 from logger import get_logger
 from jobs import start_download_job, get_job, list_jobs
-from database import (
-    download_list,
-    download_count_by_status,
-    download_stats,
-    favorite_list,
-    favorite_add,
-    favorite_remove,
-)
+from database import download_stats
 if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
     music = importlib.import_module("music")
 
@@ -73,10 +61,6 @@ def _ensure_music_download_folder() -> None:
 _ensure_music_download_folder()
 
 app = Flask(__name__)
-if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
-    from music_stream_api import music_stream_api
-
-    app.register_blueprint(music_stream_api)
 # Track in-flight music downloads so repeated clicks reuse the same job.
 _MUSIC_DOWNLOAD_JOBS: dict[str, tuple[str, float]] = {}
 _MUSIC_DOWNLOAD_LOCK = threading.Lock()
@@ -161,7 +145,6 @@ def _download_folder(*, create: bool = True) -> Path:
 def _scope_allows_path(scope: str, path: str) -> bool:
     common_paths = {
         "/",
-        "/service-worker.js",
         "/api/status",
         "/api/dependencies/progress",
         "/api/dependencies/retry",
@@ -170,18 +153,17 @@ def _scope_allows_path(scope: str, path: str) -> bool:
         "/api/download-folder/select",
         "/api/stats",
         "/stats",
-        "/open-folder",
         "/api/update/check",
         "/api/update/install",
     }
-    if path in common_paths or path.startswith(("/static/", "/media/", "/media-local/")):
+    if path in common_paths or path.startswith(("/static/", "/media/")):
         return True
     if scope == "all":
         return True
     if scope == "video":
         return path in {
-            "/video", "/config", "/history", "/jobs", "/download", "/download-async",
-            "/upload-local", "/url-options", "/expand-url", "/fetch-episodes", "/api/local-videos", "/stats",
+            "/video", "/jobs", "/download", "/download-async",
+            "/url-options", "/expand-url", "/api/local-videos", "/stats",
         } or path.startswith("/jobs/")
     if scope == "music":
         # The Music edition ships the DowFlow Music (Liner) app, so a scoped
@@ -208,9 +190,6 @@ COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
     ),
 }
 
-LOCAL_MEDIA_REGISTRY: dict[str, tuple[Path, float]] = {}
-# Reentrant lock: the registry is shared across Flask threads.
-_LOCAL_MEDIA_LOCK = threading.RLock()
 DEBUG_MODE = os.environ.get("DOWFLOW_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
 if DEBUG_MODE:
     log.info("DOWFLOW_DEBUG mode active (DEBUG console logging)")
@@ -218,42 +197,6 @@ if DEBUG_MODE:
 
 def is_allowed_local_file(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in ALLOWED_LOCAL_EXTENSIONS
-
-
-def cleanup_local_media_registry() -> None:
-    # Safe to call directly or from register/serve while already locked.
-    with _LOCAL_MEDIA_LOCK:
-        now = time.time()
-        expired_tokens = [
-            token
-            for token, (_, created_at) in list(LOCAL_MEDIA_REGISTRY.items())
-            if now - created_at > LOCAL_MEDIA_TTL_SECONDS
-        ]
-        for token in expired_tokens:
-            LOCAL_MEDIA_REGISTRY.pop(token, None)
-
-        if len(LOCAL_MEDIA_REGISTRY) <= LOCAL_MEDIA_MAX_ENTRIES:
-            return
-
-        tokens_by_age = sorted(
-            LOCAL_MEDIA_REGISTRY.items(),
-            key=lambda item: item[1][1],
-        )
-        overflow = len(LOCAL_MEDIA_REGISTRY) - LOCAL_MEDIA_MAX_ENTRIES
-        for token, _ in tokens_by_age[:overflow]:
-            LOCAL_MEDIA_REGISTRY.pop(token, None)
-
-
-def register_local_media(source_path: Path) -> dict[str, str]:
-    cleanup_local_media_registry()
-    token = uuid.uuid4().hex
-    with _LOCAL_MEDIA_LOCK:
-        LOCAL_MEDIA_REGISTRY[token] = (source_path.resolve(), time.time())
-    return {
-        "filename": source_path.name,
-        "filepath": str(source_path),
-        "file_url": f"/media-local/{token}",
-    }
 
 
 @app.route("/")
@@ -277,11 +220,6 @@ def index():
         app_scope=APP_SCOPE,
         is_frozen=IS_FROZEN,
     )
-
-
-@app.get("/service-worker.js")
-def service_worker():
-    return "", 204
 
 
 @app.get("/api/status")
@@ -409,31 +347,6 @@ def open_music_desktop_app():
 
 # ─────────────────────────────  Music API  ────────────────────────────────────
 
-@app.route("/api/music/search", methods=["POST"])
-def music_search():
-    data = request.get_json(silent=True) or {}
-    query = str(data.get("query") or "").strip()
-    if not query:
-        return jsonify({"success": False, "error": "Empty query."}), 400
-    try:
-        limit = int(data.get("limit") or 20)
-    except (TypeError, ValueError):
-        limit = 20
-    limit = max(1, min(limit, 50))
-    tracks = music.search_music(query, limit)
-    return jsonify({"success": True, "query": query, "tracks": tracks})
-
-
-@app.route("/api/music/popular")
-def music_popular():
-    try:
-        limit = int(request.args.get("limit") or 24)
-    except (TypeError, ValueError):
-        limit = 24
-    limit = max(1, min(limit, 50))
-    return jsonify({"success": True, "tracks": music.popular_music(limit)})
-
-
 @app.route("/api/music/download", methods=["POST"])
 def music_download():
     data = request.get_json(silent=True) or {}
@@ -496,19 +409,6 @@ def music_download():
         if title_key:
             _MUSIC_DOWNLOAD_JOBS[title_key] = (job_id, now)
     return jsonify({"success": True, "async": True, "job_id": job_id})
-
-
-@app.route("/api/music/library")
-def music_library():
-    try:
-        limit = int(request.args.get("limit") or 200)
-    except (TypeError, ValueError):
-        limit = 200
-    try:
-        items = music.list_library(max(1, min(limit, 500)))
-    except DownloadPathNotConfigured:
-        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
-    return jsonify({"success": True, "items": items})
 
 
 @app.get("/api/music/folder")
@@ -598,40 +498,6 @@ def music_covers_backfill():
     except DownloadPathNotConfigured:
         return jsonify({"success": False, "error": "Choose a download folder first."}), 409
     return jsonify({"success": True, "created": created})
-
-
-@app.get("/api/music/favorites")
-def music_favorites():
-    return jsonify({"success": True, "items": favorite_list()})
-
-
-@app.post("/api/music/favorites")
-def music_favorite_add():
-    data = request.get_json(silent=True) or {}
-    filename = str(data.get("filename") or "").strip()
-    if not filename:
-        return jsonify({"success": False, "error": "Filename is required."}), 400
-    favorite_add(filename)
-    return jsonify({"success": True, "filename": filename})
-
-
-@app.delete("/api/music/favorites/<path:filename>")
-def music_favorite_remove(filename: str):
-    removed = favorite_remove(filename)
-    return jsonify({"success": True, "removed": removed, "filename": filename})
-
-
-@app.route("/api/music/delete", methods=["POST"])
-def music_delete():
-    data = request.get_json(silent=True) or {}
-    filename = data.get("filename")
-    if not filename:
-        return jsonify({"success": False, "error": "Filename is required."}), 400
-    
-    success = music.delete_track(filename)
-    if success:
-        return jsonify({"success": True, "message": "Track deleted."})
-    return jsonify({"success": False, "error": "Track not found."}), 404
 
 
 @app.route("/check-ffmpeg")
@@ -750,26 +616,6 @@ def local_videos():
     return jsonify({"success": True, "items": items})
 
 
-@app.route("/history")
-def history():
-    """SQLite download history and statistics."""
-    try:
-        limit = request.args.get("limit", default=50, type=int)
-        limit = max(1, min(limit or 50, 200))
-        status = (request.args.get("status") or "").strip() or None
-        rows = download_list(limit=limit, status=status)
-        return jsonify(
-            {
-                "success": True,
-                "counts": download_count_by_status(),
-                "items": rows,
-            }
-        )
-    except Exception as e:
-        log.error("[history] %s", e, exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
 @app.get("/api/stats")
 def stats_api():
     """Return aggregate download metrics and recent strategy usage."""
@@ -858,14 +704,6 @@ def download_async():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/config")
-def frontend_config():
-    """Return the static list of formats, qualities, and languages for the frontend."""
-    payload = get_frontend_config()
-    payload["has_ffmpeg"] = has_ffmpeg()
-    return jsonify(payload)
-
-
 @app.route("/media/<path:filename>")
 def serve_media(filename: str):
     try:
@@ -873,80 +711,6 @@ def serve_media(filename: str):
     except DownloadPathNotConfigured:
         abort(409)
     return send_from_directory(folder, filename, as_attachment=False)
-
-
-@app.route("/media/music/<path:filename>")
-def serve_music_media(filename: str):
-    """Serve Music files from the configured Music folder with HTTP ranges."""
-    if music is None:
-        abort(404)
-    try:
-        music_folder = music._music_folder()
-    except DownloadPathNotConfigured:
-        abort(409)
-    return send_from_directory(
-        music_folder,
-        filename,
-        as_attachment=False,
-        conditional=True,
-    )
-
-
-@app.route("/media-local/<token>")
-def serve_local_media(token: str):
-    cleanup_local_media_registry()
-    with _LOCAL_MEDIA_LOCK:
-        entry = LOCAL_MEDIA_REGISTRY.get(token)
-        if entry is None:
-            abort(404)
-        source_path, _ = entry
-        if not source_path.is_file():
-            LOCAL_MEDIA_REGISTRY.pop(token, None)
-            abort(404)
-        LOCAL_MEDIA_REGISTRY[token] = (source_path, time.time())
-    return send_file(source_path, as_attachment=False)
-
-
-@app.route("/open-folder")
-def open_folder():
-    try:
-        os.startfile(str(_download_folder()))  # type: ignore[attr-defined]
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route("/upload-local", methods=["POST"])
-def upload_local():
-    try:
-        file = request.files.get("file")
-        if file is None or not file.filename:
-            return jsonify({"success": False, "error": "No local file received."}), 400
-
-        suffix = Path(file.filename).suffix.lower()
-        if suffix not in ALLOWED_LOCAL_EXTENSIONS:
-            return jsonify({"success": False, "error": "Unsupported file format."}), 400
-
-        safe_name = secure_filename(file.filename) or f"local-{uuid.uuid4().hex}{suffix}"
-        stored_name = f"{uuid.uuid4().hex[:8]}-{safe_name}"
-        destination = _download_folder() / stored_name
-        file.save(destination)
-
-        return jsonify(
-            {
-                "success": True,
-                "filename": stored_name,
-                "file_url": f"/media/{stored_name}",
-                "source_type": "local",
-                "source_label": file.filename,
-                "message": "Local file uploaded successfully.",
-                "previewable": Path(stored_name).suffix.lower() in PREVIEWABLE_EXTENSIONS,
-            }
-        )
-    except DownloadPathNotConfigured:
-        return jsonify({"success": False, "error": "Choose a download folder first."}), 409
-    except Exception as e:
-        return jsonify({"success": False, "error": f"Local upload failed: {e}"}), 500
 
 
 @app.route("/url-options", methods=["POST"])
@@ -1000,34 +764,6 @@ def expand_url_route():
         return jsonify(result.to_dict()), status
     except Exception as e:
         log.error("[expand-url] ERROR: %s", e, exc_info=True)
-        return jsonify({"success": False, "error": f"System error: {e}"}), 500
-
-
-@app.route("/fetch-episodes", methods=["POST"])
-def fetch_episodes():
-    """Legacy alias for /expand-url (Franime)."""
-    try:
-        data = request.get_json() or {}
-        url = (data.get("url") or "").strip()
-        if not url:
-            return jsonify({"success": False, "error": "URL is required."}), 400
-        options = {
-            "scope": "season" if data.get("current_only") else "all",
-            "current_only": bool(data.get("current_only")),
-        }
-        log.info("[fetch-episodes] url=%s options=%s", url, options)
-        from url_expanders import expand_url
-        result = expand_url(url, options)
-        status = 200 if result.success else 400
-        log.info(
-            "[fetch-episodes] success=%s count=%s error=%s",
-            result.success,
-            result.count or len(result.urls),
-            result.error,
-        )
-        return jsonify(result.to_dict()), status
-    except Exception as e:
-        log.error("[fetch-episodes] ERROR: %s", e, exc_info=True)
         return jsonify({"success": False, "error": f"System error: {e}"}), 500
 
 

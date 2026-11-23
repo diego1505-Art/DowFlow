@@ -422,10 +422,6 @@ def detect_language_from_url(url: str) -> str:
     return ""
 
 
-# App settings
-LOCAL_MEDIA_TTL_SECONDS = 3600
-LOCAL_MEDIA_MAX_ENTRIES = 128
-
 # Browser extractor settings
 # Set DOWFLOW_BROWSER_VISIBLE=1 before starting the app if you need to debug the browser.
 BROWSER_HEADLESS = os.environ.get("DOWFLOW_BROWSER_VISIBLE", "").strip().lower() not in {"1", "true", "yes", "on"}

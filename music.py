@@ -1,20 +1,15 @@
 """
-DowFlow — Music service.
+DowFlow — Music service for the DowFlow Music (Liner) app.
 
-Search for tracks and popular songs via YouTube (yt-dlp), download audio
-(MP3/FLAC, etc.), and automatically fetch album artwork (public Deezer API,
-falling back to the YouTube thumbnail).
-
-Integration with a local dataset is planned via `music_dataset.get_dataset()`:
-it will be queried first when available; otherwise, all searches use YouTube.
+Download audio (MP3/FLAC, etc.) from YouTube via yt-dlp, list the downloaded
+tracks, and automatically fetch album artwork (public Deezer API, falling back
+to the YouTube thumbnail).
 """
 from __future__ import annotations
 
 import os
 import re
-import time
 import unicodedata
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -25,7 +20,6 @@ import download_manager
 from config import AUDIO_EXTENSIONS, get_download_path
 from logger import get_logger
 from music_dataset import get_dataset
-from utils import yt_dlp_runtime_options
 
 log = get_logger("music")
 
@@ -120,152 +114,9 @@ def _library_track_metadata(stem: str) -> tuple[str, str, str]:
     return raw_artist, title, key
 
 
-def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
-    """Convert a flat yt-dlp entry into a track for the frontend."""
-    if not isinstance(entry, dict):
-        return None
-    video_id = entry.get("id")
-    if not video_id:
-        return None
-    raw_url = entry.get("url")
-    if isinstance(raw_url, str) and raw_url.startswith("http"):
-        url = raw_url
-    else:
-        url = f"https://www.youtube.com/watch?v={video_id}"
-    duration = entry.get("duration")
-    return {
-        "id": str(video_id),
-        "title": entry.get("title") or "Untitled",
-        "artist": entry.get("uploader") or entry.get("channel") or "",
-        "url": url,
-        "duration": int(duration) if isinstance(duration, (int, float)) else None,
-        "thumbnail": _thumb_for(str(video_id)),
-        "view_count": entry.get("view_count"),
-    }
-
-
-def _dedupe(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen_ids: set[str] = set()
-    seen_keys: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for track in tracks:
-        title = (track.get("title") or "").strip()
-        artist = (track.get("artist") or "").strip()
-        track_id = (track.get("id") or "").strip()
-
-        if track_id and track_id.lower() in seen_ids:
-            continue
-
-        if title and artist:
-            key = f"{title}|{artist}"
-        elif title:
-            key = title
-        elif track_id:
-            key = track_id
-        else:
-            continue
-
-        norm = "".join(
-            ch for ch in key.lower() if ch.isalnum() or ch in {" ", "-", "_", "|"}
-        )
-        if norm in seen_keys:
-            continue
-        seen_keys.add(norm)
-        if track_id:
-            seen_ids.add(track_id.lower())
-        out.append(track)
-    return out
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 #  Search / popular tracks
 # ─────────────────────────────────────────────────────────────────────────────
-
-def _search_youtube(query: str, limit: int) -> list[dict[str, Any]]:
-    import yt_dlp
-
-    limit = max(1, min(int(limit or 20), 50))
-    opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "extract_flat": "in_playlist",
-        "playlistend": limit,
-    }
-    opts.update(yt_dlp_runtime_options())
-
-    with yt_dlp.YoutubeDL(opts) as ydl:  # pyright: ignore[reportArgumentType]
-        info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
-
-    entries = (info or {}).get("entries") or []
-    tracks = [track for track in (_normalize_entry(e) for e in entries) if track]
-    return _dedupe(tracks)[:limit]
-
-
-def search_music(query: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Search for tracks locally when a dataset is available, otherwise on YouTube."""
-    query = (query or "").strip()
-    if not query:
-        return []
-
-    dataset = get_dataset()
-    if dataset is not None and dataset.available():
-        try:
-            results = dataset.search(query, limit)
-            if results:
-                return results[:limit]
-        except NotImplementedError:
-            pass
-        except Exception as exc:  # Fall back to YouTube if the dataset fails.
-            log.warning("[music] Dataset unavailable; falling back to YouTube: %s", exc)
-
-    try:
-        return _search_youtube(query, limit)
-    except Exception as exc:
-        log.error("[music] Search failed: %s", exc, exc_info=True)
-        return []
-
-
-def popular_music(limit: int = 24) -> list[dict[str, Any]]:
-    """Return popular tracks (30-minute in-memory cache)."""
-    global _popular_cache
-    now = time.time()
-    if _popular_cache and now - _popular_cache[0] < _POPULAR_TTL_SECONDS:
-        return _popular_cache[1][:limit]
-
-    dataset = get_dataset()
-    if dataset is not None and dataset.available():
-        try:
-            result = dataset.popular(limit)
-            if result:
-                _popular_cache = (now, result)
-                return result[:limit]
-        except NotImplementedError:
-            pass
-        except Exception as exc:
-            log.warning("[music] Popular dataset unavailable: %s", exc)
-
-    per_query = max(6, (limit // len(_POPULAR_QUERIES)) + 4)
-    tracks: list[dict[str, Any]] = []
-    # YouTube queries are independent, so run them in parallel to reduce cold-start
-    # latency (the slowest operation in the /popular endpoint).
-    with ThreadPoolExecutor(max_workers=len(_POPULAR_QUERIES)) as pool:
-        futures = {
-            pool.submit(_search_youtube, query, per_query): query
-            for query in _POPULAR_QUERIES
-        }
-        for future in as_completed(futures):
-            query = futures[future]
-            try:
-                tracks.extend(future.result())
-            except Exception as exc:
-                log.warning("[music] Popular query '%s' failed: %s", query, exc)
-
-    tracks = _dedupe(tracks)[:limit]
-    if tracks:
-        _popular_cache = (now, tracks)
-    return tracks
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Album artwork
@@ -308,17 +159,6 @@ def fetch_cover_url(artist: str | None, title: str | None) -> str | None:
 
 _COVER_CACHE: dict[tuple[str, str], tuple[float, str | None]] = {}
 _COVER_TTL_SECONDS = 600.0
-
-
-def fetch_cover_url_cached(artist: str | None, title: str | None) -> str | None:
-    """Like fetch_cover_url, but also cache failures for 10 minutes."""
-    key = ((artist or "").strip().lower(), (title or "").strip().lower())
-    hit = _COVER_CACHE.get(key)
-    if hit and time.time() - hit[0] < _COVER_TTL_SECONDS:
-        return hit[1]
-    url = fetch_cover_url(artist, title)
-    _COVER_CACHE[key] = (time.time(), url)
-    return url
 
 
 def _normalize_text(value: str) -> str:
@@ -481,77 +321,3 @@ def ensure_covers(limit: int = 60) -> int:
 #  Local library (previously downloaded tracks)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def list_library(limit: int = 200) -> list[dict[str, Any]]:
-    """List the audio files in the download root with their cover art."""
-    music_folder = _music_folder()
-    music_folder.mkdir(parents=True, exist_ok=True)
-    download_manager.mark_missing(music_folder)
-    try:
-        entries = [p for p in music_folder.iterdir() if p.is_file()]
-    except OSError:
-        return []
-
-    entries.sort(key=lambda path: path.stat().st_mtime, reverse=True)
-    items: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for path in entries:
-        if path.suffix.lower() not in AUDIO_EXTENSIONS:
-            continue
-        artist, title, title_key = _library_track_metadata(path.stem)
-        if title_key in seen:
-            continue
-        seen.add(title_key)
-
-        cover_name = None
-        for ext in COVER_EXTENSIONS:
-            candidate = music_folder / f"{path.stem}{ext}"
-            if candidate.is_file():
-                cover_name = candidate.name
-                break
-
-        cover_url = f"/media/{quote(cover_name)}" if cover_name else None
-        if not cover_url:
-            cover_url = fetch_cover_url_cached(None, path.stem)
-
-        stat = path.stat()
-        items.append(
-            {
-                "filename": path.name,
-                "title": title or path.stem,
-                "artist": artist,
-                "audio_url": f"/media/{quote(path.name)}",
-                "cover_url": cover_url,
-                "size": stat.st_size,
-                "mtime": stat.st_mtime,
-            }
-        )
-
-    items.sort(key=lambda item: item["mtime"], reverse=True)
-    return items[:limit]
-
-
-def delete_track(filename: str) -> bool:
-    """Delete a track and its associated cover art."""
-    from werkzeug.utils import secure_filename
-    safe_name = secure_filename(filename)
-    music_folder = _music_folder()
-    audio_path = music_folder / safe_name
-    
-    if not audio_path.is_file():
-        return False
-        
-    try:
-        # Delete the audio file.
-        audio_path.unlink()
-        
-        # Delete the cover art if it exists (same base filename).
-        base_name = audio_path.stem
-        for ext in COVER_EXTENSIONS:
-            cover_path = music_folder / f"{base_name}{ext}"
-            if cover_path.is_file():
-                cover_path.unlink()
-        download_manager.mark_deleted(filename=safe_name, path=audio_path)
-        return True
-    except Exception as exc:
-        log.error("[music] Failed to delete %s: %s", filename, exc)
-        return False

@@ -10,7 +10,6 @@ from launcher import (
     _is_redundant_server_line,
     _next_available_port,
     _read_appended_runtime_logs,
-    _read_appended_server_logs,
     _read_existing_server_logs,
 )
 
@@ -213,49 +212,6 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertTrue(_is_redundant_server_line(get_line))
         self.assertTrue(_is_redundant_server_line(get_line_ansi))
         self.assertTrue(_is_redundant_server_line(post_line))
-
-    def test_existing_server_logs_are_recovered_and_tailed(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            log_path = Path(temporary) / "dowflow.log"
-            startup_log = (
-                "2026-11-04 23:03:19 | SUCCESS | app              | 100 | 1 | "
-                "Server started at http://127.0.0.1:5001\n"
-            )
-            network_log = (
-                "2026-11-04 23:03:20 | INFO    | playlist         | 100 | 1 | "
-                "[perf] Connection tier: x16\n"
-            )
-            log_path.write_text(
-                "2026-11-04 23:03:18 | INFO    | app              | 100 | 1 | "
-                "DowFlow — Multi-Site Media Downloader\n"
-                + startup_log
-                + "2026-11-04 23:03:19 | WARNING | werkzeug         | 100 | 1 | "
-                "WARNING: This is a development server. Do not use it in a production deployment.\n"
-                + "2026-11-04 23:03:19 | INFO    | app              | 100 | 1 | "
-                "Press Ctrl+C to stop\n"
-                + "2026-11-04 23:03:19 | INFO    | werkzeug         | 100 | 1 | "
-                "* Running on http://127.0.0.1:5001\n"
-                + "2026-11-04 23:03:19 | INFO    | werkzeug         | 100 | 1 | "
-                "Press CTRL+C to quit\n",
-                encoding="utf-8",
-            )
-
-            existing_lines, offset = _read_existing_server_logs(log_path)
-            self.assertTrue(
-                any("Server started at http://127.0.0.1:5001" in line for line in existing_lines)
-            )
-            with log_path.open("a", encoding="utf-8") as handle:
-                handle.write(network_log)
-
-            appended_lines, _ = _read_appended_server_logs(log_path, offset)
-
-        self.assertEqual(len(existing_lines), 4)
-        self.assertEqual(len(appended_lines), 1)
-        self.assertIn("Connection tier: x16", appended_lines[0])
-        self.assertTrue(any("development server" in line for line in existing_lines))
-        self.assertEqual(sum("Press Ctrl+C to stop" in line for line in existing_lines), 1)
-        self.assertFalse(any("Running on http://" in line for line in existing_lines))
-        self.assertFalse(any("Press CTRL+C to quit" in line for line in existing_lines))
 
     def test_runtime_log_reader_keeps_download_events(self):
         with tempfile.TemporaryDirectory() as temporary:

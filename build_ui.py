@@ -85,7 +85,7 @@ class Console:
 
     def progress_row(self, reserved: int) -> int:
         """Row of the build bar: near the bottom, with room under it."""
-        return max(reserved + 4, self.height - 3)
+        return max(reserved + 4, self.height - 6)
 
     def wave(self, tick: int) -> str:
         span = max(10, self.width - 4)

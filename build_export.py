@@ -55,6 +55,10 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "setup": "DowFlow-Setup",
         "app_name": "DowFlow",
         "app_id": "DowFlow.Menu",
+        # Downloading the whole menu has to bring everything: the setup also
+        # installs the DowFlow Music (Liner) app in submenus\music, which is
+        # what the Music card opens.
+        "bundles_music": True,
     },
     "video": {
         "name": "DowFlow-Video",
@@ -506,8 +510,13 @@ def build_installer(
     project_root: Path | None = None,
     output_dir: Path | None = None,
     progress_callback: Callable[[int, str, int | None], None] | None = None,
+    liner_dir: Path | None = None,
 ) -> Path:
-    """Compress an already-built edition folder with Inno Setup."""
+    """Compress an already-built edition folder with Inno Setup.
+
+    ``liner_dir`` is the packaged DowFlow Music app; passing it makes the
+    installer copy it into ``submenus\\music`` next to the edition.
+    """
     if scope not in EXPORT_SCOPES:
         raise ValueError("Unsupported export scope.")
     root = (project_root or Path(__file__).resolve().parent).resolve()
@@ -551,6 +560,8 @@ def build_installer(
         f"/DIconFile={root / 'static' / 'dowflow.ico'}",
         str(root / "build" / "installer.iss"),
     ]
+    if liner_dir is not None:
+        command.insert(-1, f"/DLinerDir={liner_dir}")
     stop = threading.Event()
     watcher: threading.Thread | None = None
     if progress_callback is not None:
@@ -734,6 +745,7 @@ def build_executable(
 
     result = executable
     if installer:
+        liner_dir: Path | None = None
         if EDITIONS[scope].get("liner"):
             # Liner embeds the freshly built Music backend, so it has to be
             # packaged after PyInstaller and before the installer.
@@ -741,6 +753,28 @@ def build_executable(
                 root,
                 progress_callback=lambda value, stage: report_progress(value, stage),
             )
+            liner_dir = liner_app_dir(root)
+        elif EDITIONS[scope].get("bundles_music"):
+            # The whole-menu setup ships the Music app too. Liner packages the
+            # Music backend inside its resources, so that backend comes first.
+            music_backend = (
+                root / "build" / "out" / "DowFlow-Music" / "DowFlow-Music.exe"
+            )
+            if not music_backend.is_file():
+                report_progress(85, "Building the Music backend")
+                build_executable(
+                    "music",
+                    "DowFlow-Music",
+                    root,
+                    installer=False,
+                    blank=blank,
+                )
+            report_progress(86, "Packaging DowFlow Music")
+            build_liner_app(
+                root,
+                progress_callback=lambda value, stage: report_progress(value, stage),
+            )
+            liner_dir = liner_app_dir(root)
         if blank and output_dir is None:
             output_dir = blank_output_dir(root)
         report_progress(87, "Preparing media tools")
@@ -757,6 +791,7 @@ def build_executable(
             root,
             output_dir,
             progress_callback=report_progress,
+            liner_dir=liner_dir,
         )
     report_progress(100, "Complete")
     return result

@@ -344,9 +344,14 @@ def _liner_launcher_spec() -> tuple[list[str], Path] | None:
         # The Music edition installs Liner next to the other editions, inside
         # the same %LOCALAPPDATA%\DowFlow folder.
         executable = Path(sys.executable).resolve()
+        # The menu edition lives in <root>\menu, while every submenu lives in
+        # <root>\submenus\<edition>. One parent is not enough from the menu:
+        # it used to look in <root>\menu\submenus\music and never found the
+        # Music edition the user had installed next to it.
         for candidate in (
             executable.parent / "dowflow-music.exe",
             executable.parent / "submenus" / "music" / "dowflow-music.exe",
+            executable.parent.parent / "submenus" / "music" / "dowflow-music.exe",
         ):
             if candidate.is_file():
                 return [str(candidate)], candidate.parent

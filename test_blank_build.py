@@ -61,5 +61,59 @@ class BlankBuildTests(unittest.TestCase):
         self.assertEqual(build_export.blank_output_dir(root), root / "build" / "release")
 
 
+class MusicBundlingTests(unittest.TestCase):
+    """The whole-menu setup has to bring the Music app with it."""
+
+    def _installer_kwargs(self, scope: str, name: str) -> dict:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            # The Music backend Liner embeds, so the build never recurses.
+            backend = root / "build" / "out" / "DowFlow-Music" / "DowFlow-Music.exe"
+            backend.parent.mkdir(parents=True)
+            backend.write_text("exe", encoding="utf-8")
+
+            class FakeProcess:
+                stdout = iter(())
+
+                def __init__(self, command, **kwargs) -> None:
+                    output = root / "build" / "out" / name
+                    output.mkdir(parents=True, exist_ok=True)
+                    (output / f"{name}.exe").write_text("exe", encoding="utf-8")
+
+                def wait(self) -> int:
+                    return 0
+
+            with (
+                mock.patch.object(build_export.subprocess, "Popen", FakeProcess),
+                mock.patch.object(build_export, "prepare_tools", return_value=None),
+                mock.patch.object(build_export, "build_liner_app") as liner,
+                mock.patch.object(
+                    build_export, "liner_app_dir", return_value=root / "liner"
+                ),
+                mock.patch.object(build_export, "build_installer") as installer,
+            ):
+                installer.return_value = root / "setup.exe"
+                build_export.build_executable(
+                    scope, name, project_root=root, installer=True, blank=True
+                )
+            self.assertEqual(liner.call_count, 1 if scope in {"all", "music"} else 0)
+            return installer.call_args.kwargs
+
+    def test_whole_menu_setup_installs_music(self) -> None:
+        kwargs = self._installer_kwargs("all", "DowFlow")
+        self.assertIsNotNone(kwargs.get("liner_dir"))
+
+    def test_video_setup_stays_without_music(self) -> None:
+        kwargs = self._installer_kwargs("video", "DowFlow-Video")
+        self.assertIsNone(kwargs.get("liner_dir"))
+
+    def test_installer_template_copies_music_only_when_asked(self) -> None:
+        text = (Path(__file__).parent / "build" / "installer.iss").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("#ifdef LinerDir", text)
+        self.assertIn('DestDir: "{app}\\submenus\\music"', text)
+
+
 if __name__ == "__main__":
     unittest.main()

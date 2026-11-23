@@ -76,6 +76,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; The runnable application for this edition.
 Source: "{#SourceDir}\*"; DestDir: "{app}\{#DestDir}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The whole-menu setup also installs DowFlow Music (Liner) in its own submenu,
+; so one download brings the menu and the Music app the Music card opens.
+#ifdef LinerDir
+Source: "{#LinerDir}\*"; DestDir: "{app}\submenus\music"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 ; Shared native tools, installed once for every edition and never removed by
 ; an edition's uninstaller.
 Source: "{#ToolsDir}\ffmpeg\*"; DestDir: "{app}\data\tools\ffmpeg"; Flags: ignoreversion recursesubdirs createallsubdirs onlyifdoesntexist uninsneveruninstall

@@ -58,6 +58,12 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
+; Every edition installs into the same %LOCALAPPDATA%\DowFlow root (its own
+; submenus\<edition> folder plus the shared data\ folder). Inno Setup's
+; "folder already exists" prompt therefore appeared on the second edition and
+; made it look like a second install of the same app; installing there is
+; the normal case for this layout.
+DirExistsWarning=no
 MinVersion=10.0
 
 [Languages]

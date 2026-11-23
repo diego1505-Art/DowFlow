@@ -57,9 +57,37 @@ class ElectronPackagingTests(unittest.TestCase):
         self.assertIn('event.sender !== mainWindow.webContents', main)
         self.assertIn("musicLauncher.closeAll()", main)
         self.assertIn('open: () => ipcRenderer.invoke("dowflow:music:open")', preload)
-        self.assertIn('href="/music" data-menu-id="music"', template)
+        # Music opens the Liner application; the card no longer links a page.
+        self.assertIn('data-menu-id="music"', template)
+        self.assertIn('fetch("/api/music/open"', template)
         self.assertIn("window.dowflow?.music?.open", template)
-        self.assertIn("window.location.assign(musicEntry.href)", template)
+        self.assertIn("DowFlow Music is not installed.", template)
+        self.assertNotIn('href="/music"', template)
+
+    def test_music_edition_ships_liner_with_the_dowflow_backend(self):
+        import build_export
+
+        music = build_export.EDITIONS["music"]
+        self.assertTrue(music["liner"])
+        self.assertEqual(music["app_exe"], "dowflow-music.exe")
+        backend = (PROJECT_ROOT / "desktop" / "liner" / "electron" / "dowflow-backend.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("export function startBundledDowflowBackend", backend)
+        self.assertIn('path.join(process.resourcesPath, "backend", "DowFlow-Music.exe")', backend)
+        self.assertIn("export function stopBundledDowflowBackend", backend)
+        main = (PROJECT_ROOT / "desktop" / "liner" / "electron" / "main.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("startBundledDowflowBackend();", main)
+        self.assertIn("stopBundledDowflowBackend();", main)
+        package = json.loads(
+            (PROJECT_ROOT / "desktop" / "liner" / "package.json").read_text(encoding="utf-8")
+        )
+        resource = next(
+            item for item in package["build"]["extraResources"] if item["to"] == "backend"
+        )
+        self.assertEqual(resource["from"], "../../build/out/DowFlow-Music")
 
     def test_electron_build_does_not_embed_personal_portable_seeds(self):
         spec = (PROJECT_ROOT / "build" / "dowflow.spec").read_text(encoding="utf-8")

@@ -6,11 +6,9 @@
   "productName": "DowFlow",
   "main": "main.cjs",
   "scripts": {
-    "dev": "pnpm build:music && pnpm build:worker && electron .",
-    "build:music": "vite build --config renderer/vite.config.mts",
+    "dev": "pnpm build:worker && electron .",
     "build:worker": "esbuild youtube/potoken-worker.js --bundle --platform=browser --format=cjs --external:electron --outfile=build/potoken-preload.cjs",
-    "typecheck:music": "tsc --noEmit -p renderer/tsconfig.json",
-    "check": "node --check main.cjs && node --check preload.cjs && node --check music-launcher.cjs && node --test music-launcher.test.cjs && node --check youtube/potoken-service.cjs && pnpm typecheck:music && pnpm build:music && pnpm build:worker",
+    "check": "node --check main.cjs && node --check preload.cjs && node --check music-launcher.cjs && node --test music-launcher.test.cjs && node --check youtube/potoken-service.cjs && pnpm build:worker",
     "package:win": "powershell -ExecutionPolicy Bypass -File ./build-win.ps1"
   },
   "devDependencies": {

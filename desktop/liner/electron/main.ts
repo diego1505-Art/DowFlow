@@ -88,7 +88,11 @@ import { DiscordRpcManager } from "./discord.js";
 import { PoTokenService } from "./youtube/potoken.js";
 import { confineToApp, handleTrusted, onTrusted } from "./ipc-guard.js";
 import { setupLocalTracks, syncLocalTracksNow } from "./local-tracks/ipc.js";
-import { findDowflowBackend } from "./dowflow-backend.js";
+import {
+  findDowflowBackend,
+  startBundledDowflowBackend,
+  stopBundledDowflowBackend,
+} from "./dowflow-backend.js";
 import {
   createSavedTrackLibrary,
   setupSavedTracks,
@@ -581,6 +585,9 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    // The Music edition ships DowFlow's download backend: start it so the
+    // "Télécharger" action works even when DowFlow itself is closed.
+    startBundledDowflowBackend();
     if (!app.isPackaged && process.env.LINER_DEV_SIGNING_SECRET) {
       setDevSigningSecret(process.env.LINER_DEV_SIGNING_SECRET);
       console.log(
@@ -2423,5 +2430,8 @@ app.on("window-all-closed", () => {
 });
 
 // covers every other way out: cmd+q, the updater's quitAndInstall, os shutdown
-app.on("before-quit", () => shutdown.begin());
+app.on("before-quit", () => {
+  stopBundledDowflowBackend();
+  shutdown.begin();
+});
 app.on("will-quit", () => shutdown.begin());

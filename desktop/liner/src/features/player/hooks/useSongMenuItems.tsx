@@ -269,6 +269,9 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
                 }
               />
             ),
+            // Liking is a toggle the user can undo right away: closing the
+            // context menu on every click made the little window disappear.
+            keepOpen: true,
             onClick: handleLike,
           },
           {
@@ -369,6 +372,9 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
               }
             />
           ),
+          // Liking is a toggle the user can undo right away: closing the
+          // context menu on every click made the little window disappear.
+          keepOpen: true,
           onClick: handleLike,
         },
         {

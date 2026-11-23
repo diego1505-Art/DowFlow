@@ -400,19 +400,15 @@ class LocalVideoApiTests(unittest.TestCase):
         self.assertIn(b"chooseDownloadFolder", video_response.data)
         self.assertIn(b"chooseDownloadedVideo", video_response.data)
 
-        music_response = client.get("/music/explore")
-        self.assertEqual(music_response.status_code, 200)
-        self.assertIn(b'id="root"', music_response.data)
-        self.assertIn(b"DowFlow Music", music_response.data)
-        music_response.close()
-
-        music_routes = (
-            "/music", "/music/stream", "/music/explore", "/music/liked",
-        )
-        for route in music_routes:
+        # Music is the DowFlow Music (Liner) desktop app now: the old web page
+        # is gone and a scoped Music backend only serves its API.
+        for route in ("/music", "/music/stream", "/music/explore", "/music/liked"):
             with self.subTest(route=route):
-                self.assertTrue(app_module._scope_allows_path("music", route))
-        self.assertFalse(app_module._scope_allows_path("music", "/music/out-of-scope"))
+                self.assertEqual(client.get(route).status_code, 404)
+        self.assertTrue(
+            app_module._scope_allows_path("music", "/api/music/stream/favorites")
+        )
+        self.assertFalse(app_module._scope_allows_path("music", "/video"))
 
         category_response = client.get("/film")
         self.assertEqual(category_response.status_code, 200)
@@ -446,8 +442,10 @@ class LocalVideoApiTests(unittest.TestCase):
     def test_build_helper_passes_scope_and_removes_temporary_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            # The Music edition packages Liner instead of running PyInstaller,
+            # so this test keeps a scoped backend edition (Films).
             expected = (
-                root / "build" / "out" / "Music Edition" / "Music Edition.exe"
+                root / "build" / "out" / "Films Edition" / "Films Edition.exe"
             )
             progress_events = []
 
@@ -475,20 +473,20 @@ class LocalVideoApiTests(unittest.TestCase):
                     return 0
 
                 def assert_build_arguments(self):
-                    self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_SCOPE"], "music")
-                    self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_NAME"], "Music Edition")
+                    self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_SCOPE"], "film")
+                    self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_NAME"], "Films Edition")
                     self_unit.assertIn(str(root / "build" / "dowflow.spec"), self.command)
                     self_unit.assertIn("--distpath", self.command)
                     self_unit.assertNotIn("--clean", self.command)
                     profile = root / "build" / "app_scope.json"
-                    self_unit.assertEqual(json.loads(profile.read_text(encoding="utf-8"))["scope"], "music")
+                    self_unit.assertEqual(json.loads(profile.read_text(encoding="utf-8"))["scope"], "film")
 
             self_unit = self
 
             with patch.object(build_export.subprocess, "Popen", FakeProcess):
                 result = build_export.build_executable(
-                    "music",
-                    "Music Edition.exe",
+                    "film",
+                    "Films Edition.exe",
                     root,
                     progress_callback=progress_events.append,
                 )
@@ -549,9 +547,12 @@ class LocalVideoApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             edition = build_export.EDITIONS["music"]
-            source = root / "build" / "out" / edition["name"]
+            # The Music edition installs the packaged Liner app, so the setup is
+            # built from its win-unpacked folder and ships no media tools.
+            source = build_export.liner_app_dir(root)
             source.mkdir(parents=True)
-            (source / f"{edition['name']}.exe").write_bytes(b"x" * (6 * 1024 * 1024))
+            (source / edition["app_exe"]).write_bytes(b"x" * (6 * 1024 * 1024))
+            captured = {}
             tools = root / "build" / "tools"
             tools.mkdir(parents=True)
             (tools / ".tools.ready").write_text("{}", encoding="utf-8")
@@ -565,6 +566,7 @@ class LocalVideoApiTests(unittest.TestCase):
                 stderr = ""
 
             def fake_run(command, **kwargs):
+                captured["command"] = command
                 output_dir = next(
                     item.split("=", 1)[1]
                     for item in command
@@ -591,6 +593,13 @@ class LocalVideoApiTests(unittest.TestCase):
                 )
 
             self.assertTrue(events)
+            self.assertIn("/DAppExe=dowflow-music.exe", captured["command"])
+            self.assertTrue(
+                any(
+                    item.startswith("/DSourceDir=") and "win-unpacked" in item
+                    for item in captured["command"]
+                )
+            )
             self.assertTrue(all(percent >= 90 for percent, _stage, _eta in events))
             self.assertTrue(any("MB/s" in stage for _percent, stage, _eta in events))
             self.assertTrue(any("MB" in stage and "/" in stage for _percent, stage, _eta in events))

@@ -38,7 +38,7 @@ def default_output_dir() -> Path:
 # One entry per build.bat choice. ``dest`` is relative to
 # %LOCALAPPDATA%\DowFlow and keeps every edition in its own folder while the
 # data/ folder stays shared.
-EDITIONS: dict[str, dict[str, str]] = {
+EDITIONS: dict[str, dict[str, Any]] = {
     "all": {
         "name": "DowFlow",
         "dest": "menu",
@@ -59,6 +59,11 @@ EDITIONS: dict[str, dict[str, str]] = {
         "setup": "DowFlow-Music-Setup",
         "app_name": "DowFlow Music",
         "app_id": "DowFlow.Music",
+        # The Music edition is the Liner desktop application: it plays, searches
+        # and downloads music on its own, so this edition ships neither the
+        # Python backend nor the media tools.
+        "liner": True,
+        "app_exe": "dowflow-music.exe",
     },
     "film": {
         "name": "DowFlow-Films",
@@ -236,6 +241,136 @@ def prepare_tools(
     return tools_dir
 
 
+# Liner's own ``release/`` folder holds the copy people start with
+# start.bat music, which may be running while the edition is built: package into
+# a separate folder so the build never has to touch loaded files.
+_LINER_BUILD_OUTPUT = "release-build"
+
+
+def liner_app_dir(root: Path) -> Path:
+    """Where Electron Builder writes the packaged DowFlow Music (Liner) app."""
+    return root / "desktop" / "liner" / _LINER_BUILD_OUTPUT / "win-unpacked"
+
+
+def _node_executable(root: Path) -> str:
+    bundled = root / "build" / "tools" / "node" / "node.exe"
+    if bundled.is_file():
+        return str(bundled)
+    found = shutil.which("node")
+    if found:
+        return found
+    raise RuntimeError("Node.js is required to package DowFlow Music.")
+
+
+def _newest_mtime(*paths: Path) -> float:
+    newest = 0.0
+    for path in paths:
+        if path.is_file():
+            try:
+                newest = max(newest, path.stat().st_mtime)
+            except OSError:
+                continue
+        elif path.is_dir():
+            for base, _directories, files in os.walk(path):
+                for name in files:
+                    try:
+                        newest = max(newest, (Path(base) / name).stat().st_mtime)
+                    except OSError:
+                        continue
+    return newest
+
+
+def _liner_toolchain(root: Path, liner_root: Path) -> None:
+    """Build the DowFlow Music sources when their output is missing or stale."""
+    outputs = (
+        liner_root / "dist" / "index.html",
+        liner_root / "dist-electron" / "main.js",
+    )
+    sources = (
+        liner_root / "electron",
+        liner_root / "src",
+        liner_root / "package.json",
+    )
+    if all(path.is_file() for path in outputs) and _newest_mtime(*sources) <= (
+        _newest_mtime(*outputs)
+    ):
+        return
+    tsc = liner_root / "node_modules" / "typescript" / "bin" / "tsc"
+    vite = liner_root / "node_modules" / "vite" / "bin" / "vite.js"
+    if not tsc.is_file() or not vite.is_file():
+        raise RuntimeError(
+            "DowFlow Music is not built and its toolchain is missing; "
+            "run pnpm --dir desktop/liner install first."
+        )
+    node = _node_executable(root)
+    for command in ([node, str(tsc), "-b"], [node, str(vite), "build"]):
+        completed = subprocess.run(
+            command,
+            cwd=liner_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
+        if completed.returncode:
+            detail = (completed.stdout or "") + (completed.stderr or "")
+            raise RuntimeError(detail[-5000:] or "DowFlow Music could not be built.")
+
+
+def build_liner_app(
+    project_root: Path | None = None,
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> Path:
+    """Package the Liner desktop application that the Music edition installs."""
+    root = (project_root or Path(__file__).resolve().parent).resolve()
+    liner_root = root / "desktop" / "liner"
+    edition = EDITIONS["music"]
+    if not (liner_root / "package.json").is_file():
+        raise RuntimeError("The DowFlow Music project is missing from desktop/liner.")
+    builder = liner_root / "node_modules" / "electron-builder" / "cli.js"
+    if not builder.is_file():
+        raise RuntimeError(
+            "DowFlow Music dependencies are missing; run "
+            "pnpm --dir desktop/liner install first."
+        )
+    if progress_callback is not None:
+        progress_callback(87, "Packaging DowFlow Music")
+    _liner_toolchain(root, liner_root)
+    shutil.rmtree(liner_app_dir(root), ignore_errors=True)
+    completed = subprocess.run(
+        [
+            _node_executable(root),
+            str(builder),
+            "--win",
+            "--dir",
+            "--x64",
+            "--publish",
+            "never",
+            f"--config.directories.output={_LINER_BUILD_OUTPUT}",
+        ],
+        cwd=liner_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=SUBPROCESS_CREATION_FLAGS,
+    )
+    if completed.returncode:
+        detail = (completed.stdout or "") + (completed.stderr or "")
+        raise RuntimeError(detail[-5000:] or "Electron Builder failed.")
+    executable = liner_app_dir(root) / str(edition["app_exe"])
+    if not executable.is_file():
+        raise RuntimeError("Electron Builder completed without creating DowFlow Music.")
+    return executable
+
+
+def _installer_source_dir(root: Path, edition: dict[str, Any]) -> Path:
+    if edition.get("liner"):
+        return liner_app_dir(root)
+    return root / "build" / "out" / str(edition["name"])
+
+
 def _tree_size(*paths: Path) -> int:
     total = 0
     for path in paths:
@@ -367,8 +502,9 @@ def build_installer(
         raise ValueError("Unsupported export scope.")
     root = (project_root or Path(__file__).resolve().parent).resolve()
     edition = EDITIONS[scope]
-    source_dir = root / "build" / "out" / edition["name"]
-    executable = source_dir / f"{edition['name']}.exe"
+    source_dir = _installer_source_dir(root, edition)
+    exe_name = str(edition.get("app_exe") or f"{edition['name']}.exe")
+    executable = source_dir / exe_name
     if not executable.is_file():
         raise RuntimeError(
             f"The {edition['name']} folder is missing; build the edition first."
@@ -395,7 +531,7 @@ def build_installer(
     command = [
         iscc,
         f"/DAppName={edition['app_name']}",
-        f"/DAppExe={edition['name']}.exe",
+        f"/DAppExe={exe_name}",
         f"/DSourceDir={source_dir}",
         f"/DDestDir={edition['dest']}",
         f"/DOutputBase={edition['setup']}",
@@ -577,6 +713,13 @@ def build_executable(
 
     result = executable
     if installer:
+        if EDITIONS[scope].get("liner"):
+            # Liner embeds the freshly built Music backend, so it has to be
+            # packaged after PyInstaller and before the installer.
+            build_liner_app(
+                root,
+                progress_callback=lambda value, stage: report_progress(value, stage),
+            )
         report_progress(87, "Preparing media tools")
         prepare_tools(
             root,

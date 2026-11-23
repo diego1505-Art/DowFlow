@@ -51,6 +51,27 @@ if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
 log = get_logger("app")
 _APP_BUILD_ID = get_runtime_build_id()
 
+
+def _ensure_music_download_folder() -> None:
+    """Give a Music-only install a working download folder out of the box.
+
+    The Music edition ships the DowFlow Music (Liner) app, which has no setup
+    page asking for a folder, so a fresh install downloads into ~/Downloads
+    until the user picks another one in Liner's settings.
+    """
+    if not IS_FROZEN or APP_SCOPE != "music" or has_configured_download_path():
+        return
+    for candidate in (Path.home() / "Downloads", Path.home()):
+        try:
+            set_download_path(candidate)
+            return
+        except (OSError, ValueError):
+            continue
+    log.warning("No default download folder could be set for DowFlow Music")
+
+
+_ensure_music_download_folder()
+
 app = Flask(__name__)
 if not IS_FROZEN or APP_SCOPE in {"all", "music"}:
     from music_stream_api import music_stream_api
@@ -114,13 +135,7 @@ def cache_static_assets(response):
     path = request.path
     if not path.startswith("/static/"):
         return response
-    if path.startswith("/static/music-stream/assets/"):
-        # Filenames contain a content hash, so they can be cached for good.
-        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
-    elif path.startswith("/static/music-stream/"):
-        response.headers["Cache-Control"] = "no-cache"
-    else:
-        response.headers["Cache-Control"] = "public, max-age=3600"
+    response.headers["Cache-Control"] = "public, max-age=3600"
     return response
 
 
@@ -167,9 +182,9 @@ def _scope_allows_path(scope: str, path: str) -> bool:
             "/upload-local", "/url-options", "/expand-url", "/fetch-episodes", "/api/local-videos", "/stats",
         } or path.startswith("/jobs/")
     if scope == "music":
-        return path in {
-            "/music", "/music/stream", "/music/explore", "/music/liked",
-        } or path.startswith(("/api/music/", "/jobs/"))
+        # The Music edition ships the DowFlow Music (Liner) app, so a scoped
+        # backend only needs to expose its API.
+        return path.startswith(("/api/music/", "/jobs/"))
     return path == f"/{scope}"
 
 
@@ -243,12 +258,17 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 def index():
     """Main menu, or the direct entry point for a scoped executable."""
     if IS_FROZEN and APP_SCOPE != "all":
-        return redirect({
+        target = {
             "video": "/video",
-            "music": "/music",
             "film": "/film",
             "anime": "/anime",
-        }[APP_SCOPE])
+        }.get(APP_SCOPE)
+        if target is None:
+            # The Music edition is the Liner desktop app and its bundled
+            # backend only exposes the API, so there is no page at "/".
+            # Redirecting to "/" itself used to answer 302 forever.
+            abort(404)
+        return redirect(target)
     return render_template(
         "menu.html",
         has_ffmpeg=has_ffmpeg(),
@@ -298,18 +318,6 @@ def video_page():
     return render_template("download.html", has_ffmpeg=has_ffmpeg(), app_scope=APP_SCOPE)
 
 
-@app.route("/music", endpoint="music_page")
-@app.route("/music/explore", endpoint="music_explore_page")
-@app.route("/music/liked", endpoint="music_liked_page")
-@app.route("/music/stream", endpoint="music_stream_page")
-def music_stream_page():
-    """Serve the React Music application from every current Music entry route."""
-    stream_ui = Path(app.static_folder or "static") / "music-stream"
-    if not (stream_ui / "index.html").is_file():
-        abort(503, description="The Music streaming interface has not been built yet.")
-    return send_from_directory(stream_ui, "index.html")
-
-
 @app.route("/film")
 @app.route("/anime")
 def coming_soon_page():
@@ -331,6 +339,15 @@ def coming_soon_page():
 def _liner_launcher_spec() -> tuple[list[str], Path] | None:
     """Return the command that opens the DowFlow Music (Liner) desktop app."""
     if IS_FROZEN:
+        # The Music edition installs Liner next to the other editions, inside
+        # the same %LOCALAPPDATA%\DowFlow folder.
+        executable = Path(sys.executable).resolve()
+        for candidate in (
+            executable.parent / "dowflow-music.exe",
+            executable.parent / "submenus" / "music" / "dowflow-music.exe",
+        ):
+            if candidate.is_file():
+                return [str(candidate)], candidate.parent
         return None
     app_dir = SOURCE_DIR / "desktop" / "liner"
     if not (app_dir / "package.json").is_file():

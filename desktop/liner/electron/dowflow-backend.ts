@@ -2,8 +2,12 @@
  * Locates the local DowFlow Flask backend so DowFlow Music can talk to it
  * without sharing a process or fighting browser CORS rules.
  */
+import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 let lastGoodOrigin: string | null = null;
+let bundledBackend: ChildProcess | null = null;
 
 export async function findDowflowBackend(): Promise<string | null> {
   const configured = process.env.DOWFLOW_BACKEND_URL?.trim();
@@ -38,6 +42,78 @@ export async function findDowflowBackend(): Promise<string | null> {
     if (lastGoodOrigin === origin) lastGoodOrigin = null;
   }
   return null;
+}
+
+/**
+ * Start the backend shipped inside the Music edition and publish its origin,
+ * so downloading a track works without the rest of DowFlow being open.
+ */
+export function startBundledDowflowBackend(): void {
+  if (process.env.DOWFLOW_BACKEND_URL?.trim() || bundledBackend) return;
+  if (!process.resourcesPath) return;
+  const executable = [
+    path.join(process.resourcesPath, "backend", "DowFlow-Music.exe"),
+    path.join(process.resourcesPath, "backend", "DowFlow.exe"),
+  ].find((candidate) => fs.existsSync(candidate));
+  if (!executable) return;
+  const environment: NodeJS.ProcessEnv = {
+    ...process.env,
+    PYTHONUNBUFFERED: "1",
+  };
+  // <app>\submenus\music\resources\backend sits inside an installed edition,
+  // whose shared data folder (settings, downloads, media tools) is <app>\data.
+  const sharedData = path.resolve(
+    path.dirname(executable),
+    "..",
+    "..",
+    "..",
+    "..",
+    "data",
+  );
+  if (fs.existsSync(sharedData)) environment.DOWFLOW_DATA_ROOT = sharedData;
+  try {
+    bundledBackend = spawn(executable, ["--server"], {
+      cwd: path.dirname(executable),
+      windowsHide: true,
+      stdio: "ignore",
+      env: environment,
+    });
+  } catch {
+    bundledBackend = null;
+    return;
+  }
+  bundledBackend.once("error", () => {
+    bundledBackend = null;
+  });
+  bundledBackend.once("exit", () => {
+    bundledBackend = null;
+  });
+  void publishBundledOrigin();
+}
+
+async function publishBundledOrigin(): Promise<void> {
+  // The backend picks the first free port from 5001, like the probe above.
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    const origin = await findDowflowBackend();
+    if (origin) {
+      process.env.DOWFLOW_BACKEND_URL = origin;
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+/** Stop the bundled backend when DowFlow Music quits. */
+export function stopBundledDowflowBackend(): void {
+  const child = bundledBackend;
+  bundledBackend = null;
+  if (!child || child.exitCode !== null) return;
+  try {
+    child.kill();
+  } catch {
+    // The process is already gone.
+  }
 }
 
 /** Ask DowFlow to write the missing cover art in its Music folder. */

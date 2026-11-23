@@ -58,6 +58,12 @@
       "LICENSE",
       "native/snap-preview/build/Release/snap_preview.node"
     ],
+    "extraResources": [
+      {
+        "from": "../../build/out/DowFlow-Music",
+        "to": "backend"
+      }
+    ],
     "linux": {
       "executableName": "dowflow-music",
       "syncDesktopName": true,

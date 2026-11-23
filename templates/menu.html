@@ -192,8 +192,8 @@
                     <span class="badge on">Available</span>
                 </a>
                 {% endif %}
-                {% if app_scope in ["all", "music"] %}
-                <a class="card available" href="/music" data-menu-id="music">
+                {% if app_scope == "all" %}
+                <a class="card available" href="#" data-menu-id="music">
                     <div class="card-index">02</div>
                     <h3>Music</h3>
                     <p>Search, download and manage your music library.</p>
@@ -268,34 +268,30 @@
             }
         });
 
+        // Music is the DowFlow Music (Liner) desktop application: the menu
+        // opens it directly, there is no web page behind this card anymore.
         const musicEntry = document.querySelector('[data-menu-id="music"]');
         musicEntry?.addEventListener("click", async (event) => {
+            event.preventDefault();
             const openMusic = window.dowflow?.music?.open;
             if (typeof openMusic === "function") {
-                event.preventDefault();
                 try {
                     const result = await openMusic();
                     if (result?.success) return;
-                    if (result?.fallback) {
-                        window.location.assign(musicEntry.href);
-                        return;
-                    }
-                    window.alert(result?.error || "Unable to open DowFlow Music.");
+                    window.alert(result?.error || "DowFlow Music is not installed.");
                 } catch (error) {
                     window.alert(error instanceof Error ? error.message : "Unable to open DowFlow Music.");
                 }
                 return;
             }
             // Plain browser or PyWebView launch: ask the backend to start Liner.
-            event.preventDefault();
             try {
                 const response = await fetch("/api/music/open", { method: "POST" });
                 const result = await response.json();
                 if (result?.success) return;
-                // Liner is not built yet: fall back to the web Music shell.
-                window.location.assign(musicEntry.href);
+                window.alert(result?.error || "DowFlow Music is not installed.");
             } catch {
-                window.location.assign(musicEntry.href);
+                window.alert("Unable to open DowFlow Music.");
             }
         });
 

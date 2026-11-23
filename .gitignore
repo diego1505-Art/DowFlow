@@ -20,6 +20,9 @@ config.json
 # Electron shell dependencies and packaged artifacts
 node_modules/
 desktop/electron/release/
+desktop/electron/release-music/
+desktop/electron/build/
+desktop/liner/release-build/
 desktop/electron/dist/
 
 # OS artifacts

@@ -29,13 +29,6 @@ static_files = [
     "dependencies-loading.js", "dependencies-loading.css",
 ]
 datas = templates + [(str(PROJECT_ROOT / "static" / name), "static") for name in static_files]
-if BUILD_SCOPE in {"all", "music"}:
-    music_stream_root = PROJECT_ROOT / "static" / "music-stream"
-    if music_stream_root.is_dir():
-        for stream_file in music_stream_root.rglob("*"):
-            if stream_file.is_file():
-                relative_parent = stream_file.relative_to(music_stream_root).parent
-                datas.append((str(stream_file), str(Path("static") / "music-stream" / relative_parent)))
 profile_file = PROJECT_ROOT / "build" / "app_scope.json"
 if profile_file.is_file():
     datas.append((str(profile_file), "portable_data"))

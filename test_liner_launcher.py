@@ -60,6 +60,28 @@ class LinerLauncherTests(unittest.TestCase):
             self.assertIsNone(self._spec_for(executable))
 
 
+    def test_source_mode_prefers_the_fresh_build(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "src"
+            liner = source / "desktop" / "liner"
+            (liner / "release" / "win-unpacked").mkdir(parents=True)
+            (liner / "release-build" / "win-unpacked").mkdir(parents=True)
+            (liner / "package.json").write_text("{}", encoding="utf-8")
+            (liner / "release" / "win-unpacked" / "dowflow-music.exe").write_text(
+                "exe", encoding="utf-8"
+            )
+            fresh = liner / "release-build" / "win-unpacked" / "dowflow-music.exe"
+            fresh.write_text("exe", encoding="utf-8")
+
+            with (
+                mock.patch.object(app, "IS_FROZEN", False),
+                mock.patch.object(app, "SOURCE_DIR", source),
+            ):
+                spec = app._liner_launcher_spec()
+
+            self.assertIsNotNone(spec)
+            self.assertEqual(spec[0], [str(fresh)])
+
 class MusicBuildFreshnessTests(unittest.TestCase):
     """start.bat music must rebuild the packaged app when sources changed."""
 

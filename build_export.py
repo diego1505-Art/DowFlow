@@ -256,6 +256,70 @@ def liner_app_dir(root: Path) -> Path:
     return root / "desktop" / "liner" / _LINER_BUILD_OUTPUT / "win-unpacked"
 
 
+def liner_release_dir(root: Path) -> Path:
+    """Electron Builder's output: the unpacked app and the updater files."""
+    return root / "desktop" / "liner" / _LINER_BUILD_OUTPUT
+
+
+def liner_build_version(liner_root: Path) -> str:
+    """A fresh, increasing version for every packaged DowFlow Music build.
+
+    electron-updater only offers an update when the released version is newer
+    than the installed one, so the build stamps its date into the patch number
+    (``0.2.202611232145`` for 23 November 2026 at 21:45) instead of rewriting
+    ``package.json`` on every build.
+    """
+    try:
+        manifest = json.loads(
+            (liner_root / "package.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        manifest = {}
+    parts = str(manifest.get("version") or "").split(".")
+    major = parts[0] if parts and parts[0].isdigit() else "0"
+    minor = parts[1] if len(parts) > 1 and parts[1].isdigit() else "0"
+    return f"{major}.{minor}.{time.strftime('%Y%m%d%H%M')}"
+
+
+def _write_liner_update_config(liner_root: Path, app_dir: Path) -> Path | None:
+    """Make sure the packaged app knows where to fetch its updates.
+
+    electron-updater reads ``resources/app-update.yml`` and refuses to check
+    without it. Electron Builder writes that file from the ``publish`` block
+    for installer targets, so this only fills the gap for a ``--dir`` build.
+    """
+    config = app_dir / "resources" / "app-update.yml"
+    if config.is_file():
+        return config
+    try:
+        manifest = json.loads(
+            (liner_root / "package.json").read_text(encoding="utf-8")
+        )
+        publish = (manifest.get("build") or {}).get("publish") or []
+        provider = publish[0] if publish else {}
+    except (OSError, ValueError, TypeError, IndexError):
+        provider = {}
+    owner = str(provider.get("owner") or "").strip()
+    repo = str(provider.get("repo") or "").strip()
+    if str(provider.get("provider") or "") != "github" or not owner or not repo:
+        return None
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(
+        f"provider: github\nowner: {owner}\nrepo: {repo}\n", encoding="utf-8"
+    )
+    return config
+
+
+def liner_update_artifacts(root: Path) -> dict[str, Path]:
+    """Files to upload on the GitHub release so the Music app can update itself."""
+    release = liner_release_dir(root)
+    setups = sorted(release.glob("DowFlow-Music-Setup-*.exe"))
+    return {
+        "setup": setups[-1] if setups else release / "DowFlow-Music-Setup.exe",
+        "latest": release / "latest.yml",
+    }
+
+
 def _node_executable(root: Path) -> str:
     bundled = root / "build" / "tools" / "node" / "node.exe"
     if bundled.is_file():
@@ -341,31 +405,40 @@ def build_liner_app(
     if progress_callback is not None:
         progress_callback(87, "Packaging DowFlow Music")
     _liner_toolchain(root, liner_root)
-    shutil.rmtree(liner_app_dir(root), ignore_errors=True)
-    completed = subprocess.run(
-        [
-            _node_executable(root),
-            str(builder),
-            "--win",
-            "--dir",
-            "--x64",
-            "--publish",
-            "never",
-            f"--config.directories.output={_LINER_BUILD_OUTPUT}",
-        ],
-        cwd=liner_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        creationflags=SUBPROCESS_CREATION_FLAGS,
-    )
-    if completed.returncode:
+    version = liner_build_version(liner_root)
+    # The NSIS target leaves the unpacked app start.bat opens AND writes the
+    # installer plus latest.yml the updater needs; --dir alone produces none of
+    # those, so it is only the fallback when NSIS cannot be packaged.
+    attempts = (("--win", "--x64"), ("--win", "--dir", "--x64"))
+    detail = ""
+    for arguments in attempts:
+        shutil.rmtree(liner_app_dir(root), ignore_errors=True)
+        completed = subprocess.run(
+            [
+                _node_executable(root),
+                str(builder),
+                *arguments,
+                "--publish",
+                "never",
+                f"--config.directories.output={_LINER_BUILD_OUTPUT}",
+                f"--config.extraMetadata.version={version}",
+            ],
+            cwd=liner_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+        )
+        if completed.returncode == 0:
+            break
         detail = (completed.stdout or "") + (completed.stderr or "")
+    else:
         raise RuntimeError(detail[-5000:] or "Electron Builder failed.")
     executable = liner_app_dir(root) / str(edition["app_exe"])
     if not executable.is_file():
         raise RuntimeError("Electron Builder completed without creating DowFlow Music.")
+    _write_liner_update_config(liner_root, liner_app_dir(root))
     return executable
 
 

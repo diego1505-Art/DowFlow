@@ -29,6 +29,7 @@ SCOPES = (
 )
 
 WAVE = "▁▂▃▄▅▆▇█▇▆▅▄▃▂"
+BASE_SUBTITLE = "PyInstaller · Windows"
 BLANK_ANSWERS = frozenset({"o", "oui", "y", "yes"})
 
 CYAN = (34, 211, 238)
@@ -185,10 +186,6 @@ class Flow:
             self._thread.join(timeout=1)
             self._thread = None
 
-    def resume(self) -> None:
-        if self._thread is None:
-            self.start()
-
     def stop(self) -> None:
         self.pause()
         self.draw()
@@ -220,11 +217,23 @@ def ensure_build_requirements(console: Console) -> bool:
     return True
 
 
-def run_build(console: Console, scope: str, name: str, blank: bool = False) -> int:
+def run_build(
+    console: Console,
+    scope: str,
+    name: str,
+    blank: bool = False,
+    top_row: int | None = None,
+) -> int:
     console.write("\n")
     sys.stdout.flush()
     if console.is_tty:
-        return bp.run_animated(scope, name, installer=True, blank=blank)
+        return bp.run_animated(
+            scope,
+            name,
+            installer=True,
+            blank=blank,
+            top_row=top_row,
+        )
     command = [sys.executable, str(ROOT / "build_export.py"), scope, name, "--installer"]
     if blank:
         command.append("--blank")
@@ -241,10 +250,11 @@ def main() -> int:
 
     console = Console()
     console.clear()
-    flow = console.start_flow("PyInstaller · Windows")
+    flow = console.start_flow(BASE_SUBTITLE)
     try:
         while True:
             if flow is not None:
+                flow.subtitle = BASE_SUBTITLE
                 console.clear_below(flow.rows)
             else:
                 console.clear()
@@ -278,16 +288,12 @@ def main() -> int:
                 return 0
             blank = answer in BLANK_ANSWERS
             target = default_output_dir() / setup
+            if flow is not None:
+                mode = "à blanc" if blank else "normal"
+                flow.subtitle = f"{BASE_SUBTITLE} · {mode}"
+                flow.draw()
             console.write("\n")
-            if blank:
-                console.note(f"Build à blanc (release) → {target}", CYAN)
-                console.note(
-                    "Sans cache ni données locales, pour la release.",
-                    MUTED,
-                    "◆",
-                )
-            else:
-                console.note(f"Build normal → {target}", CYAN)
+            console.note(f"Sortie → {target}", CYAN)
             console.note(
                 "Les données iront dans %LOCALAPPDATA%\\DowFlow\\data.",
                 MUTED,
@@ -300,13 +306,13 @@ def main() -> int:
                 console.pause()
                 continue
 
-            if flow is not None:
-                flow.pause()
-                console.clear()
-            code = run_build(console, scope, name, blank=blank)
-            if flow is not None:
-                console.clear()
-                flow.resume()
+            code = run_build(
+                console,
+                scope,
+                name,
+                blank=blank,
+                top_row=flow.rows + 5 if flow is not None else None,
+            )
             console.write("\n")
             if code == 0 and target.is_file():
                 console.note(str(target), GREEN, "✓")

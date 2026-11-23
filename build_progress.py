@@ -257,10 +257,14 @@ class BuildDisplay:
         scope: str,
         name: str,
         stream: object | None = None,
+        top_row: int | None = None,
     ) -> None:
         self.scope = scope
         self.name = name
         self.stream = stream or sys.stdout
+        # When the caller keeps its own animated banner on the reserved rows,
+        # the progress line is pinned under it instead of pushing the screen.
+        self.top_row = top_row
         self.is_tty = bool(
             getattr(self.stream, "isatty", lambda: False)()
         )
@@ -293,13 +297,16 @@ class BuildDisplay:
             return
         if self.vt:
             self._write(HIDE_CURSOR)
-        rule = "".join(
-            _paint("─", _gradient(index / 51), self.colour) for index in range(52)
-        )
-        title = _bold(_rainbow_text("DOWFLOW BUILD", self.colour), self.vt)
-        subtitle = _paint(f"{self.scope} · {self.name}", (125, 211, 252), self.colour)
-        spark = _paint("◆", (250, 204, 21), self.colour)
-        self._write(f"\n  {rule}\n  {spark} {title}  {subtitle}\n  {rule}\n")
+        if self.top_row is None:
+            rule = "".join(
+                _paint("─", _gradient(index / 51), self.colour) for index in range(52)
+            )
+            title = _bold(_rainbow_text("DOWFLOW BUILD", self.colour), self.vt)
+            subtitle = _paint(
+                f"{self.scope} · {self.name}", (125, 211, 252), self.colour
+            )
+            spark = _paint("◆", (250, 204, 21), self.colour)
+            self._write(f"\n  {rule}\n  {spark} {title}  {subtitle}\n  {rule}\n")
         self._started = True
         self._thread = threading.Thread(
             target=self._loop,
@@ -347,6 +354,9 @@ class BuildDisplay:
             )
             tick = self.tick
         frame = render_frame(frame_state, tick, self.width, self.colour)
+        if self.top_row is not None:
+            self._write(f"\x1b[{self.top_row};1H\x1b[2K{frame}")
+            return
         clear = "\x1b[2K\r" if self.vt else "\r" + " " * self.width + "\r"
         self._write(clear + frame)
 
@@ -365,7 +375,12 @@ class BuildDisplay:
                 self.shown = 100.0
             self.tick += 1
         self.render()
-        self._write("\n" + (SHOW_CURSOR if self.vt else ""))
+        if self.top_row is not None:
+            # Park the cursor under the progress line so later messages do not
+            # land on top of the banner rows.
+            self._write(f"\x1b[{self.top_row + 1};1H" + (SHOW_CURSOR if self.vt else ""))
+        else:
+            self._write("\n" + (SHOW_CURSOR if self.vt else ""))
         self._started = False
 
 
@@ -397,8 +412,9 @@ def run_animated(
     name: str,
     installer: bool = True,
     blank: bool = False,
+    top_row: int | None = None,
 ) -> int:
-    display = BuildDisplay(scope, name)
+    display = BuildDisplay(scope, name, top_row=top_row)
     display.start()
     command = [
         sys.executable,

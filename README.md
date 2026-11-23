@@ -10,7 +10,7 @@ Use DowFlow only for personal purposes and with content you have the right to do
 - Video and audio downloads with `yt-dlp`.
 - Native parallel fragment downloads through `yt-dlp`.
 - Adaptive quality, VTT subtitles and resumable downloads.
-- Music search, album covers, favorites and a local library.
+- Music downloads and cover art for the DowFlow Music (Liner) app.
 - Browser-based extraction with Playwright for sites that are not supported directly.
 - SQLite history, asynchronous jobs and per-domain organization.
 
@@ -71,7 +71,7 @@ python -m build_export all DowFlow --installer
 
 Install the pinned `setuptools` version after the build requirements and before starting PyInstaller. This works around the `ModuleNotFoundError: No module named 'jaraco'` compatibility issue seen in some build environments. The build is windowed (`console=False`) and uses `pywebview` with WebView2 instead of launching a browser window. Tkinter is included for the native folder picker.
 
-`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. After an edition it asks for the build type: `1` is the everyday build for the Windows Downloads folder, `2` is the blank build that goes on the release. A blank build keeps nothing from the developer's machine (no history database, no saved music, no configured download root, no cookie exports), deletes the previous `build/out/<Edition>/` folder and starts PyInstaller with a clean cache, so the setup is what a new user installs. Choice `6` builds the blank setup of all five editions in one run; blank setups are written to `build/release/` and are never mixed with the everyday builds. Each choice writes `build/out/<Edition>/` and drops the installer into `%USERPROFILE%\Downloads\<Edition>-Setup.exe` (`build/release/` for blank builds, or `--output-dir`):
+`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. After choosing an edition it asks `Un exe à blanc, pour la release ? [o/N]`: `N` builds the everyday setup, `o` the blank setup for the release. A blank build keeps nothing from the developer's machine (no history database, no saved music, no configured download root, no cookie exports), deletes the previous `build/out/<Edition>/` folder, starts PyInstaller with a clean cache and always rebuilds the Music backend, so the setup is what a new user installs. Every setup, blank or not, is written to `%USERPROFILE%\Downloads\<Edition>-Setup.exe`; `build/out/<Edition>/` holds the unpacked build and an explicit `--output-dir` overrides the destination:
 
 | Choice | Installer |
 | --- | --- |
@@ -85,7 +85,7 @@ A build only produces the edition you picked: the other installers in a folder c
 
 The installers are the release assets; a one-directory build cannot be distributed as a lone executable. Each installer copies its edition into `%LOCALAPPDATA%\DowFlow\menu\` or `%LOCALAPPDATA%\DowFlow\submenus\<edition>\`. The whole-menu setup also installs DowFlow Music (Liner) in `submenus\music`, so downloading the menu brings the Music app the Music card opens; the other editions stay separate downloads. Each edition keeps its own files, while `%LOCALAPPDATA%\DowFlow\data\` is shared by every edition and holds `config.json`, `dowflow.db`, `logs\` and `tools\` (FFmpeg, Node, Chromium, WebView2). Installing a single submenu is therefore enough: it brings the shared tools and data, and installing another edition later does not overwrite it.
 
-`python build/fetch_tools.py` downloads the native tools once into `build/tools/` and caches them across editions. The installers copy them to `data\tools`, so DowFlow never downloads FFmpeg, Node.js or Chromium at startup. WebView2 is required for the native window; the installer runs the bundled bootstrapper when the runtime is missing.
+`python build_export.py` (or the menu's first build) downloads the native tools once into `build/tools/` and caches them across editions. The installers copy them to `data\tools`, so DowFlow never downloads FFmpeg, Node.js or Chromium at startup. WebView2 is required for the native window; the installer runs the bundled bootstrapper when the runtime is missing.
 
 Close DowFlow before building. Installer builds never embed the developer's `dowflow.db`, `config.json` or cookie exports. Deleting an edition keeps `data\` and the other editions intact.
 
@@ -130,14 +130,14 @@ Downloads, logs, SQLite databases, browser profiles, Python caches and virtual e
 | --- | --- |
 | `app.py` | Flask server and HTTP routes |
 | `playlist.py` | Video and audio downloads |
-| `music.py` | Music search, downloads and library |
-| `music_dataset.py` | Local catalog interface |
+| `music.py` | Music downloads and cover art |
+| `music_dataset.py` | Local catalog interface (stub, always empty) |
 | `browser_extractor.py` | Browser-based extraction |
 | `url_expanders/` | URL and episode expansion |
 | `tools/fix_videos.py` | MP4 file remuxing |
 | `tools/extract_urls_from_txt.py` | URL extraction from a text file |
 | `templates/` and `static/` | Web interface |
-| `downloads/` | Locally downloaded media |
+| `desktop/liner/` | DowFlow Music (Liner) desktop app |
 | `logs/` | Local logs |
 
 ## Configuration

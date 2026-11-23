@@ -23,6 +23,7 @@ import zipfile
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from build_export import newest_mtime as _newest_mtime
 from config import SUBPROCESS_CREATION_FLAGS, get_data_root
 
 APP_VERSION = "V15"
@@ -1007,24 +1008,6 @@ def _run_application_window(
 # lives in ``release-build`` now and is rebuilt whenever its sources changed.
 LINER_SOURCE_DIRS = ("src", "electron")
 LINER_BUILD_DIR = Path("release-build") / "win-unpacked"
-
-
-def _newest_mtime(*paths: Path) -> float:
-    newest = 0.0
-    for path in paths:
-        if path.is_file():
-            try:
-                newest = max(newest, path.stat().st_mtime)
-            except OSError:
-                continue
-        elif path.is_dir():
-            for base, _directories, files in os.walk(path):
-                for name in files:
-                    try:
-                        newest = max(newest, (Path(base) / name).stat().st_mtime)
-                    except OSError:
-                        continue
-    return newest
 
 
 def liner_directory(root: Path) -> Path:

@@ -385,7 +385,8 @@ def _node_executable(root: Path) -> str:
     raise RuntimeError("Node.js is required to package DowFlow Music.")
 
 
-def _newest_mtime(*paths: Path) -> float:
+def newest_mtime(*paths: Path) -> float:
+    """Newest modification time among the files and folders given."""
     newest = 0.0
     for path in paths:
         if path.is_file():
@@ -414,8 +415,8 @@ def _liner_toolchain(root: Path, liner_root: Path) -> None:
         liner_root / "src",
         liner_root / "package.json",
     )
-    if all(path.is_file() for path in outputs) and _newest_mtime(*sources) <= (
-        _newest_mtime(*outputs)
+    if all(path.is_file() for path in outputs) and newest_mtime(*sources) <= (
+        newest_mtime(*outputs)
     ):
         return
     tsc = liner_root / "node_modules" / "typescript" / "bin" / "tsc"

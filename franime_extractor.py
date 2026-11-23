@@ -3,8 +3,7 @@ Franime.fr extractor — supports SIBNET, FILEMOON, SENDVID, VIDMOLY, and direct
 Launches Chrome in the background by default, captures player URLs, and tries each player in order.
 """
 from __future__ import annotations
-import re, os, shutil, tempfile, time, random
-from pathlib import Path
+import re, os, shutil, time, random
 from typing import Any
 
 from config import BROWSER_HEADLESS, BROWSER_PROFILE_DIR, PROXIES, SUBPROCESS_CREATION_FLAGS
@@ -614,9 +613,8 @@ def _download_stream(stream_url: str, player_name: str, page_url: str,
             _build_audio_format_string,
             _build_audio_postprocessor,
             _build_subtitle_lang_options,
-            _resolve_quality_key,
         )
-        from config import VIDEO_OUTPUT_FORMATS, AUDIO_OUTPUT_FORMATS
+        from config import VIDEO_OUTPUT_FORMATS
     except Exception:
         _build_video_format_string = None  # type: ignore
 

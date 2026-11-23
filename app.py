@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 from folder_picker import select_cookie_file, select_download_folder
 import download_manager

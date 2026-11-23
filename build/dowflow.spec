@@ -26,7 +26,7 @@ template_sets = {
 templates = [(str(PROJECT_ROOT / "templates" / name), "templates") for name in template_sets[BUILD_SCOPE]]
 static_files = [
     "favicon.svg", "dowflow.ico", "app.css",
-    "dependencies-loading.js", "dependencies-loading.css",
+    "dependencies-loading.js", "dependencies-loading.css", "update.js",
 ]
 datas = templates + [(str(PROJECT_ROOT / "static" / name), "static") for name in static_files]
 profile_file = PROJECT_ROOT / "build" / "app_scope.json"

@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 import build_progress as bp
-from build_export import default_output_dir
+from build_export import blank_output_dir, default_output_dir
 
 ROOT = Path(__file__).resolve().parent
 
@@ -117,6 +117,12 @@ class Console:
                 f"    {number}  {self.paint(f'{label:<18}', WHITE, bold=True)}"
                 f"{self.paint(target, PATH_BLUE)}\n"
             )
+        six = self.paint("6", GREEN, bold=True)
+        all_blank = f"{'All editions, blank':<20}"
+        self.write(
+            f"    {six}  {self.paint(all_blank, WHITE, bold=True)}"
+            f"{self.paint(str(blank_output_dir()), PATH_BLUE)}\n"
+        )
         zero = self.paint("0", (244, 114, 182), bold=True)
         self.write(f"    {zero}  {self.paint('Quit', MUTED)}\n\n")
         self.write("  " + self.rule() + "\n")
@@ -210,15 +216,41 @@ def ensure_build_requirements(console: Console) -> bool:
     return True
 
 
-def run_build(console: Console, scope: str, name: str) -> int:
+def run_build(console: Console, scope: str, name: str, blank: bool = False) -> int:
     console.write("\n")
     sys.stdout.flush()
     if console.is_tty:
-        return bp.run_animated(scope, name, installer=True)
-    return subprocess.call(
-        [sys.executable, str(ROOT / "build_export.py"), scope, name, "--installer"],
-        cwd=ROOT,
-    )
+        return bp.run_animated(scope, name, installer=True, blank=blank)
+    command = [sys.executable, str(ROOT / "build_export.py"), scope, name, "--installer"]
+    if blank:
+        command.append("--blank")
+    return subprocess.call(command, cwd=ROOT)
+
+
+def build_all_blank(console: Console) -> None:
+    """Build the five blank setups that are uploaded to the GitHub release."""
+    if not ensure_build_requirements(console):
+        return
+    console.write("\n")
+    console.note(f"Éditions à blanc → {blank_output_dir()}", CYAN)
+    failures: list[str] = []
+    for _key, scope, label, name, setup in SCOPES:
+        console.write("\n")
+        console.note(f"Édition « {label} » → {blank_output_dir() / setup}", CYAN)
+        console.write("\n")
+        code = run_build(console, scope, name, blank=True)
+        target = blank_output_dir() / setup
+        console.write("\n")
+        if code == 0 and target.is_file():
+            console.note(str(target), GREEN, "✓")
+        else:
+            failures.append(label)
+            console.note(f"« {label} » a échoué.", RED, "×")
+    console.write("\n")
+    if failures:
+        console.note("Échecs : " + ", ".join(failures), RED, "×")
+    else:
+        console.note("Les setups à blanc sont prêts pour la release.", GREEN, "✓")
 
 
 def main() -> int:
@@ -240,7 +272,7 @@ def main() -> int:
                 console.clear()
             console.menu()
             try:
-                choice = console.ask("Choix [0-5] :").strip()
+                choice = console.ask("Choix [0-6] :").strip()
             except EOFError:
                 console.write("\n")
                 return 0
@@ -248,6 +280,11 @@ def main() -> int:
             if choice == "0":
                 console.write("\n  " + console.paint("À bientôt.", MUTED) + "\n\n")
                 return 0
+            if choice == "6":
+                build_all_blank(console)
+                console.write("\n")
+                console.pause()
+                continue
             match = next((row for row in SCOPES if row[0] == choice), None)
             if match is None:
                 console.note("Choix invalide, recommence.", RED, "×")
@@ -256,7 +293,27 @@ def main() -> int:
 
             _key, scope, label, name, setup = match
             console.write("\n")
-            console.note(f"Édition « {label} » → {default_output_dir() / setup}", CYAN)
+            console.note(f"Édition « {label} »", CYAN)
+            console.note(
+                "1  Build actuel   → " + str(default_output_dir() / setup),
+                MUTED,
+                "◆",
+            )
+            console.note(
+                "2  Build à blanc  → " + str(blank_output_dir() / setup)
+                + " (sans cache, sans données, pour la release)",
+                MUTED,
+                "◆",
+            )
+            try:
+                kind = console.ask("Type [1/2] :").strip() or "1"
+            except EOFError:
+                console.write("\n")
+                return 0
+            blank = kind == "2"
+            target = (blank_output_dir() if blank else default_output_dir()) / setup
+            console.write("\n")
+            console.note(f"Sortie → {target}", CYAN)
             console.note(
                 "Les données iront dans %LOCALAPPDATA%\\DowFlow\\data.",
                 MUTED,
@@ -269,8 +326,7 @@ def main() -> int:
                 console.pause()
                 continue
 
-            code = run_build(console, scope, name)
-            target = default_output_dir() / setup
+            code = run_build(console, scope, name, blank=blank)
             console.write("\n")
             if code == 0 and target.is_file():
                 console.note(str(target), GREEN, "✓")

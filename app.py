@@ -171,6 +171,8 @@ def _scope_allows_path(scope: str, path: str) -> bool:
         "/api/stats",
         "/stats",
         "/open-folder",
+        "/api/update/check",
+        "/api/update/install",
     }
     if path in common_paths or path.startswith(("/static/", "/media/", "/media-local/")):
         return True
@@ -627,6 +629,33 @@ def music_delete():
 @app.route("/check-ffmpeg")
 def check_ffmpeg():
     return jsonify({"has_ffmpeg": has_ffmpeg()})
+
+
+@app.get("/api/update/check")
+def update_check():
+    """Report whether the GitHub release holds a newer Setup for this edition."""
+    from updater import check_for_update
+
+    return jsonify({"success": True, **check_for_update(APP_SCOPE)})
+
+
+@app.post("/api/update/install")
+def update_install():
+    """Download the newest Setup, start it and let it replace this install."""
+    from updater import install_latest
+
+    try:
+        result = install_latest(APP_SCOPE)
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 409
+    except Exception as exc:  # network, disk or a corrupted download
+        log.error("[update] %s", exc, exc_info=True)
+        return jsonify({"success": False, "error": str(exc)}), 502
+    log.success("[update] Installing %s", result["version"] or result["name"])
+    # Inno Setup replaces the program folder: this process has to go, and the
+    # launcher's watchdog follows it instead of holding the port.
+    threading.Timer(1.5, lambda: os._exit(0)).start()
+    return jsonify({"success": True, **result})
 
 
 @app.get("/api/download-folder")

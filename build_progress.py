@@ -392,7 +392,12 @@ def _pump(stream: object, messages: queue.Queue[tuple[str, object]]) -> None:
         messages.put(("eof", None))
 
 
-def run_animated(scope: str, name: str, installer: bool = True) -> int:
+def run_animated(
+    scope: str,
+    name: str,
+    installer: bool = True,
+    blank: bool = False,
+) -> int:
     display = BuildDisplay(scope, name)
     display.start()
     command = [
@@ -404,6 +409,8 @@ def run_animated(scope: str, name: str, installer: bool = True) -> int:
     ]
     if installer:
         command.append("--installer")
+    if blank:
+        command.append("--blank")
     try:
         process = subprocess.Popen(
             command,

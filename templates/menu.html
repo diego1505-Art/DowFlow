@@ -299,6 +299,7 @@
     </script>
     {% if is_frozen %}
     <script src="{{ url_for('static', filename='dependencies-loading.js') }}"></script>
+    <script src="{{ url_for('static', filename='update.js') }}" defer></script>
     {% endif %}
 
 </body>

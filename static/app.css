@@ -194,3 +194,38 @@ dialog { background: var(--dw-surface) !important; border-color: var(--dw-border
   .download-page .hero,
   .music-page .hero { display: block !important; }
 }
+
+/* Installed builds: offer the newest Setup published on the GitHub release. */
+.dowflow-update {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2147483000;
+  width: min(320px, calc(100vw - 36px));
+  padding: 14px 16px;
+  border: 1px solid var(--dw-border-strong);
+  border-radius: 14px;
+  background: var(--dw-surface-2);
+  box-shadow: var(--dw-shadow);
+  color: var(--dw-text);
+  font-size: .84rem;
+  line-height: 1.35;
+}
+.dowflow-update__title { margin: 0 0 4px; font-weight: 600; }
+.dowflow-update__note { margin: 0 0 10px; color: var(--dw-muted); }
+.dowflow-update__actions { display: flex; gap: 8px; }
+.dowflow-update__actions button {
+  border-radius: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--dw-border-strong);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.dowflow-update__install {
+  border-color: var(--dw-red-line) !important;
+  background: var(--dw-red-soft) !important;
+  color: #ffd9db !important;
+}
+.dowflow-update__actions button:disabled { opacity: .55; cursor: default; }

@@ -71,7 +71,7 @@ python -m build_export all DowFlow --installer
 
 Install the pinned `setuptools` version after the build requirements and before starting PyInstaller. This works around the `ModuleNotFoundError: No module named 'jaraco'` compatibility issue seen in some build environments. The build is windowed (`console=False`) and uses `pywebview` with WebView2 instead of launching a browser window. Tkinter is included for the native folder picker.
 
-`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. Each choice writes `build/out/<Edition>/` and drops the installer straight into the Windows Downloads folder (`%USERPROFILE%\Downloads\<Edition>-Setup.exe`, override with `--output-dir`):
+`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. After an edition it asks for the build type: `1` is the everyday build for the Windows Downloads folder, `2` is the blank build that goes on the release. A blank build keeps nothing from the developer's machine (no history database, no saved music, no configured download root, no cookie exports), deletes the previous `build/out/<Edition>/` folder and starts PyInstaller with a clean cache, so the setup is what a new user installs. Choice `6` builds the blank setup of all five editions in one run; blank setups are written to `build/release/` and are never mixed with the everyday builds. Each choice writes `build/out/<Edition>/` and drops the installer into `%USERPROFILE%\Downloads\<Edition>-Setup.exe` (`build/release/` for blank builds, or `--output-dir`):
 
 | Choice | Installer |
 | --- | --- |
@@ -88,6 +88,8 @@ The installers are the release assets; a one-directory build cannot be distribut
 `python build/fetch_tools.py` downloads the native tools once into `build/tools/` and caches them across editions. The installers copy them to `data\tools`, so DowFlow never downloads FFmpeg, Node.js or Chromium at startup. WebView2 is required for the native window; the installer runs the bundled bootstrapper when the runtime is missing.
 
 Close DowFlow before building. Installer builds never embed the developer's `dowflow.db`, `config.json` or cookie exports. Deleting an edition keeps `data\` and the other editions intact.
+
+An installed edition can also update itself: it asks the `latest` GitHub release for the setup matching its edition, and **Install** downloads that setup, starts it silently and lets Inno Setup close and restart DowFlow. A source checkout keeps using the launcher's Git/ZIP update instead.
 
 ## Tests
 

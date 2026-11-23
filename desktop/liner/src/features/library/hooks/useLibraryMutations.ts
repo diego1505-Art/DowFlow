@@ -60,7 +60,11 @@ export function useAddPlaylistTracks() {
       if (!isLocalPlaylistId(playlistId)) {
         return api.addPlaylistTrack(playlistId, trackId);
       }
-      const snapshot = track ?? (await clientCatalog.resolveSnapshot(trackId));
+      // A track handed over by the context menu may carry no duration; the
+      // catalog snapshot does, and the playlist total depends on it.
+      const provided = track && (track.durationMs ?? 0) > 0 ? track : undefined;
+      const snapshot =
+        provided ?? (await clientCatalog.resolveSnapshot(trackId)) ?? track;
       if (!snapshot) throw new Error("Track not found");
       return addLocalPlaylistTrack(playlistId, toClientTrack(snapshot));
     },

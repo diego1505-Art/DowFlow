@@ -1937,6 +1937,14 @@ if (!gotTheLock) {
       },
     );
 
+    // electron-updater reads app-update.yml from the packaged resources; dev
+    // and `electron-builder --dir` builds have none, and a check would fail
+    // with ENOENT and show an "update failed" toast to the user.
+    const canCheckForUpdates = (): boolean =>
+      app.isPackaged &&
+      !IS_STAGING &&
+      fs.existsSync(path.join(process.resourcesPath, "app-update.yml"));
+
     // updater config: production github releases only, no prereleases or auto-install on close
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
@@ -1972,17 +1980,15 @@ if (!gotTheLock) {
         "\x1b[31m updater \x1b[0m autoUpdater error:",
         err?.message || err,
       );
+      if (!canCheckForUpdates()) return;
       mainWindow?.webContents.send("updater:error", {
         message: err?.message || "Update check failed",
       });
     });
 
     handleTrusted("updater:check-for-updates", async () => {
-      if (!app.isPackaged) {
-        return { available: false, error: "Updater is disabled in dev mode" };
-      }
-      if (IS_STAGING) {
-        return { available: false, error: "Updates are off in staging builds" };
+      if (!canCheckForUpdates()) {
+        return { available: false };
       }
       try {
         const result = await autoUpdater.checkForUpdates();
@@ -2006,8 +2012,8 @@ if (!gotTheLock) {
     });
 
     handleTrusted("updater:download-update", async () => {
-      if (!app.isPackaged) {
-        return { success: false, error: "Updater is disabled in dev mode" };
+      if (!canCheckForUpdates()) {
+        return { success: false };
       }
       try {
         await autoUpdater.downloadUpdate();
@@ -2393,7 +2399,7 @@ if (!gotTheLock) {
     });
 
     // automatic update check after window initialization (packaged app only)
-    if (app.isPackaged && !IS_STAGING) {
+    if (canCheckForUpdates()) {
       setTimeout(() => {
         autoUpdater.checkForUpdates().catch((err) => {
           console.error(

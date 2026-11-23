@@ -389,6 +389,9 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
               artists,
               coverUrl,
               duration,
+              // Without this the local playlist stored 0 ms for the track and
+              // the playlist header read "0 min 0 s".
+              durationMs,
               playlists: playlistsData?.playlists ?? [],
             });
           },

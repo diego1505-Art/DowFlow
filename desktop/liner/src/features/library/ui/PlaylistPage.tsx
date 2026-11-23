@@ -743,8 +743,10 @@ function LibraryPlaylistContent() {
                       items={[
                         viewData.countLabel,
                         (() => {
+                          // A stored 0 means the total was never computed,
+                          // so it must not win over the tracks' own durations.
                           const totalMs =
-                            viewData.durationMs ??
+                            viewData.durationMs ||
                             viewData.tracks.reduce(
                               (acc, t) => acc + (t.durationMs || 0),
                               0,

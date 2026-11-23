@@ -297,12 +297,10 @@ def _liner_launcher_spec() -> tuple[list[str], Path] | None:
     app_dir = SOURCE_DIR / "desktop" / "liner"
     if not (app_dir / "package.json").is_file():
         return None
-    # start.bat music packages the current sources into release-build; the old
-    # release/ folder only stays as a fallback so no stale app is opened first.
-    for folder in ("release-build", "release"):
-        packaged = app_dir / folder / "win-unpacked" / "dowflow-music.exe"
-        if packaged.is_file():
-            return [str(packaged)], app_dir
+    # start.bat music packages the current sources into release-build.
+    packaged = app_dir / "release-build" / "win-unpacked" / "dowflow-music.exe"
+    if packaged.is_file():
+        return [str(packaged)], app_dir
     if not (app_dir / "dist-electron" / "main.js").is_file():
         return None
     if not (app_dir / "dist" / "index.html").is_file():

@@ -1001,6 +1001,89 @@ def _run_application_window(
     return exit_code["value"]
 
 
+# ── DowFlow Music (Liner) ────────────────────────────────────────────────────
+# ``start.bat music`` used to launch any ``release\win-unpacked`` it found,
+# however old, so a fixed app was never the one being tested. The packaged app
+# lives in ``release-build`` now and is rebuilt whenever its sources changed.
+LINER_SOURCE_DIRS = ("src", "electron")
+LINER_BUILD_DIR = Path("release-build") / "win-unpacked"
+
+
+def _newest_mtime(*paths: Path) -> float:
+    newest = 0.0
+    for path in paths:
+        if path.is_file():
+            try:
+                newest = max(newest, path.stat().st_mtime)
+            except OSError:
+                continue
+        elif path.is_dir():
+            for base, _directories, files in os.walk(path):
+                for name in files:
+                    try:
+                        newest = max(newest, (Path(base) / name).stat().st_mtime)
+                    except OSError:
+                        continue
+    return newest
+
+
+def liner_directory(root: Path) -> Path:
+    return root / "desktop" / "liner"
+
+
+def liner_executable(root: Path) -> Path:
+    return liner_directory(root) / LINER_BUILD_DIR / "dowflow-music.exe"
+
+
+def liner_build_is_current(root: Path) -> bool:
+    """True when the packaged Music app is at least as new as its sources."""
+    liner = liner_directory(root)
+    executable = liner_executable(root)
+    if not executable.is_file():
+        return False
+    sources = _newest_mtime(
+        *(liner / name for name in LINER_SOURCE_DIRS),
+        liner / "package.json",
+        liner / "index.html",
+    )
+    build = _newest_mtime(executable, liner / "dist", liner / "dist-electron")
+    return build >= sources
+
+
+def open_music(root: Path) -> int:
+    """Open DowFlow Music, rebuilding the packaged app when sources changed."""
+    liner = liner_directory(root)
+    if not (liner / "package.json").is_file():
+        _log(f"[ERROR] DowFlow Music is missing from {liner}.")
+        return 1
+    if not liner_build_is_current(root):
+        _log("[MUSIC] Rebuilding DowFlow Music (its sources changed)...")
+        from build_export import build_liner_app
+
+        try:
+            build_liner_app(root)
+        except RuntimeError as error:
+            _log(f"[ERROR] DowFlow Music could not be built: {error}")
+            _log("[ERROR] Close DowFlow Music if it is running, then retry.")
+            return 1
+    executable = liner_executable(root)
+    _log(f"[MUSIC] Opening {executable}")
+    try:
+        subprocess.Popen(
+            [str(executable)],
+            cwd=str(executable.parent),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=SUBPROCESS_CREATION_FLAGS,
+            close_fds=True,
+        )
+    except OSError as error:
+        _log(f"[ERROR] DowFlow Music could not start: {error}")
+        return 1
+    return 0
+
+
 def main() -> int:
     root = project_root()
     frozen = getattr(sys, "frozen", False)
@@ -1033,6 +1116,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if "--music" in sys.argv:
+        raise SystemExit(open_music(project_root()))
     if getattr(sys, "frozen", False) and "--choose-folder" in sys.argv:
         from folder_picker import main as folder_picker_main
 

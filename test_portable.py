@@ -67,6 +67,17 @@ class PortableConfigurationTests(unittest.TestCase):
             self.assertEqual(config.find_installed_data_root(menu_exe), data.resolve())
             self.assertEqual(config.find_installed_data_root(video_exe), data.resolve())
 
+    def test_music_backend_finds_the_shared_data_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            install = Path(temporary) / "DowFlow"
+            backend = install / "submenus" / "music" / "resources" / "backend"
+            (install / "data").mkdir(parents=True)
+            backend.mkdir(parents=True)
+
+            self.assertEqual(
+                config.find_installed_data_root(backend), (install / "data").resolve()
+            )
+
     def test_frozen_install_prefers_the_shared_tools_folder(self):
         with tempfile.TemporaryDirectory() as temporary:
             data_root = Path(temporary) / "DowFlow" / "data"

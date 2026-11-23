@@ -71,6 +71,78 @@ class BlankBuildTests(unittest.TestCase):
                 self.assertEqual(build_export.default_output_dir(), downloads)
 
 
+class UserDataIsolationTests(unittest.TestCase):
+    """No setup may carry the database, config or logs of this machine."""
+
+    def test_strips_the_runtime_files_of_an_app_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            edition = Path(folder) / "DowFlow"
+            edition.mkdir()
+            (edition / "DowFlow.exe").write_text("exe", encoding="utf-8")
+            (edition / "_internal").mkdir()
+            (edition / "_internal" / "portable_data").mkdir()
+            files = ("dowflow.db", "dowflow.db-wal", "config.json", "youtube.com_cookies.txt")
+            folders = ("logs", "bin", "browser_profile", "portable_data")
+            for name in files:
+                (edition / name).write_text("data", encoding="utf-8")
+            for name in folders:
+                (edition / name).mkdir()
+                (edition / name / "inside.txt").write_text("data", encoding="utf-8")
+
+            removed = build_export.strip_user_data(edition)
+
+            self.assertEqual(sorted(removed), sorted((*files, *folders)))
+            self.assertTrue((edition / "DowFlow.exe").is_file())
+            self.assertTrue((edition / "_internal" / "portable_data").is_dir())
+            for name in (*files, *folders):
+                self.assertFalse((edition / name).exists(), name)
+
+    def test_a_setup_built_from_a_used_folder_stays_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / "build" / "out" / "DowFlow-Video"
+            output.mkdir(parents=True)
+            (output / "dowflow.db").write_text("db", encoding="utf-8")
+            (output / "logs").mkdir()
+
+            class FakeProcess:
+                stdout = iter(())
+
+                def __init__(self, command, **kwargs) -> None:
+                    (output / "DowFlow-Video.exe").write_text(
+                        "exe", encoding="utf-8"
+                    )
+
+                def wait(self) -> int:
+                    return 0
+
+            with (
+                mock.patch.object(build_export.subprocess, "Popen", FakeProcess),
+                mock.patch.object(build_export, "prepare_tools", return_value=None),
+                mock.patch.object(build_export, "build_installer") as installer,
+            ):
+                installer.return_value = root / "setup.exe"
+                build_export.build_executable(
+                    "video",
+                    "DowFlow-Video",
+                    project_root=root,
+                    installer=True,
+                )
+
+            self.assertFalse((output / "dowflow.db").exists())
+            self.assertFalse((output / "logs").exists())
+
+    def test_a_blank_build_never_reuses_the_music_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            backend = root / "build" / "out" / "DowFlow-Music" / "DowFlow-Music.exe"
+            backend.parent.mkdir(parents=True)
+            backend.write_text("exe", encoding="utf-8")
+
+            self.assertFalse(build_export.music_backend_is_reusable(root, True))
+            self.assertTrue(build_export.music_backend_is_reusable(root, False))
+
+
 class MusicBundlingTests(unittest.TestCase):
     """The whole-menu setup has to bring the Music app with it."""
 
@@ -86,9 +158,12 @@ class MusicBundlingTests(unittest.TestCase):
                 stdout = iter(())
 
                 def __init__(self, command, **kwargs) -> None:
-                    output = root / "build" / "out" / name
+                    # PyInstaller is faked for whichever edition runs, which can
+                    # also be the Music backend a whole-menu build rebuilds.
+                    built = kwargs["env"]["DOWFLOW_BUILD_NAME"]
+                    output = root / "build" / "out" / built
                     output.mkdir(parents=True, exist_ok=True)
-                    (output / f"{name}.exe").write_text("exe", encoding="utf-8")
+                    (output / f"{built}.exe").write_text("exe", encoding="utf-8")
 
                 def wait(self) -> int:
                     return 0

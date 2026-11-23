@@ -99,11 +99,6 @@ Name: "{app}\data\tools"; Flags: uninsneveruninstall
 Name: "{group}\{#AppName}"; Filename: "{app}\{#DestDir}\{#AppExe}"; WorkingDir: "{app}\{#DestDir}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#DestDir}\{#AppExe}"; WorkingDir: "{app}\{#DestDir}"; Tasks: desktopicon
 
-[Registry]
-; config.py reads DataRoot so every edition (menu and submenus) shares the
-; same configuration, database, logs and native tools.
-Root: HKCU; Subkey: "Software\DowFlow"; ValueType: string; ValueName: "DataRoot"; ValueData: "{app}\data"
-
 [Run]
 Filename: "{app}\{#DestDir}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 

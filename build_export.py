@@ -85,6 +85,61 @@ EDITIONS: dict[str, dict[str, Any]] = {
     },
 }
 
+# A setup must never carry this machine's runtime state: the database, the
+# configuration, exported cookies, logs, downloaded tools and browser profiles
+# belong in %LOCALAPPDATA%\DowFlow\data, never in a packaged app folder.
+_USER_DATA_ENTRIES = (
+    "dowflow.db",
+    "dowflow.db-wal",
+    "dowflow.db-shm",
+    "config.json",
+    "youtube_cookies.txt",
+    "youtube.com_cookies.txt",
+    "cookies.txt",
+    "logs",
+    "bin",
+    "browser_profile",
+    "portable_data",
+)
+
+
+def strip_user_data(folder: Path) -> list[str]:
+    """Delete the runtime files a local run left inside an app folder.
+
+    Running a built edition from its output folder makes it create its database,
+    configuration and logs beside the executable, and Inno Setup copies the
+    whole folder: without this the next setup would carry them.
+    """
+    removed: list[str] = []
+    if not folder.is_dir():
+        return removed
+    for name in _USER_DATA_ENTRIES:
+        target = folder / name
+        try:
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.exists():
+                target.unlink()
+            else:
+                continue
+        except OSError:
+            continue
+        removed.append(name)
+    return removed
+
+
+def music_backend_is_reusable(root: Path, blank: bool) -> bool:
+    """True when the Music backend of an earlier build can be packaged as is.
+
+    A blank build never reuses one: that folder may hold data left by a manual
+    run, and a release must not ship it.
+    """
+    if blank:
+        return False
+    backend = root / "build" / "out" / "DowFlow-Music" / "DowFlow-Music.exe"
+    return backend.is_file()
+
+
 WEBVIEW2_BOOTSTRAPPER_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 WEBVIEW2_BOOTSTRAPPER_NAME = "MicrosoftEdgeWebview2Setup.exe"
 _INVALID_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -405,6 +460,9 @@ def build_liner_app(
     if progress_callback is not None:
         progress_callback(87, "Packaging DowFlow Music")
     _liner_toolchain(root, liner_root)
+    # Liner embeds build/out/DowFlow-Music: never package the runtime data a
+    # local run of that backend left beside its executable.
+    strip_user_data(root / "build" / "out" / "DowFlow-Music")
     version = liner_build_version(liner_root)
     # The NSIS target leaves the unpacked app start.bat opens AND writes the
     # installer plus latest.yml the updater needs; --dir alone produces none of
@@ -808,6 +866,10 @@ def build_executable(
 
     result = executable
     if installer:
+        # Anything started from these folders wrote its database, configuration
+        # and logs into them; a setup must stay clean.
+        strip_user_data(dist_dir / name)
+        strip_user_data(root / "build" / "out" / "DowFlow-Music")
         liner_dir: Path | None = None
         if EDITIONS[scope].get("liner"):
             # Liner embeds the freshly built Music backend, so it has to be
@@ -820,10 +882,7 @@ def build_executable(
         elif EDITIONS[scope].get("bundles_music"):
             # The whole-menu setup ships the Music app too. Liner packages the
             # Music backend inside its resources, so that backend comes first.
-            music_backend = (
-                root / "build" / "out" / "DowFlow-Music" / "DowFlow-Music.exe"
-            )
-            if not music_backend.is_file():
+            if not music_backend_is_reusable(root, blank):
                 report_progress(85, "Building the Music backend")
                 build_executable(
                     "music",

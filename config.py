@@ -42,10 +42,12 @@ def find_installed_data_root(executable_dir: Path | None = None) -> Path | None:
 
     The layout is: %LOCALAPPDATA%\\DowFlow\\data next to menu/ and
     submenus/<edition>/. "data" is shared by every edition so a submenu
-    installed on its own finds its configuration, database and tools.
+    installed on its own finds its configuration, database and tools. The Music
+    backend runs from submenus\\music\\resources\\backend, four levels down,
+    so the lookup walks up four parents.
     """
     current = (executable_dir or EXECUTABLE_DIR).resolve()
-    for candidate in (current, current.parent, current.parent.parent):
+    for candidate in (current, *tuple(current.parents)[:4]):
         if candidate.name.casefold() != "dowflow":
             continue
         data_root = candidate / "data"

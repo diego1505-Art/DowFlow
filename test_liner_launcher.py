@@ -91,12 +91,17 @@ class MusicBuildFreshnessTests(unittest.TestCase):
         (liner / "src").mkdir(parents=True)
         source = liner / "src" / "App.tsx"
         source.write_text("source", encoding="utf-8")
-        (liner / "package.json").write_text("{}", encoding="utf-8")
+        package = liner / "package.json"
+        package.write_text("{}", encoding="utf-8")
         executable = liner / "release-build" / "win-unpacked" / "dowflow-music.exe"
         executable.parent.mkdir(parents=True)
         executable.write_text("exe", encoding="utf-8")
         now = time.time()
-        for path, age in ((source, source_age), (executable, build_age)):
+        # package.json counts as a source, so it gets the source age too: left at
+        # "now", it made the comparison hinge on a one-millisecond margin that a
+        # coarser filesystem clock can invert.
+        aged = ((source, source_age), (package, source_age), (executable, build_age))
+        for path, age in aged:
             os.utime(path, (now - age, now - age))
         return root
 

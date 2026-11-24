@@ -235,7 +235,7 @@ class PortableConfigurationTests(unittest.TestCase):
             ), patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}):
                 data_root = config._initial_data_root()
 
-            self.assertEqual(data_root, (local_app_data / "DowFlow" / "data").resolve())
+            self.assertEqual(data_root.resolve(), (local_app_data / "DowFlow" / "data").resolve())
             self.assertTrue(data_root.is_dir())
 
     def test_portable_data_extraction_never_overwrites_existing_files(self):
@@ -517,7 +517,9 @@ class LocalVideoApiTests(unittest.TestCase):
                 def assert_build_arguments(self):
                     self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_SCOPE"], "film")
                     self_unit.assertEqual(self.kwargs["env"]["DOWFLOW_BUILD_NAME"], "Films Edition")
-                    self_unit.assertIn(str(root / "build" / "dowflow.spec"), self.command)
+                    self_unit.assertIn(
+                        str((root / "build" / "dowflow.spec").resolve()), self.command
+                    )
                     self_unit.assertIn("--distpath", self.command)
                     self_unit.assertNotIn("--clean", self.command)
                     profile = root / "build" / "app_scope.json"
@@ -576,7 +578,7 @@ class LocalVideoApiTests(unittest.TestCase):
             ):
                 result = build_export.build_installer("video", root, output_dir=root / "build-output")
 
-            self.assertEqual(result, setup)
+            self.assertEqual(result, setup.resolve())
             command = captured["command"]
             self.assertIn("/DDestDir=submenus\\video", command)
             self.assertIn("/DOutputBase=DowFlow-Video-Setup", command)

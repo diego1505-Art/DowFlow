@@ -26,7 +26,7 @@ from urllib.request import Request, urlopen
 from build_export import newest_mtime as _newest_mtime
 from config import SUBPROCESS_CREATION_FLAGS, get_data_root
 
-APP_VERSION = "V15"
+APP_VERSION = "V16"
 GITHUB_REPOSITORY = "https://github.com/diego1505-Art/DowFlow.git"
 GITHUB_BRANCH = "main"
 UPDATE_MARKER = ".dowflow-commit"

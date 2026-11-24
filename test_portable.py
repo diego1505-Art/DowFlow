@@ -582,7 +582,7 @@ class LocalVideoApiTests(unittest.TestCase):
             command = captured["command"]
             self.assertIn("/DDestDir=submenus\\video", command)
             self.assertIn("/DOutputBase=DowFlow-Video-Setup", command)
-            self.assertIn(str(root / "build" / "installer.iss"), command)
+            self.assertIn(str((root / "build" / "installer.iss").resolve()), command)
             self.assertTrue(
                 any(item.startswith("/DSourceDir=") and edition["name"] in item for item in command)
             )

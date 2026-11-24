@@ -416,7 +416,6 @@ def run_animated(
     scope: str,
     name: str,
     installer: bool = True,
-    blank: bool = False,
     top_row: int | None = None,
 ) -> int:
     display = BuildDisplay(scope, name, top_row=top_row)
@@ -430,8 +429,6 @@ def run_animated(
     ]
     if installer:
         command.append("--installer")
-    if blank:
-        command.append("--blank")
     try:
         process = subprocess.Popen(
             command,

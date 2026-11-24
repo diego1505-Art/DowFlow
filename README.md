@@ -71,7 +71,7 @@ python -m build_export all DowFlow --installer
 
 Install the pinned `setuptools` version after the build requirements and before starting PyInstaller. This works around the `ModuleNotFoundError: No module named 'jaraco'` compatibility issue seen in some build environments. The build is windowed (`console=False`) and uses `pywebview` with WebView2 instead of launching a browser window. Tkinter is included for the native folder picker.
 
-`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name. After choosing an edition it asks `Un exe à blanc, pour la release ? [o/N]`: `N` builds the everyday setup, `o` the blank setup for the release. A blank build keeps nothing from the developer's machine (no history database, no saved music, no configured download root, no cookie exports), deletes the previous `build/out/<Edition>/` folder, starts PyInstaller with a clean cache and always rebuilds the Music backend, so the setup is what a new user installs. Every setup, blank or not, is written to `%USERPROFILE%\Downloads\<Edition>-Setup.exe`; `build/out/<Edition>/` holds the unpacked build and an explicit `--output-dir` overrides the destination:
+`build.bat` keeps the five choices — Whole menu, Video, Music, Movies / Series and Anime — and no longer asks for a name: choosing an edition starts its setup build straight away. Every setup is written to `%USERPROFILE%\Downloads\<Edition>-Setup.exe`; `build/out/<Edition>/` holds the unpacked build and an explicit `--output-dir` overrides the destination:
 
 | Choice | Installer |
 | --- | --- |

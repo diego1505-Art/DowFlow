@@ -42,14 +42,14 @@ class FakeTty:
 
 
 class FlowTests(unittest.TestCase):
-    def test_banner_shows_the_build_mode(self) -> None:
+    def test_banner_shows_the_subtitle(self) -> None:
         console = FakeConsole()
         flow = build_ui.Flow(console, build_ui.BASE_SUBTITLE)
         flow.start()
-        flow.subtitle = f"{build_ui.BASE_SUBTITLE} · à blanc"
+        flow.subtitle = f"{build_ui.BASE_SUBTITLE} · DowFlow-Video"
         flow.draw()
         flow.stop()
-        self.assertIn("· à blanc", console.out.getvalue())
+        self.assertIn("· DowFlow-Video", console.out.getvalue())
 
     def test_pause_freezes_the_banner(self) -> None:
         console = FakeConsole()

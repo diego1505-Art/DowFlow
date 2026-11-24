@@ -128,14 +128,12 @@ def strip_user_data(folder: Path) -> list[str]:
     return removed
 
 
-def music_backend_is_reusable(root: Path, blank: bool) -> bool:
+def music_backend_is_reusable(root: Path) -> bool:
     """True when the Music backend of an earlier build can be packaged as is.
 
-    A blank build never reuses one: that folder may hold data left by a manual
-    run, and a release must not ship it.
+    strip_user_data() clears that folder before Liner embeds it, so a backend
+    left behind by a manual run never reaches the setup.
     """
-    if blank:
-        return False
     backend = root / "build" / "out" / "DowFlow-Music" / "DowFlow-Music.exe"
     return backend.is_file()
 
@@ -723,17 +721,13 @@ def build_executable(
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     *,
     installer: bool = False,
-    clean: bool = False,
-    blank: bool = False,
     output_dir: Path | None = None,
 ) -> Path:
     """Build the scope's one-directory app and optionally its installer.
 
-    ``blank`` produces the setup published on the release: nothing from the
-    developer's machine is copied (no database, no saved music, no configured
-    download root, no cookies), the previous output folder is deleted first so
-    no file from an earlier build survives, and PyInstaller starts with a clean
-    cache. Every setup, blank or not, is written to the Windows Downloads folder.
+    Every setup is written to the Windows Downloads folder. Before the installer
+    is compressed, strip_user_data() removes the database, configuration, cookie
+    exports and logs a local run left inside the packaged folders.
     """
     if scope not in EXPORT_SCOPES:
         raise ValueError("Unsupported export scope.")
@@ -742,9 +736,6 @@ def build_executable(
     name = sanitize_exe_name(requested_name or EDITIONS[scope]["name"])
     dist_dir = root / "build" / "out"
     work_dir = root / "build" / "work" / f"{scope}-{name}"
-    if blank:
-        clean = True
-        shutil.rmtree(dist_dir / name, ignore_errors=True)
     profile_path = root / "build" / "app_scope.json"
     history_path = root / "build" / ".export_history.json"
     dist_dir.mkdir(parents=True, exist_ok=True)
@@ -763,8 +754,6 @@ def build_executable(
         "PyInstaller",
         "--noconfirm",
     ]
-    if clean:
-        command.append("--clean")
     command += [
         "--distpath",
         str(dist_dir),
@@ -873,14 +862,13 @@ def build_executable(
         elif EDITIONS[scope].get("bundles_music"):
             # The whole-menu setup ships the Music app too. Liner packages the
             # Music backend inside its resources, so that backend comes first.
-            if not music_backend_is_reusable(root, blank):
+            if not music_backend_is_reusable(root):
                 report_progress(85, "Building the Music backend")
                 build_executable(
                     "music",
                     "DowFlow-Music",
                     root,
                     installer=False,
-                    blank=blank,
                 )
             report_progress(86, "Packaging DowFlow Music")
             build_liner_app(
@@ -915,11 +903,6 @@ def main() -> int:
     parser.add_argument("--json-progress", action="store_true")
     parser.add_argument("--installer", action="store_true", help="Also build the Inno Setup installer.")
     parser.add_argument(
-        "--blank",
-        action="store_true",
-        help="Build the clean setup for the release (no local data; written to Downloads like every other build).",
-    )
-    parser.add_argument(
         "--output-dir",
         type=Path,
         help="Where to write <Edition>-Setup.exe (defaults to the Windows Downloads folder).",
@@ -937,7 +920,6 @@ def main() -> int:
             args.name,
             progress_callback=callback,
             installer=args.installer,
-            blank=args.blank,
             output_dir=args.output_dir,
         )
     except Exception as exc:

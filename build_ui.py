@@ -30,7 +30,6 @@ SCOPES = (
 
 WAVE = "▁▂▃▄▅▆▇█▇▆▅▄▃▂"
 BASE_SUBTITLE = "PyInstaller · Windows"
-BLANK_ANSWERS = frozenset({"o", "oui", "y", "yes"})
 
 CYAN = (34, 211, 238)
 AMBER = (251, 191, 36)
@@ -232,7 +231,6 @@ def run_build(
     console: Console,
     scope: str,
     name: str,
-    blank: bool = False,
     top_row: int | None = None,
 ) -> int:
     console.write("\n")
@@ -242,12 +240,9 @@ def run_build(
             scope,
             name,
             installer=True,
-            blank=blank,
             top_row=top_row,
         )
     command = [sys.executable, str(ROOT / "build_export.py"), scope, name, "--installer"]
-    if blank:
-        command.append("--blank")
     return subprocess.call(command, cwd=ROOT)
 
 
@@ -288,21 +283,7 @@ def main() -> int:
             _key, scope, label, name, setup = match
             console.write("\n")
             console.note(f"Édition « {label} »", CYAN)
-            try:
-                answer = (
-                    console.ask("Un exe à blanc, pour la release ? [o/N] :")
-                    .strip()
-                    .lower()
-                )
-            except EOFError:
-                console.write("\n")
-                return 0
-            blank = answer in BLANK_ANSWERS
             target = default_output_dir() / setup
-            if flow is not None:
-                mode = "à blanc" if blank else "normal"
-                flow.subtitle = f"{BASE_SUBTITLE} · {mode}"
-                flow.draw()
             console.write("\n")
             console.note(f"Sortie → {target}", CYAN)
             console.note(
@@ -321,7 +302,6 @@ def main() -> int:
                 console,
                 scope,
                 name,
-                blank=blank,
                 top_row=console.progress_row(flow.rows) if flow is not None else None,
             )
             if flow is not None:

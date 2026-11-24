@@ -11,7 +11,12 @@ import { queryCache } from "@/shared/cache/queryCache";
 import {
   clearPersistedScreenCache,
   clearScreenCache,
+  removeScreenCacheByPrefix,
 } from "@/shared/cache/screenCache";
+import {
+  clearListeningHistory,
+  forgetListeningHistoryTrack,
+} from "@/features/player/lib/listeningHistory";
 import { lyricsCache } from "@/features/lyrics";
 import { clearCoverRegistry } from "@/features/covers";
 import { useSearchHistoryStore } from "@/features/search/store/searchHistoryStore";
@@ -479,6 +484,12 @@ export async function clearStorageCategories(
     audioCache.invalidate();
     await linerDb.clearStore("audio");
     await linerDb.clearStore("tracks");
+    // The home "jump back in" row is built from the audio cache plus the
+    // device listening history, so clearing the audio cache has to drop both
+    // or the cleared tracks stay on the home screen.
+    clearListeningHistory();
+    removeScreenCacheByPrefix("home:recent:");
+    useCachedTracksStore.getState().reset();
     if (isAllCategories) {
       await linerDb.close();
     }
@@ -549,6 +560,7 @@ export async function clearStorageCategories(
 
 export async function removeTrackFromCache(trackId: string): Promise<void> {
   await useCachedTracksStore.getState().remove(trackId);
+  forgetListeningHistoryTrack(trackId);
   lyricsCache.delete(trackId);
   await linerDb.deleteLyrics(trackId);
   await refreshStorageAnalytics(true).catch(() => null);

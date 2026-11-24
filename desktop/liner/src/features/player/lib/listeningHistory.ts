@@ -76,6 +76,16 @@ export function subscribeListeningHistory(listener: () => void): () => void {
   return () => window.removeEventListener(CHANGE_EVENT, listener);
 }
 
+export function forgetListeningHistoryTrack(trackId: string): void {
+  const next = snapshot.filter((entry) => entry.track.id !== trackId);
+  if (next.length === snapshot.length) return;
+  snapshot = next;
+  persist();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+  }
+}
+
 export function clearListeningHistory(): void {
   snapshot = [];
   if (typeof window === "undefined") return;

@@ -77,7 +77,7 @@ into the encrypted files above on first launch and then removed.
 
 | Category | Removes                                                                                                                                     |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Audio    | `audio` and `tracks` stores, then **every** `*.indexeddb.blob` folder and `blob_storage`; with all categories selected, the whole IndexedDB |
+| Audio    | `audio` and `tracks` stores, the device listening history behind the home "Jump back in" row and its cached screen entry, then **every** `*.indexeddb.blob` folder and `blob_storage`; with all categories selected, the whole IndexedDB |
 | Covers   | CacheStorage and the service worker folder                                                                                                  |
 | Lyrics   | `lyrics` store, `liner_lyrics_*` keys and the lyrics session                                                                                |
 | Metadata | `artists` store, `queryCache`, search caches and search history                                                                             |

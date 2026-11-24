@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Track } from "@/shared/types";
 import {
   clearListeningHistory,
+  forgetListeningHistoryTrack,
   getListeningHistory,
   recordListeningHistory,
 } from "./listeningHistory";
@@ -31,6 +32,20 @@ describe("local listening history", () => {
       "a",
       "b",
     ]);
+  });
+
+  it("forgets a single track, e.g. when its cached audio is deleted", () => {
+    recordListeningHistory(mk("a"));
+    recordListeningHistory(mk("b"));
+
+    forgetListeningHistoryTrack("a");
+
+    expect(getListeningHistory().map((entry) => entry.track.id)).toEqual([
+      "b",
+    ]);
+    expect(localStorage.getItem("liner_listening_history_v1")).not.toContain(
+      '"a"',
+    );
   });
 
   it("ignores local files and persists the row across reads", () => {

@@ -5,6 +5,11 @@ import { lyricsCache } from "@/features/lyrics";
 import type { LyricsCandidate } from "@/shared/contracts/lyrics";
 import { useCachedTracksStore } from "@/features/library/cached/store/cachedTracksStore";
 import {
+  clearListeningHistory,
+  getListeningHistory,
+  recordListeningHistory,
+} from "@/features/player/lib/listeningHistory";
+import {
   removeTrackFromCache,
   subscribeStorageAnalytics,
 } from "./cacheManager";
@@ -50,6 +55,7 @@ describe("removeTrackFromCache", () => {
     await linerDb.clearAll();
     audioCache.invalidate();
     lyricsCache.clear();
+    clearListeningHistory();
     useCachedTracksStore.setState({ items: [], loaded: false, loading: false });
   });
 
@@ -108,5 +114,16 @@ describe("removeTrackFromCache", () => {
       useCachedTracksStore.getState().items.map((item) => item.track.id),
     ).toEqual([otherTrack.id]);
     expect(analyticsUpdates).toBe(1);
+  });
+
+  it("forgets the track on the home listening history too", async () => {
+    recordListeningHistory(track);
+    recordListeningHistory(otherTrack);
+
+    await removeTrackFromCache(track.id);
+
+    expect(getListeningHistory().map((entry) => entry.track.id)).toEqual([
+      otherTrack.id,
+    ]);
   });
 });

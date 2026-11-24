@@ -196,6 +196,20 @@ export function clearPersistedScreenCache(): void {
     .catch(() => undefined);
 }
 
+export function removeScreenCacheByPrefix(prefix: string): void {
+  const keys: string[] = [];
+  for (const key of entries.keys()) {
+    if (key.startsWith(prefix)) keys.push(key);
+  }
+  if (keys.length === 0) return;
+  for (const key of keys) {
+    entries.delete(key);
+    pendingWrites.set(key, null);
+    notify(key);
+  }
+  scheduleFlush();
+}
+
 export function getScreenCacheStats(): { count: number } {
   return { count: entries.size };
 }

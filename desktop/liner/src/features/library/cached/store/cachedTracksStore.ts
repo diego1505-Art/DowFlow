@@ -26,6 +26,7 @@ interface CachedTracksState {
   setVisibleOnline: (visible: boolean) => void;
   load: () => Promise<void>;
   remove: (trackId: string) => Promise<void>;
+  reset: () => void;
 }
 
 async function readCachedTracks(): Promise<CachedTrack[]> {
@@ -86,4 +87,5 @@ export const useCachedTracksStore = create<CachedTracksState>((set, get) => ({
     set({ items: get().items.filter((item) => item.track.id !== trackId) });
     await audioCache.deleteAudio(trackId);
   },
+  reset: () => set({ items: [], loaded: true, loading: false }),
 }));
